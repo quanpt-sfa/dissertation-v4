@@ -1,6 +1,7 @@
 # pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 from __future__ import annotations
 
+import gzip
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -12,6 +13,8 @@ import pandas as pd
 from core.hashing import protocol_hash
 from snapshot.builder import build_snapshot, load_snapshot, write_snapshot
 from snapshot.injection import inject_snapshot
+from snapshot.inspector import inspect_file
+from snapshot.models import ReaderSpec
 
 
 def _catalog() -> dict[str, object]:
@@ -175,3 +178,83 @@ def test_snapshot_injection_populates_runtime_source_registry(tmp_path: Path) ->
     sources_value = source_registry["sources"]
     assert isinstance(sources_value, dict)
     assert set(cast(dict[str, object], sources_value)) == {"panel", "reference"}
+
+
+def test_snapshot_inspects_gzip_csv_without_expanding_to_disk(tmp_path: Path) -> None:
+    path = tmp_path / "source.csv.gz"
+    with gzip.open(path, "wt", encoding="utf-8", newline="") as stream:
+        stream.write("firm_id,fiscal_year\nA,2024\nB,2025\n")
+    inspection = inspect_file(
+        path,
+        "csv",
+        ReaderSpec(
+            encoding="utf-8",
+            delimiter=",",
+            sheet_name=None,
+            header_row=None,
+        ),
+    )
+    assert inspection.columns == ("firm_id", "fiscal_year")
+    assert inspection.row_count == 2
+
+
+def test_snapshot_locks_derived_availability_for_long_source(tmp_path: Path) -> None:
+    root = tmp_path / "raw"
+    path = root / "data" / "financial.csv.gz"
+    path.parent.mkdir(parents=True)
+    with gzip.open(path, "wt", encoding="utf-8", newline="") as stream:
+        stream.write("firm_id,fiscal_year,item,value\nA,2024,cash,1\nA,2024,equity,2\n")
+    catalog: dict[str, object] = {
+        "root_environment_variable": "DISSERTATION_RAW_ROOT",
+        "snapshot_schema_version": 1,
+        "profiles": {
+            "financial": {
+                "enabled": True,
+                "required": True,
+                "discovery": {
+                    "globs": ["data/financial.csv.gz"],
+                    "excludes": [],
+                    "cardinality": "one",
+                },
+                "format": "csv",
+                "reader": {"encoding": "utf-8", "delimiter": ","},
+                "channel_id": "S1",
+                "source_type": "financial_statement_long",
+                "source_agency": "test",
+                "original_unit": "firm-year-item",
+                "role": "predictor",
+                "verification_status": "observed",
+                "coverage_dimensions": ["year"],
+                "data_risks": [],
+                "semantic_fields": {
+                    "firm_id": ["firm_id"],
+                    "fiscal_year": ["fiscal_year"],
+                },
+                "required_semantic_fields": [
+                    "firm_id",
+                    "fiscal_year",
+                    "availability_date",
+                ],
+                "key_semantics": [],
+                "date_semantics": [],
+                "panel_mapping": {
+                    "enabled": True,
+                    "core_predictor": True,
+                    "contributes_to_firm_master": True,
+                    "availability_date_rule": "fiscal_year_plus_one_month_day",
+                    "availability_month_day": "03-31",
+                    "row_aggregation": "firm_year_presence",
+                },
+            }
+        },
+    }
+    snapshot = build_snapshot(
+        registry={"source_catalog": catalog},
+        raw_root=root,
+        snapshot_id="derived",
+    )
+    source = cast(list[dict[str, object]], snapshot["sources"])[0]
+    assert source["availability_date_field"] == "__derived_availability_date__"
+    assert source["availability_date_source"] == ("derived:fiscal_year_plus_one_month_day:03-31")
+    panel = cast(dict[str, object], source["panel_mapping"])
+    assert panel["row_aggregation"] == "firm_year_presence"

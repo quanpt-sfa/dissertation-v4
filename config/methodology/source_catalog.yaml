@@ -2,246 +2,306 @@ source_catalog:
   root_environment_variable: DISSERTATION_RAW_ROOT
   snapshot_schema_version: 1
   profiles:
-    financial_panel_wide:
+    firm_identity_master:
       enabled: true
       required: true
       discovery:
         globs:
-        - data/processed/panel_wide_clean.parquet
+        - data/source/identity/firm_identity_master_augmented.csv
         excludes: []
         cardinality: one
-      format: parquet
-      channel_id: S1
-      source_type: processed_financial_panel
-      source_agency: dissertation_pipeline
-      original_unit: firm-year
-      role: predictor
-      verification_status: derived_from_audited_filings
-      coverage_dimensions: [year, listing_board, industry, auditor_tier]
-      data_risks: [missing_publication_date, duplicate_firm_year, schema_drift]
+      format: csv
+      reader:
+        encoding: utf-8-sig
+        delimiter: ','
+      channel_id: S3
+      source_type: firm_identity_master
+      source_agency: curated_identity_master
+      original_unit: issuer
+      role: reference
+      verification_status: observed_with_review_flags
+      coverage_dimensions: [exchange, identity_status, master_origin]
+      data_risks: [nonstandard_identifier, review_required_identity]
       semantic_fields:
-        firm_id: [firm_master_id, firm_id, issuer_id, code, ticker, Mã]
-        fiscal_year: [fiscal_year, year, reporting_year, nam, Năm]
-        availability_date: [audited_publication_date, audit_publication_date, publication_date, report_date, publish_date, ngay_cong_bo, Ngày công bố]
-        fiscal_year_end: [fiscal_year_end, year_end_date, reporting_date, ngay_ket_thuc_nam]
-        ticker: [ticker, code, ma_ck, Mã]
-      required_semantic_fields: [firm_id, fiscal_year, availability_date]
-      key_semantics: [firm_id, fiscal_year]
-      date_semantics: [availability_date, fiscal_year_end]
-      panel_mapping:
-        enabled: true
-        core_predictor: true
-        contributes_to_firm_master: true
-    financial_panel_long:
-      enabled: true
-      required: true
-      discovery:
-        globs:
-        - data/processed/panel_long_clean.parquet
-        excludes: []
-        cardinality: one
-      format: parquet
-      channel_id: S1
-      source_type: processed_financial_panel_long
-      source_agency: dissertation_pipeline
-      original_unit: firm-year-item
-      role: auxiliary
-      verification_status: derived_from_audited_filings
-      coverage_dimensions: [year, item]
-      data_risks: [schema_drift, duplicate_observation]
-      semantic_fields:
-        firm_id: [firm_master_id, firm_id, issuer_id, code, ticker, Mã]
-        fiscal_year: [fiscal_year, year, reporting_year, nam, Năm]
-      required_semantic_fields: [firm_id, fiscal_year]
-      key_semantics: []
+        firm_id: [issuer_ticker]
+        ticker: [issuer_ticker]
+      required_semantic_fields: [firm_id]
+      key_semantics: [firm_id]
       date_semantics: []
       panel_mapping:
         enabled: false
-    audit_opinions:
-      enabled: true
-      required: true
-      discovery:
-        globs:
-        - data/raw/fiinpro/audit_opinions/*.xlsx
-        excludes: []
-        cardinality: many
-      format: xlsx
-      reader:
-        sheet_name: first
-        header_row: auto
-      channel_id: S2
-      source_type: audit_opinion
-      source_agency: FiinPro-X
-      original_unit: firm-year
-      role: evidence
-      verification_status: observed
-      coverage_dimensions: [year, auditor]
-      data_risks: [missing_opinion_date, duplicate_firm_year, heterogeneous_headers]
-      semantic_fields:
-        firm_id: [firm_id, code, ticker, Mã, Mã CK]
-        fiscal_year: [fiscal_year, year, Năm]
-        availability_date: [availability_date, publication_date, Ngày công bố, Ngày BCTC]
-        outcome: [outcome, non_clean, audit_opinion_non_clean_flag]
-        event_id: [event_id, audit_opinion_event_id]
-        event_cluster_id: [event_cluster_id, upstream_decision_id]
-      required_semantic_fields: [firm_id, fiscal_year, availability_date, outcome]
-      key_semantics: [firm_id, fiscal_year]
-      date_semantics: [availability_date]
-      panel_mapping:
-        enabled: false
-    capital_ownership:
-      enabled: true
-      required: false
-      discovery:
-        globs:
-        - data/raw/fiinpro/capital_ownership/*.xlsx
-        excludes: []
-        cardinality: many
-      format: xlsx
-      reader:
-        sheet_name: first
-        header_row: auto
-      channel_id: S1
-      source_type: capital_ownership
-      source_agency: FiinPro-X
-      original_unit: firm-year
-      role: predictor
-      verification_status: observed
-      coverage_dimensions: [year]
-      data_risks: [missing_year, heterogeneous_headers]
-      semantic_fields:
-        firm_id: [firm_id, code, ticker, Mã, Mã CK]
-        fiscal_year: [fiscal_year, year, Năm]
-      required_semantic_fields: [firm_id, fiscal_year]
-      key_semantics: [firm_id, fiscal_year]
-      date_semantics: []
-      panel_mapping:
-        enabled: false
-    quarterly_financial_exports:
-      enabled: true
-      required: true
-      discovery:
-        globs:
-        - data/raw/fiinpro/quarterly_exports/*.xlsx
-        excludes: []
-        cardinality: many
-      format: xlsx
-      reader:
-        sheet_name: first
-        header_row: auto
-      channel_id: S1
-      source_type: quarterly_financial_export
-      source_agency: FiinPro-X
-      original_unit: export-file
-      role: predictor
-      verification_status: observed
-      coverage_dimensions: [period, item]
-      data_risks: [heterogeneous_headers, duplicate_export, schema_drift]
-      semantic_fields: {}
-      required_semantic_fields: []
-      key_semantics: []
-      date_semantics: []
-      panel_mapping:
-        enabled: false
+
     listing_history:
       enabled: true
       required: true
       discovery:
         globs:
-        - data/raw/vietstock/listing_history.csv
+        - data/source/lifecycle/listing_history_expanded_step31_vietstock_profile_timeline.csv
         excludes: []
         cardinality: one
       format: csv
       reader:
-        encoding: utf-8
+        encoding: utf-8-sig
         delimiter: ','
       channel_id: S3
       source_type: listing_history
       source_agency: Vietstock_profile_timeline
       original_unit: issuer-listing-spell
       role: reference
-      verification_status: observed
-      coverage_dimensions: [exchange, listing_type]
-      data_risks: [ticker_reuse, overlapping_spells]
+      verification_status: observed_with_precision_flags
+      coverage_dimensions: [exchange, listing_type, start_precision, end_precision]
+      data_risks: [ticker_reuse, overlapping_spells, imprecise_boundary_date]
       semantic_fields:
         firm_id: [code]
+        segment_order: [segment_order]
         availability_date: [start_date]
-      required_semantic_fields: [firm_id]
-      key_semantics: []
-      date_semantics: [availability_date]
+        end_date: [end_date]
+      required_semantic_fields: [firm_id, segment_order, availability_date]
+      key_semantics: [firm_id, segment_order]
+      date_semantics: [availability_date, end_date]
       panel_mapping:
         enabled: false
-    regulatory_labels:
+
+    sanction_evidence:
       enabled: true
       required: true
       discovery:
         globs:
-        - data/raw/regulatory/research_labels.csv
+        - data/source/evidence/firm_event_sanction_panel.csv
         excludes: []
         cardinality: one
       format: csv
       reader:
-        encoding: utf-8
+        encoding: utf-8-sig
         delimiter: ','
       channel_id: S3
-      source_type: regulatory_label
-      source_agency: enforcement_decisions
-      original_unit: case-event
+      source_type: official
+      source_agency: enforcement_decision_ledger
+      original_unit: enforcement-event
       role: evidence
-      verification_status: observed
-      coverage_dimensions: [decision_year, violation_type]
-      data_risks: [ticker_match_uncertainty, event_to_firm_year_link]
+      verification_status: high_confirmation
+      coverage_dimensions: [label_year, violation_family, label_confidence]
+      data_risks: [event_to_firm_year_link, bundled_decisions, indirect_label]
       semantic_fields:
-        firm_id: [ticker]
-        fiscal_year: [affected_fiscal_year]
-        availability_date: [decision_date]
-        outcome: [outcome, is_positive, positive_label]
-        event_id: [event_id, case_id]
-        event_cluster_id: [event_cluster_id, bundle_id, document_id]
+        firm_id: [issuer_ticker]
+        fiscal_year: [label_year]
+        availability_date: [publish_date]
+        outcome: [train_include_flag]
+        event_id: [firm_event_id]
+        event_cluster_id: [bundle_id]
       required_semantic_fields: [firm_id, fiscal_year, availability_date, outcome, event_id]
       key_semantics: [event_id]
       date_semantics: [availability_date]
       panel_mapping:
         enabled: false
-    firm_reference:
+
+    financial_statement_core_long:
       enabled: true
       required: true
       discovery:
         globs:
-        - data/raw/reference/ThongTinCoBan.xlsx
+        - data/source/financial/financial_statement_core_long.csv.gz
         excludes: []
         cardinality: one
-      format: xlsx
+      format: csv
       reader:
-        sheet_name: Sheet1
-        header_row: 8
-      channel_id: S3
-      source_type: firm_reference
-      source_agency: FiinPro-X
-      original_unit: issuer
-      role: reference
-      verification_status: observed
-      coverage_dimensions: [exchange]
-      data_risks: [ticker_reuse, stale_reference]
+        encoding: utf-8-sig
+        delimiter: ','
+      channel_id: S1
+      source_type: financial_statement_core_long
+      source_agency: normalized_bctc_exports
+      original_unit: firm-year-audit-status-item
+      role: predictor
+      verification_status: observed_pre_and_post_audit
+      coverage_dimensions: [fiscal_year, audit_status, statement_family, canonical_item]
+      data_risks: [duplicate_item, scope_conflict, schema_drift, missing_pair]
       semantic_fields:
-        firm_id: [Mã, Mã CK, code, ticker]
-        availability_date: [Ngày niêm yết]
+        firm_id: [issuer_ticker]
+        fiscal_year: [fiscal_year]
+        audit_status: [audit_status]
+        statement_family: [statement_family]
+        statement_scope: [scope]
+        item_id: [canonical_item]
+        value: [value_numeric]
+      required_semantic_fields: [firm_id, fiscal_year, availability_date]
+      key_semantics: []
+      date_semantics: []
+      panel_mapping:
+        enabled: true
+        core_predictor: true
+        contributes_to_firm_master: true
+        availability_date_rule: fiscal_year_plus_one_month_day
+        availability_month_day: 03-31
+        row_aggregation: firm_year_presence
+
+    audit_annual_long:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/source/audit/bctc_audit_annual_long.csv
+        excludes: []
+        cardinality: one
+      format: csv
+      reader:
+        encoding: utf-8-sig
+        delimiter: ','
+      channel_id: S2
+      source_type: audit_opinion_and_firm
+      source_agency: normalized_bctc_audit_exports
+      original_unit: firm-year-audit-indicator
+      role: auxiliary
+      verification_status: observed_with_missingness
+      coverage_dimensions: [year, audit_indicator, statement_scope]
+      data_risks: [missing_audit_firm, duplicate_indicator, opinion_normalization]
+      semantic_fields:
+        firm_id: [issuer_ticker]
+        fiscal_year: [year]
+        audit_indicator: [audit_indicator]
+        audit_opinion: [audit_opinion_raw]
+        audit_firm: [audit_firm_raw]
+      required_semantic_fields: [firm_id, fiscal_year, audit_indicator]
+      key_semantics: []
+      date_semantics: []
+      panel_mapping:
+        enabled: false
+
+    industry_icb:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/source/industry/bctc_industry_icb.csv
+        excludes: []
+        cardinality: one
+      format: csv
+      reader:
+        encoding: utf-8-sig
+        delimiter: ','
+      channel_id: S1
+      source_type: industry_classification
+      source_agency: normalized_bctc_icb
+      original_unit: issuer
+      role: predictor
+      verification_status: observed
+      coverage_dimensions: [exchange, icb_l1, icb_l2, icb_l3]
+      data_risks: [classification_drift, duplicate_issuer]
+      semantic_fields:
+        firm_id: [issuer_ticker]
+        industry_l1: [icb_l1]
+        industry_l2: [icb_l2]
+        industry_l3: [icb_l3]
+        industry_l4: [icb_l4]
+        industry_l5: [icb_l5]
       required_semantic_fields: [firm_id]
       key_semantics: [firm_id]
+      date_semantics: []
+      panel_mapping:
+        enabled: false
+
+    ownership_snapshots:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/source/ownership/ownership_year_latest_snapshot_long.csv.gz
+        excludes: []
+        cardinality: one
+      format: csv
+      reader:
+        encoding: utf-8-sig
+        delimiter: ','
+      channel_id: S1
+      source_type: ownership_snapshot_long
+      source_agency: normalized_ownership_exports
+      original_unit: firm-year-variable
+      role: predictor
+      verification_status: observed
+      coverage_dimensions: [fiscal_year, variable_id]
+      data_risks: [missing_snapshot, non_monotone_state_ownership, duplicate_variable]
+      semantic_fields:
+        firm_id: [issuer_ticker]
+        fiscal_year: [fiscal_year]
+        availability_date: [snapshot_date]
+        variable_id: [variable_id]
+        value: [value_numeric]
+      required_semantic_fields: [firm_id, fiscal_year, availability_date, variable_id]
+      key_semantics: []
       date_semantics: [availability_date]
       panel_mapping:
         enabled: false
+
+    macro_cpi:
+      enabled: false
+      required: false
+      discovery:
+        globs:
+        - data/source/macro/macro_cpi_annual.csv
+        excludes: []
+        cardinality: one
+      format: csv
+      reader:
+        encoding: utf-8-sig
+        delimiter: ','
+      channel_id: S1
+      source_type: macro_cpi
+      source_agency: annual_cpi_reference
+      original_unit: calendar-year
+      role: auxiliary
+      verification_status: observed
+      coverage_dimensions: [year]
+      data_risks: [base_year_interpretation]
+      semantic_fields:
+        fiscal_year: [Year]
+        cpi_index: [Index]
+      required_semantic_fields: [fiscal_year, cpi_index]
+      key_semantics: [fiscal_year]
+      date_semantics: []
+      panel_mapping:
+        enabled: false
+
+    dividend_annual_long:
+      enabled: false
+      required: false
+      discovery:
+        globs:
+        - data/optional/dividend_annual_long.csv.gz
+        excludes: []
+        cardinality: one
+      format: csv
+      reader:
+        encoding: utf-8-sig
+        delimiter: ','
+      channel_id: S1
+      source_type: dividend_annual_long
+      source_agency: normalized_dividend_exports
+      original_unit: firm-year-dividend-variable
+      role: predictor
+      verification_status: observed
+      coverage_dimensions: [fiscal_year, dividend_type, variable_id]
+      data_risks: [policy_not_locked, missing_dividend_record]
+      semantic_fields:
+        firm_id: [issuer_ticker]
+        fiscal_year: [fiscal_year]
+        variable_id: [variable_id]
+        value: [value_numeric]
+      required_semantic_fields: [firm_id, fiscal_year, variable_id]
+      key_semantics: []
+      date_semantics: []
+      panel_mapping:
+        enabled: false
+
     known_cases:
       enabled: true
       required: false
       discovery:
         globs:
-        - data/raw/known_cases/known_cases.csv
+        - data/source/known_cases/known_cases.csv
         excludes: []
         cardinality: one_or_none
       format: csv
       reader:
-        encoding: utf-8
+        encoding: utf-8-sig
         delimiter: ','
       channel_id: S3
       source_type: sealed_known_case_ledger
@@ -252,7 +312,7 @@ source_catalog:
       coverage_dimensions: [year]
       data_risks: [identity_disclosure, eligibility_mismatch]
       semantic_fields:
-        firm_id: [firm_master_id, firm_id, ticker]
+        firm_id: [firm_master_id, firm_id, issuer_ticker]
         fiscal_year: [fiscal_year, year]
         case_id: [case_id, known_case_id]
       required_semantic_fields: [firm_id, fiscal_year, case_id]

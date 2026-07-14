@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Literal, cast
 
 Cardinality = Literal["one", "one_or_none", "many"]
 SourceFormat = Literal["csv", "tsv", "parquet", "json", "jsonl", "xlsx"]
+AvailabilityDateRule = Literal["physical_column", "fiscal_year_plus_one_month_day"]
+RowAggregation = Literal["one_row_per_firm_year", "firm_year_presence"]
 
 
 def _mapping(value: object, context: str) -> dict[str, Any]:
@@ -88,6 +91,9 @@ class PanelProfile:
     enabled: bool
     core_predictor: bool
     contributes_to_firm_master: bool
+    availability_date_rule: AvailabilityDateRule
+    availability_month_day: str | None
+    row_aggregation: RowAggregation
 
     @classmethod
     def from_mapping(cls, value: object, context: str) -> PanelProfile:
@@ -97,11 +103,44 @@ class PanelProfile:
         master = raw.get("contributes_to_firm_master", False)
         if not all(isinstance(item, bool) for item in (enabled, core, master)):
             raise ValueError(f"{context}: boolean panel flags required")
+        availability_rule = raw.get("availability_date_rule", "physical_column")
+        if availability_rule not in {"physical_column", "fiscal_year_plus_one_month_day"}:
+            raise ValueError(f"{context}.availability_date_rule: unsupported {availability_rule}")
+        availability_month_day = raw.get("availability_month_day")
+        if availability_month_day is not None and not isinstance(availability_month_day, str):
+            raise ValueError(f"{context}.availability_month_day: string or null required")
+        if availability_rule == "fiscal_year_plus_one_month_day":
+            if not availability_month_day:
+                raise ValueError(
+                    f"{context}.availability_month_day: required for derived availability"
+                )
+            _validate_month_day(availability_month_day, f"{context}.availability_month_day")
+        elif availability_month_day is not None:
+            raise ValueError(
+                f"{context}.availability_month_day: only valid for derived availability"
+            )
+        row_aggregation = raw.get("row_aggregation", "one_row_per_firm_year")
+        if row_aggregation not in {"one_row_per_firm_year", "firm_year_presence"}:
+            raise ValueError(f"{context}.row_aggregation: unsupported {row_aggregation}")
         return cls(
             enabled=cast(bool, enabled),
             core_predictor=cast(bool, core),
             contributes_to_firm_master=cast(bool, master),
+            availability_date_rule=cast(AvailabilityDateRule, availability_rule),
+            availability_month_day=availability_month_day,
+            row_aggregation=cast(RowAggregation, row_aggregation),
         )
+
+
+def _validate_month_day(value: str, context: str) -> None:
+    parts = value.split("-")
+    if len(parts) != 2:
+        raise ValueError(f"{context}: expected MM-DD")
+    try:
+        month, day = (int(part) for part in parts)
+        date(2000, month, day)
+    except ValueError as exc:
+        raise ValueError(f"{context}: invalid MM-DD") from exc
 
 
 @dataclass(frozen=True)

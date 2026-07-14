@@ -27,13 +27,8 @@ artifacts/
 outputs/
 logs/
 
-# Empirical inputs stay in this repo but never enter Git history.
-data/raw/**
-!data/raw/**/
-!data/raw/**/.gitkeep
-data/processed/**
-!data/processed/**/
-!data/processed/**/.gitkeep
-data/standardized/**
-!data/standardized/**/
-!data/standardized/**/.gitkeep
+# Empirical inputs, optional sources, validation fixtures, and their manifests
+# stay in this repo but never enter Git history. Only directory sentinels are tracked.
+data/**
+!data/**/
+!data/**/.gitkeep

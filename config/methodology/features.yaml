@@ -7,6 +7,21 @@ features:
   - Q
   - Z_M
   registry: []
+  source_processing:
+    excluded_market_predictors:
+    - stock_price
+    - market_capitalization
+    - enterprise_value
+    - return
+    - liquidity
+    audit_firm_missingness:
+      encode_as_zero: false
+      preserve_missing_indicator: true
+    state_ownership:
+      structural_assumption: unchanged_or_reduced_through_divestment
+      exact_imputation: adjacent_observations_must_agree
+      unresolved_path: retain_monotone_lower_and_upper_bounds
+      increase_handling: review_flag
   preprocessing:
     numeric_imputation: median
     linear_scaling: standard

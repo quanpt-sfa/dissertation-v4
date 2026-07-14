@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import csv
+import gzip
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -297,3 +299,41 @@ def test_jsonl_later_row_unregistered_field_fails(tmp_path: Path) -> None:
     )
     assert report.status == "FAILED"
     assert any(issue.code == "UNREGISTERED_SOURCE_FIELDS_IN_ROWS" for issue in report.issues)
+
+
+def test_gzip_csv_source_is_audited_as_csv(tmp_path: Path) -> None:
+    path = tmp_path / "source.csv.gz"
+    with gzip.open(path, "wt", encoding="utf-8", newline="") as stream:
+        stream.write("firm_id,fiscal_year,availability_date,amount\nA,2023,2024-03-31,1000\n")
+    report = audit_source(
+        run_id="run-a",
+        protocol_hash="a" * 64,
+        source_path=path,
+        spec=_profile(path, format_name="csv", locked_hash=hash_file(path)),
+    )
+    assert report.status == "PASS"
+    assert report.file_signature["sha256"] == hash_file(path)
+
+
+def test_registered_date_field_accepts_declared_partial_iso_precision(tmp_path: Path) -> None:
+    path = tmp_path / "source.csv"
+    _write_csv(
+        path,
+        [
+            {
+                "firm_id": "A",
+                "fiscal_year": "2023",
+                "availability_date": "2024",
+                "amount": "1000",
+            }
+        ],
+    )
+    report = audit_source(
+        run_id="run-a",
+        protocol_hash="a" * 64,
+        source_path=path,
+        spec=_profile(path, format_name="csv", locked_hash=hash_file(path)),
+    )
+    assert report.status == "PASS"
+    date_audit = cast(dict[str, object], report.date_audit["availability_date"])
+    assert date_audit["parsed"] == 1

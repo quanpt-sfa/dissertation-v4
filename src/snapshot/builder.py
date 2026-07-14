@@ -45,7 +45,10 @@ def build_snapshot(
         for path in matches:
             inspection = inspect_file(path, profile.format, profile.reader)
             semantics = resolve_semantics(inspection.columns, profile.semantic_fields)
-            missing_semantics = sorted(set(profile.required_semantic_fields) - set(semantics))
+            derived_semantics = _derived_semantics(profile)
+            missing_semantics = sorted(
+                set(profile.required_semantic_fields) - set(semantics) - set(derived_semantics)
+            )
             if missing_semantics:
                 raise ValueError(
                     f"profile={profile.profile_id}, file={path}: required semantic fields "
@@ -61,6 +64,7 @@ def build_snapshot(
                 file_size=path.stat().st_size,
                 inspection=inspection,
                 semantics=semantics,
+                derived_semantics=derived_semantics,
             )
             entries.append(entry)
 
@@ -144,13 +148,26 @@ def _build_entry(
     file_size: int,
     inspection: object,
     semantics: dict[str, str],
+    derived_semantics: dict[str, dict[str, str]],
 ) -> dict[str, object]:
     columns = tuple(cast(Any, inspection).columns)
-    required_columns = sorted({semantics[name] for name in profile.required_semantic_fields})
+    required_columns = sorted(
+        {semantics[name] for name in profile.required_semantic_fields if name in semantics}
+    )
     key_columns = [semantics[name] for name in profile.key_semantics if name in semantics]
     date_columns = [semantics[name] for name in profile.date_semantics if name in semantics]
     optional_columns = [column for column in columns if column not in required_columns]
-    availability_field = semantics.get("availability_date")
+    resolved_semantics = dict(semantics)
+    resolved_semantics.update(
+        {semantic: value["field"] for semantic, value in derived_semantics.items()}
+    )
+    availability_field = resolved_semantics.get("availability_date")
+    availability_source = (
+        f"derived:{profile.panel_mapping.availability_date_rule}:"
+        f"{profile.panel_mapping.availability_month_day}"
+        if "availability_date" in derived_semantics
+        else f"snapshot:{source_id}"
+    )
 
     source: dict[str, object] = {
         "source_id": source_id,
@@ -162,7 +179,7 @@ def _build_entry(
         "original_unit": profile.original_unit,
         "related_period_field": semantics.get("fiscal_year"),
         "availability_date_field": availability_field,
-        "availability_date_source": f"snapshot:{source_id}",
+        "availability_date_source": availability_source,
         "coverage_dimensions": list(profile.coverage_dimensions),
         "role": profile.role,
         "verification_status": profile.verification_status,
@@ -177,13 +194,16 @@ def _build_entry(
         "file_size_bytes": file_size,
         "row_count_snapshot": cast(Any, inspection).row_count,
         "schema_hash": cast(Any, inspection).schema_hash,
-        "resolved_semantics": semantics,
+        "resolved_semantics": resolved_semantics,
+        "derived_semantics": derived_semantics,
         "schema": {
             "required_columns": required_columns,
             "optional_columns": optional_columns,
             "key_columns": key_columns,
             "date_columns": date_columns,
-            "required_date_columns": [availability_field] if availability_field else [],
+            "required_date_columns": [semantics["availability_date"]]
+            if "availability_date" in semantics
+            else [],
             "numeric_columns": {},
             "allow_extra_columns": False,
             "key_unique": bool(key_columns),
@@ -195,15 +215,38 @@ def _build_entry(
             "enabled": True,
             "firm_id_field": semantics["firm_id"],
             "fiscal_year_field": semantics["fiscal_year"],
-            "availability_date_field": semantics["availability_date"],
+            "availability_date_field": resolved_semantics["availability_date"],
             "fiscal_year_end_field": semantics.get("fiscal_year_end"),
             "ticker_field": semantics.get("ticker"),
             "contributes_to_firm_master": profile.panel_mapping.contributes_to_firm_master,
             "core_predictor": profile.panel_mapping.core_predictor,
+            "availability_date_rule": profile.panel_mapping.availability_date_rule,
+            "availability_month_day": profile.panel_mapping.availability_month_day,
+            "row_aggregation": profile.panel_mapping.row_aggregation,
         }
     else:
         source["panel_mapping"] = {"enabled": False}
     return source
+
+
+def _derived_semantics(profile: SourceProfile) -> dict[str, dict[str, str]]:
+    panel = profile.panel_mapping
+    if not panel.enabled or panel.availability_date_rule == "physical_column":
+        return {}
+    if panel.availability_date_rule != "fiscal_year_plus_one_month_day":
+        raise ValueError(
+            f"profile={profile.profile_id}: unsupported availability rule "
+            f"{panel.availability_date_rule}"
+        )
+    if panel.availability_month_day is None:
+        raise ValueError(f"profile={profile.profile_id}: availability month/day is required")
+    return {
+        "availability_date": {
+            "field": "__derived_availability_date__",
+            "rule": panel.availability_date_rule,
+            "month_day": panel.availability_month_day,
+        }
+    }
 
 
 def _snapshot_hash(snapshot: dict[str, object]) -> str:

@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import hashlib
 import json
 from collections.abc import Iterator, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import IO, cast
 
 import openpyxl
 import pyarrow.parquet as pq
@@ -17,6 +18,12 @@ import pyarrow.parquet as pq
 from .models import SourceSpec
 
 Row = dict[str, object]
+
+
+def _open_text(path: Path, *, encoding: str, newline: str | None = None) -> IO[str]:
+    if path.suffix.casefold() == ".gz":
+        return gzip.open(path, "rt", encoding=encoding, newline=newline)
+    return path.open("r", encoding=encoding, newline=newline)
 
 
 def hash_file(path: Path) -> str:
@@ -61,7 +68,7 @@ def inspect_file_signature(path: Path, spec: SourceSpec) -> dict[str, object]:
 def read_header(path: Path, spec: SourceSpec) -> list[str]:
     if spec.format in {"csv", "tsv"}:
         delimiter = spec.delimiter or ("\t" if spec.format == "tsv" else ",")
-        with path.open("r", encoding=spec.encoding, newline="") as stream:
+        with _open_text(path, encoding=spec.encoding, newline="") as stream:
             reader = csv.reader(stream, delimiter=delimiter)
             try:
                 return [str(value) for value in next(reader)]
@@ -87,7 +94,7 @@ def read_header(path: Path, spec: SourceSpec) -> list[str]:
 def iter_rows(path: Path, spec: SourceSpec) -> Iterator[Row]:
     if spec.format in {"csv", "tsv"}:
         delimiter = spec.delimiter or ("\t" if spec.format == "tsv" else ",")
-        with path.open("r", encoding=spec.encoding, newline="") as stream:
+        with _open_text(path, encoding=spec.encoding, newline="") as stream:
             reader = csv.DictReader(stream, delimiter=delimiter)
             for row in reader:
                 yield {str(key): value for key, value in row.items() if key is not None}
@@ -113,7 +120,7 @@ def iter_rows(path: Path, spec: SourceSpec) -> Iterator[Row]:
         workbook.close()
         return
     if spec.format == "jsonl":
-        with path.open("r", encoding=spec.encoding) as stream:
+        with _open_text(path, encoding=spec.encoding) as stream:
             for line_number, line in enumerate(stream, start=1):
                 if not line.strip():
                     continue
@@ -123,7 +130,8 @@ def iter_rows(path: Path, spec: SourceSpec) -> Iterator[Row]:
                 yield {str(key): item for key, item in cast(dict[object, object], value).items()}
         return
     if spec.format == "json":
-        raw: object = json.loads(path.read_text(encoding=spec.encoding))
+        with _open_text(path, encoding=spec.encoding) as stream:
+            raw: object = json.load(stream)
         if not isinstance(raw, list):
             raise ValueError("JSON source must be an array of objects")
         for index, value in enumerate(cast(list[object], raw), start=1):

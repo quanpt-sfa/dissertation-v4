@@ -16,7 +16,7 @@ Các tài liệu trong `docs/generated/` được sinh từ `config/pipeline.yam
 
 ```powershell
 uv run python scripts/run_pipeline.py `
-  --run-id dissertation-2015-2025-final `
+  --run-id dissertation-2015-2026-start-v1 `
   --raw-root "D:\Works\dissertation\dissertation-v4" `
   --output-root "D:\Works\dissertation\dissertation-v4\artifacts\runs" `
   --through P17

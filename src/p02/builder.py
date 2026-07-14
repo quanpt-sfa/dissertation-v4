@@ -74,6 +74,17 @@ def build_firm_panel(
     seen_source_keys: set[tuple[str, str, int]] = set()
     normalized_origins: defaultdict[str, set[tuple[str, str]]] = defaultdict(set)
     predictor_columns = sorted(set(registered_predictor_columns or []))
+    presence_sources = {
+        item.panel_spec.source_id
+        for item in source_inputs
+        if item.panel_spec.row_aggregation == "firm_year_presence"
+    }
+    if presence_sources and predictor_columns:
+        raise ValueError(
+            "firm-year presence aggregation cannot materialize registered predictors; "
+            f"sources={sorted(presence_sources)}, predictors={predictor_columns}"
+        )
+    collapsed_source_rows = 0
 
     for source_input in source_inputs:
         _validate_audit(source_input)
@@ -128,7 +139,11 @@ def build_firm_panel(
                 )
                 continue
 
-            availability = _parse_datetime(row.get(panel_spec.availability_date_field))
+            availability = _resolve_availability_date(
+                row=row,
+                panel_spec=panel_spec,
+                fiscal_year=fiscal_year,
+            )
             if availability is None:
                 exclusions.append(
                     {
@@ -166,6 +181,9 @@ def build_firm_panel(
 
             source_key = (panel_spec.source_id, canonical, fiscal_year)
             if source_key in seen_source_keys:
+                if panel_spec.row_aggregation == "firm_year_presence":
+                    collapsed_source_rows += 1
+                    continue
                 raise ValueError(
                     f"duplicate source firm-year after entity resolution: {source_key}"
                 )
@@ -308,6 +326,7 @@ def build_firm_panel(
             "panel_row_count": len(panel),
             "excluded_row_count": len(exclusions),
             "excluded_firm_year_count": len(incomplete),
+            "collapsed_source_row_count": collapsed_source_rows,
         },
     }
     return PanelBuildResult(
@@ -424,6 +443,25 @@ def _parse_datetime(value: object) -> datetime | None:
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(UTC).replace(tzinfo=None)
     return parsed
+
+
+def _resolve_availability_date(
+    *,
+    row: dict[str, object],
+    panel_spec: PanelSourceSpec,
+    fiscal_year: int,
+) -> datetime | None:
+    if panel_spec.availability_date_rule == "physical_column":
+        return _parse_datetime(row.get(panel_spec.availability_date_field))
+    if panel_spec.availability_date_rule != "fiscal_year_plus_one_month_day":
+        raise ValueError(
+            f"source={panel_spec.source_id}: unsupported availability rule "
+            f"{panel_spec.availability_date_rule}"
+        )
+    if panel_spec.availability_month_day is None:
+        raise ValueError(f"source={panel_spec.source_id}: availability month/day is not registered")
+    month, day = (int(part) for part in panel_spec.availability_month_day.split("-"))
+    return datetime(fiscal_year + 1, month, day)
 
 
 def _parse_numeric_predictor(value: object, *, source_id: str, column: str) -> float | None:

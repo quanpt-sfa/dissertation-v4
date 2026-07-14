@@ -34,6 +34,9 @@ class PanelSourceSpec:
     ticker_field: str | None
     contributes_to_firm_master: bool
     core_predictor: bool
+    availability_date_rule: str
+    availability_month_day: str | None
+    row_aggregation: str
 
     @classmethod
     def from_source_mapping(cls, source_id: str, value: object) -> PanelSourceSpec:
@@ -67,6 +70,31 @@ class PanelSourceSpec:
             raise ValueError(
                 f"source={source_id}: panel availability field must equal the P01 registered field"
             )
+        availability_rule = _string(
+            panel.get("availability_date_rule", "physical_column"),
+            f"source={source_id}.panel_mapping.availability_date_rule",
+        )
+        if availability_rule not in {"physical_column", "fiscal_year_plus_one_month_day"}:
+            raise ValueError(
+                f"source={source_id}: unsupported availability rule {availability_rule}"
+            )
+        availability_month_day = panel.get("availability_month_day")
+        if availability_month_day is not None and not isinstance(availability_month_day, str):
+            raise ValueError(
+                f"source={source_id}.panel_mapping.availability_month_day: string or null required"
+            )
+        if availability_rule == "fiscal_year_plus_one_month_day":
+            if not availability_month_day:
+                raise ValueError(
+                    f"source={source_id}: derived availability requires availability_month_day"
+                )
+            _validate_month_day(availability_month_day, "availability_month_day")
+        row_aggregation = _string(
+            panel.get("row_aggregation", "one_row_per_firm_year"),
+            f"source={source_id}.panel_mapping.row_aggregation",
+        )
+        if row_aggregation not in {"one_row_per_firm_year", "firm_year_presence"}:
+            raise ValueError(f"source={source_id}: unsupported row aggregation {row_aggregation}")
         return cls(
             source_id=source_id,
             firm_id_field=firm_id_field,
@@ -85,6 +113,9 @@ class PanelSourceSpec:
                 panel.get("core_predictor", False),
                 f"source={source_id}.panel_mapping.core_predictor",
             ),
+            availability_date_rule=availability_rule,
+            availability_month_day=availability_month_day,
+            row_aggregation=row_aggregation,
         )
 
 

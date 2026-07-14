@@ -5,7 +5,7 @@ folds:
   - 2022
   - 2023
   - 2024
-  prospective_year: 2025
+  prospective_year: 2026
   initial_in_confirmatory_pool: false
   prospective_in_retrospective_evaluation: false
   maturity_audit_required_before_lock: true

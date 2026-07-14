@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import hashlib
 import json
 import re
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import IO, Any, cast
 
 import openpyxl
 import pyarrow.parquet as pq
@@ -33,6 +34,12 @@ def file_sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _open_text(path: Path, *, encoding: str, newline: str | None = None) -> IO[str]:
+    if path.suffix.casefold() == ".gz":
+        return gzip.open(path, "rt", encoding=encoding, newline=newline)
+    return path.open("r", encoding=encoding, newline=newline)
 
 
 def normalize_name(value: str) -> str:
@@ -70,7 +77,7 @@ def inspect_file(path: Path, format_name: SourceFormat, reader: ReaderSpec) -> F
         reader_meta: dict[str, object] = {}
     elif format_name in {"csv", "tsv"}:
         delimiter = reader.delimiter or ("\t" if format_name == "tsv" else ",")
-        with path.open("r", encoding=reader.encoding, newline="") as stream:
+        with _open_text(path, encoding=reader.encoding, newline="") as stream:
             csv_reader = csv.reader(stream, delimiter=delimiter)
             try:
                 columns = tuple(str(value).strip() for value in next(csv_reader))
@@ -103,7 +110,7 @@ def inspect_file(path: Path, format_name: SourceFormat, reader: ReaderSpec) -> F
     elif format_name == "jsonl":
         columns_set: set[str] = set()
         row_count = 0
-        with path.open("r", encoding=reader.encoding) as stream:
+        with _open_text(path, encoding=reader.encoding) as stream:
             for line in stream:
                 if not line.strip():
                     continue
@@ -116,7 +123,8 @@ def inspect_file(path: Path, format_name: SourceFormat, reader: ReaderSpec) -> F
         dtypes = {column: "dynamic_json" for column in columns}
         reader_meta = {"encoding": reader.encoding}
     elif format_name == "json":
-        raw: object = json.loads(path.read_text(encoding=reader.encoding))
+        with _open_text(path, encoding=reader.encoding) as stream:
+            raw: object = json.load(stream)
         if not isinstance(raw, list):
             raise ValueError(f"file={path}: JSON source must be an array")
         columns_set: set[str] = set()

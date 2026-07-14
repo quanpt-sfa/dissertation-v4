@@ -93,7 +93,7 @@ def test_T010_outer_folds(registry: dict[str, Any]) -> None:
     canonical(registry, "D10", "Outer folds")
     assert get(registry, "folds.initial_outer_year") == 2020
     assert get(registry, "folds.fully_nested_outer_years") == [2021, 2022, 2023, 2024]
-    assert get(registry, "folds.prospective_year") == 2025
+    assert get(registry, "folds.prospective_year") == 2026
 
 
 def test_T011_gate2(registry: dict[str, Any]) -> None:

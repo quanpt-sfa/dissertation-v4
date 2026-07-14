@@ -83,6 +83,8 @@ def _parse_date(value: object) -> datetime | None:
         "%d/%m/%Y",
         "%d-%m-%Y",
         "%Y%m%d",
+        "%Y-%m",
+        "%Y",
     ):
         try:
             return datetime.strptime(text, date_format)

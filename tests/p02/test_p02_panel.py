@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import pytest
@@ -41,6 +42,9 @@ def _source_input(
     core: bool = True,
     audit_advance: bool = True,
     firm_id_field: str = "entity_code",
+    availability_date_rule: str = "physical_column",
+    availability_month_day: str | None = None,
+    row_aggregation: str = "one_row_per_firm_year",
 ) -> SourceInput:
     path = tmp_path / f"{source_id}.csv"
     _write_csv(path, rows)
@@ -51,7 +55,11 @@ def _source_input(
         "source_agency": "Agency",
         "original_unit": "firm-year",
         "related_period_field": "fiscal_period",
-        "availability_date_field": "available_at",
+        "availability_date_field": (
+            "available_at"
+            if availability_date_rule == "physical_column"
+            else "__derived_availability_date__"
+        ),
         "availability_date_source": "publication record",
         "coverage_dimensions": ["year"],
         "role": "predictor",
@@ -80,11 +88,18 @@ def _source_input(
         "panel_mapping": {
             "firm_id_field": firm_id_field,
             "fiscal_year_field": "fiscal_period",
-            "availability_date_field": "available_at",
+            "availability_date_field": (
+                "available_at"
+                if availability_date_rule == "physical_column"
+                else "__derived_availability_date__"
+            ),
             "fiscal_year_end_field": "fiscal_end",
             "ticker_field": "ticker",
             "contributes_to_firm_master": True,
             "core_predictor": core,
+            "availability_date_rule": availability_date_rule,
+            "availability_month_day": availability_month_day,
+            "row_aggregation": row_aggregation,
         },
     }
     source_spec = SourceSpec.from_mapping(source_id, source_mapping)
@@ -99,6 +114,51 @@ def _source_input(
             "decision": {"pipeline_may_advance": audit_advance},
         },
     )
+
+
+def test_long_source_collapses_to_firm_year_with_locked_derived_availability(
+    tmp_path: Path,
+) -> None:
+    rows: list[dict[str, object]] = [
+        {
+            "entity_code": "A",
+            "ticker": "AAA",
+            "fiscal_period": 2023,
+            "available_at": "",
+            "fiscal_end": "2023-12-31",
+            "registered_predictor": "",
+        },
+        {
+            "entity_code": "A",
+            "ticker": "AAA",
+            "fiscal_period": 2023,
+            "available_at": "",
+            "fiscal_end": "2023-12-31",
+            "registered_predictor": "",
+        },
+    ]
+    result = build_firm_panel(
+        run_id="run-a",
+        protocol_hash="a" * 64,
+        source_inputs=[
+            _source_input(
+                tmp_path,
+                "financial_long",
+                rows,
+                availability_date_rule="fiscal_year_plus_one_month_day",
+                availability_month_day="03-31",
+                row_aggregation="firm_year_presence",
+            )
+        ],
+        entity_spec=_entity_spec(),
+        sample_start=2023,
+        sample_end=2023,
+        output_columns=OUTPUT_COLUMNS,
+    )
+    assert len(result.firm_year_panel) == 1
+    assert result.firm_year_panel.loc[0, "prediction_time"] == pd.Timestamp("2024-03-31")
+    summary = cast(dict[str, object], result.resolution_report["summary"])
+    assert summary["collapsed_source_row_count"] == 1
 
 
 def _entity_spec(

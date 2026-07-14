@@ -8,6 +8,17 @@ entity_resolution:
     uppercase: true
     collapse_internal_whitespace: true
   aliases: {}
+  ticker_disambiguation:
+    VSM:
+      securities_company_code: VSMS
+      securities_company_name_match_required: true
+      otherwise_code: VSM
+      otherwise_identity: Container Mien Trung
+    VTS:
+      securities_company_code: VTSC
+      securities_company_name_match_required: true
+      otherwise_code: VTS
+      otherwise_identity: Gach Ngoi Tu Son
   reporting_calendar:
     default_fiscal_year_end_month_day: 12-31
     firm_exceptions: {}

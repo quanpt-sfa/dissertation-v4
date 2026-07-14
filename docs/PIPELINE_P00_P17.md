@@ -28,7 +28,7 @@ Chạy trong root repo:
 
 ```powershell
 uv run python scripts/run_pipeline.py `
-  --run-id dissertation-2015-2025-final `
+  --run-id dissertation-2015-2026-start-v1 `
   --raw-root "D:\Works\dissertation\dissertation-v4" `
   --output-root "D:\Works\dissertation\dissertation-v4\artifacts\runs" `
   --through P17
@@ -685,7 +685,7 @@ Pipeline cố ý fail-closed khi các giá trị sau chưa được người dù
 | `simulation.operational_scenarios` | `config/execution/simulation.yaml` | P08 SKIPPED |
 | `utility.operational_scenarios` với `measurement_fixed_pi`, benefit/cost và budget đã khóa | `config/methodology/utility.yaml` | utility SKIPPED, descriptive yield vẫn ghi |
 | Hai threshold feature, pressure/monitoring/domain/model bindings | `config/methodology/inference.yaml` | Gate 3 insufficient evidence |
-| `known_cases.csv` | `data/raw/known_cases/` | P15 SKIPPED; không soft veto |
+| `known_cases.csv` | `data/source/known_cases/` | P15 SKIPPED; không soft veto |
 
 Không điền các setting này bằng suy đoán từ outer results hoặc K1–K4.
 
