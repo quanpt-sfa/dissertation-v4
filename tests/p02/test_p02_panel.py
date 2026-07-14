@@ -25,6 +25,7 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
         "fiscal_period",
         "available_at",
         "fiscal_end",
+        "registered_predictor",
     ]
     with path.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fieldnames)
@@ -67,7 +68,7 @@ def _source_input(
                 "fiscal_period",
                 "available_at",
             ],
-            "optional_columns": ["ticker", "fiscal_end"],
+            "optional_columns": ["ticker", "fiscal_end", "registered_predictor"],
             "key_columns": ["entity_code", "fiscal_period"],
             "date_columns": ["available_at", "fiscal_end"],
             "required_date_columns": ["available_at"],
@@ -134,6 +135,7 @@ def _row(
     *,
     ticker: str = "AAA",
     fiscal_end: str | None = None,
+    predictor: float | None = None,
 ) -> dict[str, object]:
     return {
         "entity_code": firm,
@@ -141,6 +143,7 @@ def _row(
         "fiscal_period": year,
         "available_at": available,
         "fiscal_end": fiscal_end or f"{year}-12-31",
+        "registered_predictor": predictor,
     }
 
 
@@ -166,6 +169,25 @@ def test_builds_prediction_time_as_latest_core_availability(tmp_path: Path) -> N
     )
     assert result.firm_master.to_dict("records") == [{"firm_master_id": "FIRM-A"}]
     assert result.firm_year_panel.loc[0, "prediction_time"] == pd.Timestamp("2024-04-20")
+
+
+def test_registered_predictor_is_carried_into_the_as_of_panel(tmp_path: Path) -> None:
+    source = _source_input(
+        tmp_path,
+        "source_a",
+        [_row("A", 2023, "2024-03-15", predictor=1.25)],
+    )
+    result = build_firm_panel(
+        run_id="run-features",
+        protocol_hash="a" * 64,
+        source_inputs=[source],
+        entity_spec=_entity_spec(),
+        sample_start=2015,
+        sample_end=2025,
+        output_columns=OUTPUT_COLUMNS,
+        registered_predictor_columns=["registered_predictor"],
+    )
+    assert result.firm_year_panel.loc[0, "registered_predictor"] == pytest.approx(1.25)
 
 
 def test_incomplete_core_availability_is_excluded(tmp_path: Path) -> None:

@@ -26,6 +26,7 @@ def publish_p02_outputs(
     protocol_hash: str,
     recovery_policy: str,
     result: PanelBuildResult,
+    dependencies: list[dict[str, object]] | None = None,
 ) -> None:
     artifacts_raw = registry.get("artifacts")
     if not isinstance(artifacts_raw, dict):
@@ -50,6 +51,7 @@ def publish_p02_outputs(
             registry,
             stage_store,
         )
+        stage_context.inherit_dependencies(dependencies or [])
         stage_context.write("firm_master", result.firm_master, {})
         stage_context.write("firm_year_panel", result.firm_year_panel, {})
         stage_context.write("duplicate_map", result.resolution_report, {})

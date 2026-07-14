@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -19,6 +20,7 @@ from core.semantic_keys import (
     PREDICTION_TIME,
     SOURCE_ID,
     TARGET_ID,
+    TARGET_VALUE,
 )
 from labels.service import aggregate_l1, evidence_score_l2
 
@@ -45,6 +47,8 @@ def build_measurement_inputs(
     unavailable_status: str,
     insufficient_channels_reason: str,
     anchor_source_ids: list[str],
+    source_profiles: dict[str, str] | None = None,
+    l2_scoring: dict[str, Any] | None = None,
 ) -> MeasurementResult:
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
@@ -71,12 +75,18 @@ def build_measurement_inputs(
     matrix_rows: list[dict[str, object]] = []
     expected_source_ids = sorted(expected_sources)
     expected_channels = sorted(set(expected_sources.values()))
+    l2_configuration = _l2_configuration(
+        expected_source_ids=expected_source_ids,
+        source_profiles=source_profiles or {},
+        scoring=l2_scoring or {},
+    )
     for raw in cast(list[dict[str, Any]], risk_sets.to_dict(orient="records")):
         risk = {str(key): value for key, value in raw.items()}
         key = (str(risk[firm]), int(risk[year]))
         prediction_time = pd.Timestamp(risk[prediction])
         horizon_end = prediction_time + pd.DateOffset(months=horizon_months)
         observed: dict[str, bool | None] = {item: None for item in expected_source_ids}
+        observed_lag_days: dict[str, int | None] = {item: None for item in expected_source_ids}
         for event in evidence_by_key.get(key, []):
             source_id = str(event[source])
             event_time = pd.Timestamp(cast(Any, event[availability]))
@@ -85,6 +95,7 @@ def build_measurement_inputs(
             value = event[outcome]
             parsed = None if pd.isna(cast(Any, value)) else bool(value)
             observed[source_id] = parsed
+            observed_lag_days[source_id] = int((event_time - prediction_time).days)
         for source_id in expected_source_ids:
             input_rows.append(
                 {
@@ -106,6 +117,13 @@ def build_measurement_inputs(
             channel_values[channel_id] = aggregate_l1(
                 {str(index): value for index, value in enumerate(values)}
             )
+        channel_scores = _l2_channel_scores(
+            source_outcomes=observed,
+            source_lag_days=observed_lag_days,
+            expected_sources=expected_sources,
+            source_profiles=source_profiles or {},
+            configuration=l2_configuration,
+        )
         matrix_rows.append(
             {
                 FIRM_ID: key[0],
@@ -113,9 +131,17 @@ def build_measurement_inputs(
                 MATURE: bool(risk[mature]),
                 "source_outcomes": observed,
                 "channel_outcomes": channel_values,
+                "channel_evidence_scores": channel_scores,
                 "observed_source_count": sum(value is not None for value in observed.values()),
+                "observed_channel_count": sum(
+                    value is not None for value in channel_values.values()
+                ),
                 "l1": l1,
-                "l2_score": evidence_score_l2(channel_values),
+                "l2_score": evidence_score_l2(channel_scores)
+                if l2_configuration["status"] == "AVAILABLE"
+                else None,
+                "l2_score_status": l2_configuration["status"],
+                "l2_score_reason_code": l2_configuration["reason_code"],
             }
         )
         if l1 is not None:
@@ -161,6 +187,9 @@ def build_measurement_inputs(
                 "variable_id": "L2",
                 "role": "observed_channel_normalized_score",
                 "normalization_denominator": "observed_channels_only",
+                "status": l2_configuration["status"],
+                "reason_code": l2_configuration["reason_code"],
+                "formula": l2_configuration.get("formula"),
             },
         ]
     )
@@ -171,6 +200,7 @@ def build_measurement_inputs(
             "expected_channels": expected_channels,
             "rows": matrix_rows,
             "missing_source_encoded_as_zero": False,
+            "l2_scoring": l2_configuration,
         },
         inputs=inputs,
         sealed_outcomes=sealed,
@@ -189,6 +219,94 @@ def build_measurement_inputs(
             "clean_positive_assumption": False,
         },
     )
+
+
+def _l2_configuration(
+    *,
+    expected_source_ids: list[str],
+    source_profiles: dict[str, str],
+    scoring: dict[str, Any],
+) -> dict[str, Any]:
+    formula = scoring.get("formula")
+    if formula is None:
+        return {
+            "status": "EMPIRICALLY_PENDING",
+            "reason_code": "L2_SCORING_FORMULA_NOT_LOCKED",
+            "required_config_keys": [
+                "measurement.l2_scoring.formula",
+                "measurement.l2_scoring.source_quality_by_profile",
+                "measurement.l2_scoring.delay_half_life_days",
+            ],
+        }
+    if formula != scoring.get("supported_formula"):
+        raise ValueError(f"unsupported L2 scoring formula: {formula}")
+    if scoring.get("channel_weights") != "equal":
+        raise ValueError("primary L2 requires equal channel weights")
+    raw_quality = scoring.get("source_quality_by_profile")
+    if not isinstance(raw_quality, dict):
+        raise ValueError("L2 source quality profile mapping is required")
+    quality = cast(dict[str, Any], raw_quality)
+    missing_sources = sorted(set(expected_source_ids) - set(source_profiles))
+    missing_profiles = sorted(set(source_profiles.values()) - set(quality))
+    half_life = scoring.get("delay_half_life_days")
+    if missing_sources or missing_profiles or not isinstance(half_life, (int, float)):
+        return {
+            "status": "EMPIRICALLY_PENDING",
+            "reason_code": "L2_QUALITY_OR_DELAY_PARAMETERS_NOT_LOCKED",
+            "missing_source_profiles": missing_sources,
+            "missing_quality_profiles": missing_profiles,
+            "required_config_keys": [
+                "measurement.l2_scoring.source_quality_by_profile",
+                "measurement.l2_scoring.delay_half_life_days",
+            ],
+        }
+    if float(half_life) <= 0:
+        raise ValueError("L2 delay half-life must be positive")
+    for profile_id in set(source_profiles.values()):
+        value = quality[profile_id]
+        if not isinstance(value, (int, float)) or not 0 <= float(value) <= 1:
+            raise ValueError(f"L2 quality for profile={profile_id} must be in [0, 1]")
+    return {
+        "status": "AVAILABLE",
+        "reason_code": None,
+        "formula": formula,
+        "channel_weights": "equal",
+        "source_quality_by_profile": {
+            profile: float(quality[profile]) for profile in sorted(set(source_profiles.values()))
+        },
+        "delay_half_life_days": float(half_life),
+        "missing_source_encoded_as_zero": False,
+    }
+
+
+def _l2_channel_scores(
+    *,
+    source_outcomes: dict[str, bool | None],
+    source_lag_days: dict[str, int | None],
+    expected_sources: dict[str, str],
+    source_profiles: dict[str, str],
+    configuration: dict[str, Any],
+) -> dict[str, float | None]:
+    channels = sorted(set(expected_sources.values()))
+    result: dict[str, float | None] = {channel: None for channel in channels}
+    if configuration["status"] != "AVAILABLE":
+        return result
+    qualities = cast(dict[str, float], configuration["source_quality_by_profile"])
+    half_life = float(configuration["delay_half_life_days"])
+    for channel in channels:
+        values: list[float] = []
+        for source_id, source_channel in expected_sources.items():
+            if source_channel != channel or source_outcomes[source_id] is None:
+                continue
+            lag = source_lag_days[source_id]
+            if lag is None:
+                continue
+            quality = qualities[source_profiles[source_id]]
+            timeliness = math.exp(-math.log(2.0) * max(0, lag) / half_life)
+            values.append(float(bool(source_outcomes[source_id])) * quality * timeliness)
+        if values:
+            result[channel] = sum(values) / len(values)
+    return result
 
 
 def summarize_fold_eligibility(
@@ -241,3 +359,49 @@ def summarize_fold_eligibility(
         *[row_for(value, "fully_nested") for value in confirmatory_years],
         row_for(prospective_year, "prospective"),
     ]
+
+
+def measurement_target_frame(
+    *,
+    matrices: dict[str, Any],
+    measurement_id: str,
+    minimum_observed_channels: int,
+    columns: dict[str, str],
+) -> pd.DataFrame:
+    """Materialize a soft target without converting unobserved channels to zero."""
+    if minimum_observed_channels < 1:
+        raise ValueError("minimum observed channels must be positive")
+    raw_rows = matrices.get("rows")
+    if not isinstance(raw_rows, list):
+        raise ValueError("source-channel matrix rows are required")
+    firm = columns[FIRM_ID]
+    year = columns[FISCAL_YEAR]
+    value = columns[TARGET_VALUE]
+    output: list[dict[str, object]] = []
+    for raw in cast(list[object], raw_rows):
+        if not isinstance(raw, dict):
+            continue
+        row = cast(dict[str, Any], raw)
+        if int(row.get("observed_channel_count", 0)) < minimum_observed_channels:
+            target: object = None
+        elif measurement_id == "L2":
+            target = row.get("l2_score")
+        elif measurement_id == "L3_fixed_pi":
+            target = row.get("l3_posterior_mean")
+        else:
+            raise ValueError(f"measurement={measurement_id}: unsupported soft target")
+        output.append(
+            {
+                firm: str(row[FIRM_ID]),
+                year: int(row[FISCAL_YEAR]),
+                value: target,
+            }
+        )
+    frame = pd.DataFrame(output, columns=[firm, year, value])
+    frame[firm] = frame[firm].astype("string")
+    frame[year] = frame[year].astype("int16")
+    frame[value] = frame[value].astype("float64")
+    observed = frame[value].dropna()
+    if not observed.empty and ((observed < 0).any() or (observed > 1).any()):
+        raise ValueError(f"measurement={measurement_id}: target values must be in [0, 1]")
+    return frame

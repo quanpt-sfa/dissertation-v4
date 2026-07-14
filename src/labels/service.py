@@ -16,7 +16,7 @@ def aggregate_l1(source_outcomes: Mapping[str, bool | None]) -> bool | None:
     return None
 
 
-def evidence_score_l2(channel_outcomes: Mapping[str, bool | None]) -> float | None:
+def evidence_score_l2(channel_outcomes: Mapping[str, bool | float | None]) -> float | None:
     """Equal-channel evidence score normalized only over observed channels."""
     observed = [float(value) for value in channel_outcomes.values() if value is not None]
     if not observed:

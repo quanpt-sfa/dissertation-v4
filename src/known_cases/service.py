@@ -66,35 +66,59 @@ def evaluate_known_cases(
                 }
             )
     scenario_ids = sorted({str(item[LEARNER_ID]) for item in results})
+    eligible_case_ids = sorted({str(item["case_id"]) for item in results})
     below_counts = {
-        scenario: sum(
-            item["percentile"] is not None and float(item["percentile"]) < 0.5
-            for item in results
-            if item[LEARNER_ID] == scenario
+        scenario: len(
+            {
+                str(item["case_id"])
+                for item in results
+                if item[LEARNER_ID] == scenario
+                and item["percentile"] is not None
+                and float(item["percentile"]) < 0.5
+            }
         )
         for scenario in scenario_ids
     }
     failing_scenarios = sum(value >= below_median_cases for value in below_counts.values())
     scenario_fraction = failing_scenarios / len(scenario_ids) if scenario_ids else None
-    strong = bool(results) and all(
-        item["percentile"] is not None and float(item["percentile"]) < strong_percentile
-        for item in results
+    strong_counts = {
+        scenario: len(
+            {
+                str(item["case_id"])
+                for item in results
+                if item[LEARNER_ID] == scenario
+                and item["percentile"] is not None
+                and float(item["percentile"]) < strong_percentile
+            }
+        )
+        for scenario in scenario_ids
+    }
+    strong_scenario_fraction = (
+        sum(value >= minimum_cases for value in strong_counts.values()) / len(scenario_ids)
+        if scenario_ids
+        else None
     )
-    enough = len(cases) >= minimum_cases
+    strong = bool(
+        strong_scenario_fraction is not None and strong_scenario_fraction >= scenario_fraction_min
+    )
+    enough = len(eligible_case_ids) >= minimum_cases
     veto = bool(
         enough and scenario_fraction is not None and scenario_fraction >= scenario_fraction_min
     )
     results.append(
         {
             "record_type": "summary",
-            "status": "PASS" if results else "SKIPPED",
+            "status": "PASS" if results else "INSUFFICIENT_EVIDENCE",
             "reason_code": None if results else "KNOWN_CASES_UNAVAILABLE",
-            "case_count": len(cases),
+            "configured_case_count": len(cases),
+            "eligible_case_count": len(eligible_case_ids),
+            "eligible_case_ids": eligible_case_ids,
             "minimum_cases_met": enough,
             "scenario_count": len(scenario_ids),
             "below_median_scenario_fraction": scenario_fraction,
             "soft_veto": veto,
             "strong_falsification": strong,
+            "strong_falsification_scenario_fraction": strong_scenario_fraction,
             "fewer_than_minimum_role": None if enough else "casewise_reporting_only",
             "permutation_method": "exact_within_outer_year_model_rank",
             "may_upgrade_failed_gate": False,

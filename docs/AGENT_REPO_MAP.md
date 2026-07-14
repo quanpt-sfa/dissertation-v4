@@ -181,8 +181,9 @@ Seal quan trọng:
 ## 8. Bản đồ artifact runtime
 
 Mỗi run nằm ở `artifacts/runs/<run-id>/`. Mỗi artifact có file dữ liệu và file
-`*.manifest.json` chứa protocol hash, producer, schema, coordinates và content
-hash. Chỉ `ArtifactStore` được đọc/ghi artifact chính thức.
+`*.manifest.json` chứa protocol hash, producer, schema, coordinates, content hash
+và danh sách dependency artifact đã xác minh. Chỉ `ArtifactStore` được đọc/ghi
+artifact chính thức.
 
 Coordinates chính:
 
@@ -256,5 +257,13 @@ uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --ch
 - File/semantic field bắt buộc thiếu: dừng pipeline, không chuyển thành `SKIPPED`.
 
 Các giá trị còn cần người dùng khóa trước run thật thường gồm
-`risksets.data_cutoff`, `features.registry`, operational simulation/utility
-scenarios và Gate 3 operational bindings.
+`risksets.data_cutoff`, `features.registry`, L2 scoring/coverage, fixed-π L3
+grid/priors, learner search spaces, operational simulation/utility scenarios và
+hai threshold cùng Gate 3 operational bindings.
+
+## 12. Bản đồ audit/completion
+
+- `IMPLEMENTATION_GAP_MATRIX.md`: baseline D01–D45 và trạng thái closure có bằng chứng.
+- `CHAPTER3_REQUIREMENT_TRACEABILITY.md`: requirement → owner → stage → artifact → test.
+- `P00_P17_COMPLETION_REPORT.md`: quality gates, fixture evidence, empirical blockers
+  và phần vẫn chưa complete. Không suy diễn “complete” từ generated catalog.

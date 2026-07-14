@@ -10,6 +10,7 @@ from typing import Any, cast
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from core.artifact_store import ArtifactStore
+from core.pipeline import mapping, sequence
 from core.runtime import RunContext
 from core.schema_registry import contract_registry
 from p01.registry import load_locked_registry, resolve_source
@@ -72,6 +73,13 @@ def main() -> int:
         sample_start=sample_start,
         sample_end=sample_end,
         output_columns=output_column_names(registry),
+        registered_predictor_columns=[
+            str(mapping(item, "feature registry item")["physical_column"])
+            for item in sequence(
+                mapping(registry.get("features"), "features").get("registry"),
+                "features.registry",
+            )
+        ],
     )
     publish_p02_outputs(
         run_root=run_root,
@@ -79,6 +87,7 @@ def main() -> int:
         protocol_hash=locked_hash,
         recovery_policy=recovery_policy,
         result=result,
+        dependencies=context.dependency_records(),
     )
 
     summary = result.resolution_report["summary"]

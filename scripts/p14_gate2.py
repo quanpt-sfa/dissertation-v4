@@ -59,7 +59,7 @@ def main() -> int:
     )
     result["protocol_hash"] = loaded.protocol_hash
     loaded.context.write("gate2_verdict", result, {})
-    print(f"P14 status=PASS verdict={result['verdict']}")
+    print(f"P14 status={result['status']} verdict={result['verdict']}")
     return 0
 
 

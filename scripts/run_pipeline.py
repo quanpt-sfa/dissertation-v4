@@ -10,6 +10,67 @@ import sys
 from pathlib import Path
 from typing import cast
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from core.resume import artifact_complete, json_object, verify_resume_inputs
+
+
+def _unit_complete(
+    registry: dict[str, object],
+    run_root: Path,
+    protocol_hash: str,
+    artifacts: list[tuple[str, dict[str, str]]],
+) -> bool:
+    return bool(artifacts) and all(
+        artifact_complete(registry, run_root, protocol_hash, artifact_id, coordinates)
+        for artifact_id, coordinates in artifacts
+    )
+
+
+def _step_outputs(
+    registry: dict[str, object], stage_id: str, coordinates: dict[str, str]
+) -> list[tuple[str, dict[str, str]]]:
+    raw_steps = registry.get("steps")
+    raw_artifacts = registry.get("artifacts")
+    if not isinstance(raw_steps, dict) or not isinstance(raw_artifacts, dict):
+        raise ValueError("locked step/artifact catalogs are unavailable")
+    raw_step = cast(dict[str, object], raw_steps).get(stage_id)
+    if not isinstance(raw_step, dict):
+        raise ValueError(f"stage={stage_id}: absent from locked catalog")
+    writes = cast(dict[str, object], raw_step).get("writes")
+    if not isinstance(writes, list):
+        raise ValueError(f"stage={stage_id}: writes must be a list")
+    outputs: list[tuple[str, dict[str, str]]] = []
+    for value in cast(list[object], writes):
+        artifact_id = str(value)
+        raw_artifact = cast(dict[str, object], raw_artifacts).get(artifact_id)
+        if not isinstance(raw_artifact, dict):
+            raise ValueError(f"artifact={artifact_id}: absent from locked catalog")
+        names = cast(dict[str, object], raw_artifact).get("coordinates")
+        if isinstance(names, list) and {str(name) for name in cast(list[object], names)} == set(
+            coordinates
+        ):
+            outputs.append((artifact_id, dict(coordinates)))
+    return outputs
+
+
+def _run_unit(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    registry: dict[str, object],
+    run_root: Path,
+    protocol_hash: str,
+    artifacts: list[tuple[str, dict[str, str]]],
+) -> None:
+    if _unit_complete(registry, run_root, protocol_hash, artifacts):
+        print(f"= verified complete; skip {' '.join(command[1:3])}", flush=True)
+        return
+    _run(command, cwd=cwd, env=env)
+    if not _unit_complete(registry, run_root, protocol_hash, artifacts):
+        raise RuntimeError(f"unit completed without its full artifact contract: {command}")
+
 
 def _run(command: list[str], *, cwd: Path, env: dict[str, str]) -> None:
     print("+", " ".join(command), flush=True)
@@ -50,6 +111,11 @@ def main() -> int:
     stage_ids = [f"P{value:02d}" for value in range(18)]
     parser.add_argument("--through", choices=stage_ids, default="P17")
     parser.add_argument("--allow-dirty", action="store_true")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the same immutable run after verifying code, config, snapshot, and artifacts.",
+    )
     args = parser.parse_args()
 
     project_root = args.config.resolve().parent.parent
@@ -58,7 +124,7 @@ def main() -> int:
     raw_root = args.raw_root.expanduser().resolve()
     output_root = args.output_root.expanduser().resolve()
     run_root = output_root / args.run_id
-    if run_root.exists():
+    if run_root.exists() and not args.resume:
         raise FileExistsError(f"run root already exists and is immutable: {run_root}")
 
     snapshot_path = run_root / "SNAPSHOT" / "data_snapshot.json"
@@ -66,53 +132,54 @@ def main() -> int:
     env["DISSERTATION_RAW_ROOT"] = str(raw_root)
     python = sys.executable
 
-    _run(
-        [
-            python,
-            "scripts/create_data_snapshot.py",
-            "--config",
-            str(args.config),
-            "--raw-root",
-            str(raw_root),
-            "--snapshot-id",
-            args.run_id,
-            "--output",
-            str(snapshot_path),
-        ],
-        cwd=project_root,
-        env=env,
-    )
-    _run(
-        [
-            python,
-            "scripts/p00_lock_protocol.py",
-            "--config",
-            str(args.config),
-            "--run-id",
-            args.run_id,
-            "--output-root",
-            str(output_root),
-            "--snapshot-manifest",
-            str(snapshot_path),
-        ],
-        cwd=project_root,
-        env=env,
-    )
+    registry_path = run_root / "P00" / "registry.lock.json"
+    if args.resume:
+        if not snapshot_path.is_file() or not registry_path.is_file():
+            raise RuntimeError("resume requires a completed snapshot and P00 lock")
+    else:
+        _run(
+            [
+                python,
+                "scripts/create_data_snapshot.py",
+                "--config",
+                str(args.config),
+                "--raw-root",
+                str(raw_root),
+                "--snapshot-id",
+                args.run_id,
+                "--output",
+                str(snapshot_path),
+            ],
+            cwd=project_root,
+            env=env,
+        )
+        _run(
+            [
+                python,
+                "scripts/p00_lock_protocol.py",
+                "--config",
+                str(args.config),
+                "--run-id",
+                args.run_id,
+                "--output-root",
+                str(output_root),
+                "--snapshot-manifest",
+                str(snapshot_path),
+            ],
+            cwd=project_root,
+            env=env,
+        )
     if args.through == "P00":
         return 0
 
-    snapshot_raw: object = json.loads(snapshot_path.read_text(encoding="utf-8"))
-    if not isinstance(snapshot_raw, dict):
-        raise ValueError("snapshot must be an object")
-    snapshot = cast(dict[str, object], snapshot_raw)
+    snapshot = json_object(snapshot_path, "snapshot")
     sources_raw = snapshot.get("sources")
     if not isinstance(sources_raw, list):
         raise ValueError("snapshot.sources must be a list")
-    registry_path = run_root / "P00" / "registry.lock.json"
-    registry_raw: object = json.loads(registry_path.read_text(encoding="utf-8"))
-    if not isinstance(registry_raw, dict):
-        raise ValueError("locked registry must be an object")
-    registry = cast(dict[str, object], registry_raw)
+    registry = json_object(registry_path, "locked registry")
+    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
+    if args.resume:
+        verify_resume_inputs(project_root, raw_root, snapshot, run_root)
     source_registry = cast(
         dict[str, object],
         cast(
@@ -135,7 +202,8 @@ def main() -> int:
             source_ids.append(source_id)
 
     for source_id in sorted(source_ids):
-        _run(
+        source_coordinates = {"source_id": source_id}
+        _run_unit(
             [
                 python,
                 "scripts/p01_audit_raw.py",
@@ -148,11 +216,15 @@ def main() -> int:
             ],
             cwd=project_root,
             env=env,
+            registry=registry,
+            run_root=run_root,
+            protocol_hash=protocol_hash,
+            artifacts=[("raw_audit", source_coordinates)],
         )
     if args.through == "P01":
         return 0
 
-    _run(
+    _run_unit(
         [
             python,
             "scripts/p02_build_firm_panel.py",
@@ -163,6 +235,10 @@ def main() -> int:
         ],
         cwd=project_root,
         env=env,
+        registry=registry,
+        run_root=run_root,
+        protocol_hash=protocol_hash,
+        artifacts=_step_outputs(registry, "P02", {}),
     )
     if args.through == "P02":
         return 0
@@ -175,15 +251,19 @@ def main() -> int:
         "P07": "scripts/p07_features.py",
     }
     for stage_id, script in simple_stages.items():
-        _run(
+        _run_unit(
             [python, script, "--registry", str(registry_path), "--run-id", args.run_id],
             cwd=project_root,
             env=env,
+            registry=registry,
+            run_root=run_root,
+            protocol_hash=protocol_hash,
+            artifacts=_step_outputs(registry, stage_id, {}),
         )
         if args.through == stage_id:
             return 0
 
-    _run(
+    _run_unit(
         [
             python,
             "scripts/p08_build_scenario_registry.py",
@@ -194,6 +274,10 @@ def main() -> int:
         ],
         cwd=project_root,
         env=env,
+        registry=registry,
+        run_root=run_root,
+        protocol_hash=protocol_hash,
+        artifacts=[("simulation_scenario_registry", {})],
     )
     simulation = cast(dict[str, object], registry["simulation"])
     scenarios = simulation.get("operational_scenarios")
@@ -223,7 +307,12 @@ def main() -> int:
             for start in range(0, minimum, batch_size):
                 count = min(batch_size, minimum - start)
                 batch_id = f"{start:06d}-{start + count - 1:06d}"
-                _run(
+                batch_coordinates = {
+                    "scenario_id": scenario_id,
+                    "method_id": method_id,
+                    "batch_id": batch_id,
+                }
+                _run_unit(
                     [
                         python,
                         "scripts/p08_run_batch.py",
@@ -244,6 +333,10 @@ def main() -> int:
                     ],
                     cwd=project_root,
                     env=env,
+                    registry=registry,
+                    run_root=run_root,
+                    protocol_hash=protocol_hash,
+                    artifacts=[("simulation_batches", batch_coordinates)],
                 )
     while jobs:
         output = _run_capture(
@@ -294,14 +387,24 @@ def main() -> int:
                 item.get("minimum_replications_met") is True and item.get("mcse_target_met") is True
                 for item in job_metrics
             )
-            if not precision_met and completed < maximum:
+            terminal_at_cap = bool(job_metrics) and all(
+                item.get("mcse_target_met") is True
+                or item.get("maximum_replications_reached") is True
+                for item in job_metrics
+            )
+            if not precision_met and not terminal_at_cap and completed < maximum:
                 pending.append((scenario_id, method_id, completed))
         if not pending:
             break
         for scenario_id, method_id, start in pending:
             count = min(batch_size, maximum - start)
             batch_id = f"{start:06d}-{start + count - 1:06d}"
-            _run(
+            batch_coordinates = {
+                "scenario_id": scenario_id,
+                "method_id": method_id,
+                "batch_id": batch_id,
+            }
+            _run_unit(
                 [
                     python,
                     "scripts/p08_run_batch.py",
@@ -322,8 +425,12 @@ def main() -> int:
                 ],
                 cwd=project_root,
                 env=env,
+                registry=registry,
+                run_root=run_root,
+                protocol_hash=protocol_hash,
+                artifacts=[("simulation_batches", batch_coordinates)],
             )
-    _run(
+    _run_unit(
         [
             python,
             "scripts/p08_aggregate_batches.py",
@@ -334,23 +441,12 @@ def main() -> int:
         ],
         cwd=project_root,
         env=env,
+        registry=registry,
+        run_root=run_root,
+        protocol_hash=protocol_hash,
+        artifacts=[("mcse_report", {})],
     )
     if args.through == "P08":
-        return 0
-
-    _run(
-        [
-            python,
-            "scripts/p09_splits_weights.py",
-            "--registry",
-            str(registry_path),
-            "--run-id",
-            args.run_id,
-        ],
-        cwd=project_root,
-        env=env,
-    )
-    if args.through == "P09":
         return 0
 
     folds = cast(dict[str, object], registry["folds"])
@@ -361,8 +457,36 @@ def main() -> int:
         str(folds["initial_outer_year"]),
         *[str(value) for value in cast(list[object], raw_nested)],
     ]
+    p09_artifacts = _step_outputs(registry, "P09", {})
     for fold_id in outer_folds:
-        _run(
+        p09_artifacts.extend(
+            [
+                ("fold_aware_weights", {"fold_id": fold_id}),
+                ("weight_diagnostics", {"fold_id": fold_id}),
+            ]
+        )
+    _run_unit(
+        [
+            python,
+            "scripts/p09_splits_weights.py",
+            "--registry",
+            str(registry_path),
+            "--run-id",
+            args.run_id,
+        ],
+        cwd=project_root,
+        env=env,
+        registry=registry,
+        run_root=run_root,
+        protocol_hash=protocol_hash,
+        artifacts=p09_artifacts,
+    )
+    if args.through == "P09":
+        return 0
+
+    for fold_id in outer_folds:
+        fold_coordinates = {"outer_fold": fold_id}
+        _run_unit(
             [
                 python,
                 "scripts/p10_select_measurement.py",
@@ -375,11 +499,16 @@ def main() -> int:
             ],
             cwd=project_root,
             env=env,
+            registry=registry,
+            run_root=run_root,
+            protocol_hash=protocol_hash,
+            artifacts=_step_outputs(registry, "P10", fold_coordinates),
         )
     if args.through == "P10":
         return 0
     for fold_id in outer_folds:
-        _run(
+        fold_coordinates = {"outer_fold": fold_id}
+        _run_unit(
             [
                 python,
                 "scripts/p11_freeze_models.py",
@@ -392,11 +521,16 @@ def main() -> int:
             ],
             cwd=project_root,
             env=env,
+            registry=registry,
+            run_root=run_root,
+            protocol_hash=protocol_hash,
+            artifacts=_step_outputs(registry, "P11", fold_coordinates),
         )
     if args.through == "P11":
         return 0
     for fold_id in outer_folds:
-        _run(
+        fold_coordinates = {"outer_fold": fold_id}
+        _run_unit(
             [
                 python,
                 "scripts/p12_evaluate.py",
@@ -409,6 +543,10 @@ def main() -> int:
             ],
             cwd=project_root,
             env=env,
+            registry=registry,
+            run_root=run_root,
+            protocol_hash=protocol_hash,
+            artifacts=_step_outputs(registry, "P12", fold_coordinates),
         )
     if args.through == "P12":
         return 0
@@ -421,10 +559,14 @@ def main() -> int:
         "P17": "scripts/p17_build_outputs.py",
     }
     for stage_id, script in final_stages.items():
-        _run(
+        _run_unit(
             [python, script, "--registry", str(registry_path), "--run-id", args.run_id],
             cwd=project_root,
             env=env,
+            registry=registry,
+            run_root=run_root,
+            protocol_hash=protocol_hash,
+            artifacts=_step_outputs(registry, stage_id, {}),
         )
         if args.through == stage_id:
             return 0

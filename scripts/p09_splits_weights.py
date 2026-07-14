@@ -28,6 +28,10 @@ def main() -> int:
         print(f"P09 dry-run: folds={','.join(fold_ids)}")
         return 0
     panel = loaded.context.read("feature_panel", {})
+    feature_registry = [
+        mapping(item, "feature registry item")
+        for item in sequence(loaded.context.read("feature_registry", {}), "feature registry")
+    ]
     risk_sets = loaded.context.read("risk_sets", {})
     matrices = mapping(loaded.context.read("source_channel_matrices", {}), "source matrices")
     observability = mapping(
@@ -56,6 +60,12 @@ def main() -> int:
         ess_fraction_minimum=float(common["ess_fraction_min"]),
         ess_absolute_minimum=float(common["ess_absolute_min"]),
         columns=physical_columns(loaded.registry),
+        verification_feature_ids=[
+            str(item["feature_id"])
+            for item in feature_registry
+            if item.get("role") == "observability"
+            and item.get("available_before_verification", True) is True
+        ],
     )
     loaded.context.write("temporal_split_registry", result.splits, {})
     loaded.context.write("channel_time_split_registry", result.channel_splits, {})

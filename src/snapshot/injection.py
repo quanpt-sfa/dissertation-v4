@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -39,7 +41,24 @@ def inject_snapshot(registry: dict[str, object], snapshot_path: Path) -> dict[st
         "hash_policy": "locked_sha256_required",
         "snapshot_id": snapshot.get("snapshot_id"),
         "snapshot_hash": snapshot.get("snapshot_hash"),
+        "snapshot_content_hash": snapshot.get("snapshot_content_hash")
+        or _legacy_content_hash(snapshot),
         "sources": source_registry,
     }
     registry["data_snapshot"] = snapshot
     return registry
+
+
+def _legacy_content_hash(snapshot: dict[str, object]) -> str:
+    """Derive a semantic content hash for schema-v1 manifests created before this field existed."""
+    payload = {
+        "snapshot_schema_version": snapshot.get("snapshot_schema_version"),
+        "root_environment_variable": snapshot.get("root_environment_variable"),
+        "raw_root_recorded": snapshot.get("raw_root_recorded"),
+        "profiles": snapshot.get("profiles"),
+        "sources": snapshot.get("sources"),
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(encoded).hexdigest()

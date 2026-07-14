@@ -31,7 +31,13 @@ def main() -> int:
         state="FROZEN",
         coordinates=coordinates,
     )
+    mcse = mapping(loaded.context.read("mcse_report", {}), "MCSE report")
+    if mcse.get("status") != "PASS" or mcse.get("precision_target_met") is not True:
+        raise RuntimeError(
+            "P12 outer firewall closed: P08 simulation must PASS every locked replication and MCSE rule"
+        )
     freeze = mapping(loaded.context.read("model_freeze_receipt", coordinates), "freeze receipt")
+    models = mapping(loaded.context.read("model_artifacts", coordinates), "model artifacts")
     if freeze.get("status") != "PASS":
         raise RuntimeError(f"fold={args.outer_fold}: a PASS model-freeze receipt is required")
     if freeze.get("protocol_hash") != loaded.protocol_hash:
@@ -42,6 +48,7 @@ def main() -> int:
         "model_freeze_receipt_hash": loaded.context.store.receipt_hash(
             "model_freeze_receipt", coordinates
         ),
+        "mcse_report_hash": loaded.context.store.receipt_hash("mcse_report", {}),
         "opened_at_state": "FROZEN",
         OUTER_FOLD: args.outer_fold,
     }
@@ -71,6 +78,10 @@ def main() -> int:
         confidence_level=float(bootstrap["confidence_level"]),
         columns=physical_columns(loaded.registry),
         rng=generator(loaded.protocol_hash, "P12", coordinates, "firm_bootstrap"),
+        oof_training_targets=[
+            mapping(item, "OOF training target")
+            for item in sequence(models.get("oof_training_targets"), "OOF training targets")
+        ],
     )
     loaded.context.write("calibration_outputs", result.calibration, coordinates)
     loaded.context.write("evaluation_metrics", result.metrics, coordinates)

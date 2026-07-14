@@ -222,7 +222,7 @@ schemas:
       min: 1990
       max: 2100
     cross_column_checks: []
-    strict_columns: true
+    strict_columns: false
     coerce: false
     compatibility_policy: strict
   evidence_ledger_frame:

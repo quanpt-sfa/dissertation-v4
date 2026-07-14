@@ -8,7 +8,9 @@ nguồn kiểm tra cuối cùng.
 ## 1. Nguyên tắc xuyên suốt
 
 - Mỗi run có một `run-id` và thư mục bất biến.
-- Snapshot file thật là một phần của protocol hash.
+- Nội dung semantic của snapshot (file/hash/schema/header/binding) là một phần của
+  protocol hash. `snapshot_id`, thời điểm capture và detached integrity hash không
+  làm thay đổi semantic protocol hash khi bytes/schema/binding giống hệt nhau.
 - Sau P00, stage chỉ đọc `registry.lock.json`, không đọc module YAML trực tiếp.
 - Mọi artifact chính thức đi qua `RunContext` và `ArtifactStore`.
 - Physical column được giải từ registry; stage chỉ dùng logical semantic keys.
@@ -34,6 +36,8 @@ uv run python scripts/run_pipeline.py `
 
 `--through Pxx` dừng sau stage tương ứng. Runner mặc định yêu cầu Git tree sạch;
 `--allow-dirty` chỉ dùng cho phát triển có chủ ý, không dùng để chấp nhận run cuối.
+`--resume` chỉ tiếp tục cùng run sau khi runner xác minh lại raw SHA-256, code,
+config, snapshot, manifest và content hash của từng unit đã hoàn tất.
 
 Luồng runner:
 
@@ -82,7 +86,9 @@ Snapshot engine:
 4. ánh xạ semantic field;
 5. tính SHA-256 và kích thước;
 6. ghi relative path, row count, columns và schema hash;
-7. đưa snapshot path cho P00.
+7. tính `snapshot_content_hash` semantic và detached `snapshot_hash` bảo vệ chính
+   file manifest;
+8. đưa snapshot path cho P00.
 
 Thêm file, thay nội dung, đổi schema/header hoặc đổi semantic binding đều làm
 snapshot/protocol thay đổi. Snapshot không copy dữ liệu sang vị trí khác.
@@ -251,7 +257,10 @@ Mục tiêu:
 
 - tạo source binary matrix và channel matrix;
 - xây L0 theo source và L1 union có bảo toàn missingness;
-- tính metadata L2 trên các channel quan sát được;
+- tính L2 theo `g_c(S,T,Q)` khi công thức, quality theo profile và delay half-life
+  đã được khóa; nếu chưa khóa thì giữ `EMPIRICALLY_PENDING`, không dùng proxy;
+- chạy pilot fixed-π L3 bằng MCMC với Se/Sp theo source, random effect theo channel,
+  R-hat, ESS và posterior-predictive diagnostics khi grid/prior đã được khóa;
 - đánh giá channel/anchor/L3 capability;
 - chỉ công bố positive count aggregate theo fold;
 - niêm phong row-level L1 outcomes.
@@ -272,7 +281,8 @@ Hàng rào:
 
 - L1: có ít nhất một positive thì `True`; toàn bộ observed false mới `False`;
   còn missing/false hỗn hợp là unknown;
-- L2 chuẩn hóa trên observed channels, không dùng tổng số channel cố định;
+- L2 chuẩn hóa trên observed channels, lưu `observed_channel_count`, quality/delay
+  components và không dùng tổng số channel cố định;
 - content predictor không được vào label model;
 - hierarchical-π không được trở thành Gate 1 candidate;
 - `fold_eligibility` chỉ chứa aggregate count, không lộ row-level outer labels.
@@ -362,6 +372,11 @@ Hàng rào:
 - số replication và MCSE threshold chỉ lấy từ registry;
 - scenario list rỗng tạo `SKIPPED`, không tự bịa scenario.
 
+Giới hạn implementation hiện còn mở: P08 đã có DGP, adaptive MCSE và một số
+operating-characteristic metrics, nhưng chưa tái chạy toàn bộ production procedure
+cho mọi nhánh D38–D45 và chưa có semi-synthetic development-covariate tier. Vì vậy
+không được dùng việc script tồn tại hoặc unit test pass để gọi P08 là method-complete.
+
 ## 14. P09 — Temporal splits và fold-aware weights
 
 Script: `scripts/p09_splits_weights.py`.
@@ -397,7 +412,7 @@ Script: `scripts/p10_select_measurement.py`.
 
 Mục tiêu:
 
-- đánh giá L2 và L3 fixed-π nếu capability cho phép;
+- đánh giá L2 và L3 fixed-π chỉ khi target/capability substantive cho phép;
 - sử dụng development years trước outer fold;
 - thực hiện channel-within-time holdout;
 - ghi lựa chọn theo fold và strict channel;
@@ -419,6 +434,10 @@ Hàng rào:
 - AP không tính trực tiếp trên L2/L3 soft targets;
 - hierarchical-π không thể được chọn.
 
+Giới hạn implementation hiện còn mở: strict channel score hiện chưa phải toàn bộ
+fitted nested learner/feature/tuning/calibration procedure và row-level fold-local L3
+posterior chưa được truyền vào P10. P10 phải giữ `none` khi các evidence này thiếu.
+
 ## 16. P11 — Fit models và freeze
 
 Script: `scripts/p11_freeze_models.py`.
@@ -426,6 +445,10 @@ Script: `scripts/p11_freeze_models.py`.
 Mục tiêu:
 
 - fit learner đã đăng ký trong từng outer fold;
+- chạy search space đã khóa với tối đa 50 valid configurations, ghi runtime và
+  valid/evaluated counts; thiếu search space của learner confirmatory thì dừng;
+- luôn fit Track A trên L1; fit Track B thật trên L2/L3 được P10 chọn;
+- fit bagging Anchor-PU chỉ từ positive của source neo đã đăng ký;
 - tạo observability-only, content-only và full comparisons;
 - fit imputation/scaling/model trong temporal development folds;
 - tạo development OOF predictions;
@@ -636,20 +659,27 @@ Pipeline cố ý fail-closed khi các giá trị sau chưa được người dù
 | --- | --- | --- |
 | `risksets.data_cutoff` | `config/methodology/risksets.yaml` | P04 dừng |
 | `features.registry` | `config/methodology/features.yaml` | P07 SKIPPED; P11 không freeze PASS |
+| `measurement.l2_missingness.minimum_observed_channels` | `config/methodology/measurement.yaml` | L2 không eligible |
+| `measurement.l2_scoring.formula`, quality profile và delay half-life | `config/methodology/measurement.yaml` | L2 giữ `EMPIRICALLY_PENDING` |
+| fixed-π grid và accuracy priors theo profile | `config/methodology/measurement.yaml` | L3 pilot giữ `EMPIRICALLY_PENDING` |
+| `learners.tuning.search_spaces` | `config/execution/learners.yaml` | P11 dừng trước freeze |
 | `simulation.operational_scenarios` | `config/execution/simulation.yaml` | P08 SKIPPED |
 | `utility.operational_scenarios` | `config/methodology/utility.yaml` | utility SKIPPED, descriptive yield vẫn ghi |
-| Gate 3 operational bindings | `config/methodology/inference.yaml` | Gate 3 insufficient evidence |
+| Hai threshold feature, pressure/monitoring/domain/model bindings | `config/methodology/inference.yaml` | Gate 3 insufficient evidence |
 | `known_cases.csv` | `data/raw/known_cases/` | P15 SKIPPED; không soft veto |
 
 Không điền các setting này bằng suy đoán từ outer results hoặc K1–K4.
 
 ## 24. Chạy lại và phục hồi
 
-- Artifact là immutable; không ghi đè partition đã PASS.
+- Artifact là immutable; exact retry chỉ idempotent khi content và dependency
+  provenance giống hệt nhau.
 - P01/P08/P09/P10/P11/P12 có đơn vị partition nên có thể rerun trong một run mới
   với coordinates tương ứng.
-- Nếu một run dừng giữa chừng, recovery policy chỉ quarantine artifact/manifest
-  pair không hoàn chỉnh; không sửa file đã hoàn tất.
+- Nếu một run dừng giữa chừng, chạy lại đúng lệnh với `--resume`. Recovery policy
+  chỉ quarantine artifact/manifest pair không hoàn chỉnh; unit đủ contract và hash
+  được skip, unit chưa đủ được chạy lại.
+- Resume bị từ chối nếu raw source, code, module config hoặc snapshot đã drift.
 - Đổi source, schema, config hoặc code được chấp nhận phải tạo run-id/protocol mới.
 - P17 lỗi trình bày có thể rerun từ finalized upstream artifacts trong run mới;
   không refit P11.

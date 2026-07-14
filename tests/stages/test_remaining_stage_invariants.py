@@ -31,7 +31,11 @@ from gates.service import gate2_verdict, gate3_verdict
 from labels.service import aggregate_l1, evidence_score_l2, posterior_l3_fixed_pi
 from risksets.service import build_risk_set
 from selection.service import select_measurement
-from simulation.service import run_batch, summarize_mcse
+from simulation.service import (
+    attach_development_covariate_pools,
+    run_batch,
+    summarize_mcse,
+)
 from splits.service import build_splits_and_weights
 
 
@@ -165,6 +169,30 @@ def test_p08_batch_is_deterministic_for_same_registered_rng_seed() -> None:
     )
     pd.testing.assert_frame_equal(first, second)
     assert not any("pi_bias" in value for value in first["metric_id"].astype(str))
+
+
+def test_p08_semi_synthetic_pool_uses_development_covariates_only() -> None:
+    scenario = {
+        "scenario_id": "semi",
+        "tier": "semi_synthetic_development_covariates",
+        "semi_synthetic_feature_ids": ["content"],
+    }
+    attached = attach_development_covariate_pools(
+        scenarios=[scenario],
+        feature_panel=pd.DataFrame(
+            {
+                "year_key": [2018, 2019, 2021],
+                "content": [1.0, 3.0, 1000.0],
+            }
+        ),
+        feature_registry=[{"feature_id": "content", "role": "content"}],
+        year_column="year_key",
+        development_year_maximum=2019,
+    )
+    assert attached[0]["semi_synthetic_pool_rows"] == 2
+    assert attached[0]["semi_synthetic_development_year_maximum"] == 2019
+    assert attached[0]["outer_rows_used_in_pool"] == 0
+    assert attached[0]["semi_synthetic_content_pool"] == pytest.approx([-1.0, 1.0])
 
 
 def test_fixed_pi_l3_ignores_missing_sources_and_adaptive_mcse_reports_actual_status() -> None:
@@ -346,6 +374,27 @@ def test_gates_fail_closed_when_required_evidence_or_bindings_are_absent() -> No
         gate={},
         confirmatory_folds=[],
         columns=_columns(),
+        measurement_selections=[{"selected_measurement": "L2"}] * 4,
     )
     assert threshold["reason_code"] == "INTERACTION_BINDINGS_UNAVAILABLE"
+    assert gate3["verdict"] == "INSUFFICIENT_EVIDENCE"
+    threshold, gate3 = gate3_verdict(
+        gate2={"verdict": "PASS"},
+        known_case_results=[],
+        feature_panel=pd.DataFrame(),
+        predictions=pd.DataFrame(),
+        outcomes=pd.DataFrame(),
+        bindings={
+            "threshold_feature_ids": [],
+            "pressure_feature_id": "pressure",
+            "monitoring_feature_id": "monitoring",
+            "parent_model_id": "model",
+            "domain_feature_id": "domain",
+        },
+        gate={},
+        confirmatory_folds=[],
+        columns=_columns(),
+        measurement_selections=[{"selected_measurement": "L2"}] * 4,
+    )
+    assert threshold["reason_code"] == "TWO_THRESHOLD_BINDINGS_REQUIRED"
     assert gate3["verdict"] == "INSUFFICIENT_EVIDENCE"

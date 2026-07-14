@@ -28,18 +28,50 @@ class RunContext:
         self.registry = registry
         self.store = store
         self.unit_coordinates = dict(unit_coordinates or {})
+        self._dependencies: dict[tuple[str, str], dict[str, object]] = {}
 
     def read(self, artifact_id: str, coordinates: Mapping[str, str]) -> object:
         self._access(artifact_id, "read")
         self._verify_required_receipts()
-        return self.store.read(artifact_id, coordinates)
+        value = self.store.read(artifact_id, coordinates)
+        manifest = self.store.manifest(artifact_id, coordinates)
+        dependency: dict[str, object] = {
+            "artifact_id": artifact_id,
+            "coordinates": dict(coordinates),
+            "content_hash": manifest["content_hash"],
+            "producer_step": manifest["producer_step"],
+            "protocol_hash": manifest["protocol_hash"],
+        }
+        key = (artifact_id, str(sorted(coordinates.items())))
+        self._dependencies[key] = dependency
+        return value
 
     def write(
         self, artifact_id: str, value: object, coordinates: Mapping[str, str]
     ) -> dict[str, object]:
         self._access(artifact_id, "write")
         self._verify_required_receipts()
-        return self.store.write(artifact_id, value, coordinates, self.step_id)
+        return self.store.write(
+            artifact_id,
+            value,
+            coordinates,
+            self.step_id,
+            dependencies=list(self._dependencies.values()),
+        )
+
+    def dependency_records(self) -> list[dict[str, object]]:
+        """Export verified upstream identities for an atomic multi-artifact publisher."""
+        return list(self._dependencies.values())
+
+    def inherit_dependencies(self, dependencies: list[dict[str, object]]) -> None:
+        """Seed provenance when computation and atomic publication use separate stores."""
+        for dependency in dependencies:
+            artifact_id = dependency.get("artifact_id")
+            coordinates = dependency.get("coordinates")
+            if not isinstance(artifact_id, str) or not isinstance(coordinates, dict):
+                raise AccessPolicyError("runtime: inherited dependency identity is incomplete")
+            key = (artifact_id, str(sorted(cast(dict[object, object], coordinates).items())))
+            self._dependencies[key] = dependency
 
     def _access(self, artifact_id: str, mode: str) -> None:
         matrix = self.registry.get("access_matrix")

@@ -41,11 +41,26 @@ def main() -> int:
             batches.append(value)
     simulation = mapping(loaded.registry.get("simulation"), "simulation")
     core = mapping(simulation.get("core"), "simulation.core")
+    l3 = mapping(simulation.get("l3"), "simulation.l3")
+    continuous = mapping(simulation.get("continuous_metrics"), "simulation.continuous_metrics")
+    evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
+    gate2 = mapping(evaluation.get("gate2"), "evaluation.gate2")
+    improvement = mapping(
+        gate2.get("minimum_meaningful_improvement"),
+        "evaluation.gate2.minimum_meaningful_improvement",
+    )
     report = summarize_mcse(
         batches,
         minimum_replications=int(core["minimum_replications"]),
         maximum_replications=int(core["maximum_replications"]),
         pass_fail_mcse_maximum=float(core["pass_fail_mcse_max"]),
+        l3_minimum_replications=int(l3["initial_replications"]),
+        l3_maximum_replications=int(l3["maximum_replications"]),
+        l3_pass_fail_mcse_maximum=float(l3["pass_fail_mcse_max"]),
+        continuous_mcse_fraction=float(
+            continuous["mcse_fraction_of_minimum_meaningful_improvement_max"]
+        ),
+        minimum_meaningful_improvement=float(improvement["absolute"]),
     )
     if args.check_only:
         print(f"P08_CONTROL_JSON={json.dumps(report, sort_keys=True)}")

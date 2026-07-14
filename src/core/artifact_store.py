@@ -52,6 +52,7 @@ class ArtifactStore:
         value: object,
         coordinates: Mapping[str, str],
         producer_step: str,
+        dependencies: list[dict[str, object]] | None = None,
     ) -> dict[str, object]:
         item = self._artifact(artifact_id)
         if item.get("producer_step") != producer_step:
@@ -61,6 +62,21 @@ class ArtifactStore:
         self.contracts.validate(artifact_id, value)
         target = self.path(artifact_id, coordinates)
         manifest_path = self._manifest_path(target)
+        if target.is_file() and manifest_path.is_file() and item.get("immutability") == "immutable":
+            existing = self.read(artifact_id, coordinates)
+            manifest_raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(manifest_raw, dict):
+                raise ConfigurationError(f"artifact={artifact_id}: manifest must be an object")
+            manifest = cast(dict[str, Any], manifest_raw)
+            expected_dependencies = _sorted_dependencies(dependencies or [])
+            if (
+                _values_equal(existing, value)
+                and manifest.get("dependencies", []) == expected_dependencies
+            ):
+                return cast(dict[str, object], manifest)
+            raise ConfigurationError(
+                f"artifact={target}: immutable artifact already exists with different content or provenance"
+            )
         self._recover_or_reject_existing(target, manifest_path, item)
 
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -72,7 +88,12 @@ class ArtifactStore:
             persisted = self._read_format(staged_artifact, str(item["format"]))
             self.contracts.validate(artifact_id, persisted)
             manifest = self._manifest(
-                artifact_id, item, staged_artifact, coordinates, producer_step
+                artifact_id,
+                item,
+                staged_artifact,
+                coordinates,
+                producer_step,
+                dependencies or [],
             )
             staged_manifest.write_text(
                 json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8"
@@ -123,6 +144,15 @@ class ArtifactStore:
         return hashlib.sha256(
             json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
+
+    def manifest(self, artifact_id: str, coordinates: Mapping[str, str]) -> dict[str, Any]:
+        """Return a verified manifest for provenance chaining."""
+        self.read(artifact_id, coordinates)
+        target = self.path(artifact_id, coordinates)
+        raw = json.loads(self._manifest_path(target).read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ConfigurationError(f"artifact={artifact_id}: manifest must be an object")
+        return cast(dict[str, Any], raw)
 
     def inventory(self) -> list[dict[str, object]]:
         """Return a verified manifest inventory without bypassing the core I/O layer."""
@@ -195,6 +225,7 @@ class ArtifactStore:
         path: Path,
         coordinates: Mapping[str, str],
         producer_step: str,
+        dependencies: list[dict[str, object]],
     ) -> dict[str, object]:
         return {
             "artifact_id": artifact_id,
@@ -205,6 +236,7 @@ class ArtifactStore:
             "coordinates": dict(coordinates),
             "protocol_hash": self.protocol_hash,
             "content_hash": _hash_file(path),
+            "dependencies": _sorted_dependencies(dependencies),
         }
 
     @staticmethod
@@ -242,6 +274,24 @@ def _hash_file(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _sorted_dependencies(dependencies: list[dict[str, object]]) -> list[dict[str, object]]:
+    return sorted(
+        dependencies,
+        key=lambda item: (
+            str(item.get("artifact_id")),
+            json.dumps(item.get("coordinates", {}), sort_keys=True),
+        ),
+    )
+
+
+def _values_equal(left: object, right: object) -> bool:
+    if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
+        return left.equals(right)
+    if isinstance(left, pd.DataFrame) or isinstance(right, pd.DataFrame):
+        return False
+    return left == right
 
 
 def _fsync_file(path: Path) -> None:

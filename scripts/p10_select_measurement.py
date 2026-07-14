@@ -38,18 +38,27 @@ def main() -> int:
     )
     if diagnostics.get("fit_scope") != "development_history":
         raise ValueError("P10 requires development-history weight diagnostics")
-    loaded.context.read("mcse_report", {})
+    mcse = mapping(loaded.context.read("mcse_report", {}), "MCSE report")
+    if mcse.get("status") != "PASS" or mcse.get("precision_target_met") is not True:
+        raise RuntimeError("P10 requires a PASS P08 simulation/MCSE report")
     loaded.context.read("fold_eligibility", {})
     measurement = mapping(loaded.registry.get("measurement"), "measurement")
     raw_candidates = sequence(
         measurement.get("selection_candidates"), "measurement.selection_candidates"
     )
     candidates = [str(value) for value in raw_candidates]
+    missingness = mapping(measurement.get("l2_missingness"), "measurement.l2_missingness")
+    minimum_channels = missingness.get("minimum_observed_channels")
+    if minimum_channels is not None and (
+        not isinstance(minimum_channels, int) or minimum_channels < 1
+    ):
+        raise ValueError("measurement.l2_missingness.minimum_observed_channels must be positive")
     result = select_measurement(
         matrices=matrices,
         outer_year=int(args.outer_fold),
         candidates=candidates,
         l3_capability=capability,
+        minimum_observed_channels=minimum_channels,
     )
     loaded.context.write("measurement_candidate_results", result.candidates, coordinates)
     loaded.context.write("measurement_selection_registry", result.selection, coordinates)

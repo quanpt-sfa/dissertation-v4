@@ -80,6 +80,7 @@ def build_snapshot(
         "profiles": profile_summary,
         "sources": sorted(entries, key=lambda item: str(item["source_id"])),
     }
+    snapshot["snapshot_content_hash"] = _snapshot_content_hash(snapshot)
     snapshot["snapshot_hash"] = _snapshot_hash(snapshot)
     return snapshot
 
@@ -210,6 +211,23 @@ def _snapshot_hash(snapshot: dict[str, object]) -> str:
 
     payload = dict(snapshot)
     payload.pop("snapshot_hash", None)
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _snapshot_content_hash(snapshot: dict[str, object]) -> str:
+    """Hash only source-discovery semantics, not run-local snapshot metadata."""
+    import hashlib
+
+    payload = {
+        "snapshot_schema_version": snapshot.get("snapshot_schema_version"),
+        "root_environment_variable": snapshot.get("root_environment_variable"),
+        "raw_root_recorded": snapshot.get("raw_root_recorded"),
+        "profiles": snapshot.get("profiles"),
+        "sources": snapshot.get("sources"),
+    }
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
         "utf-8"
     )

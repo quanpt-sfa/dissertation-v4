@@ -8,8 +8,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from core.pipeline import load_run, mapping, sequence
-from simulation.service import validate_scenarios
+import pandas as pd
+
+from core.pipeline import load_run, mapping, physical_columns, sequence
+from core.semantic_keys import FISCAL_YEAR
+from simulation.service import attach_development_covariate_pools, validate_scenarios
 
 
 def main() -> int:
@@ -24,6 +27,21 @@ def main() -> int:
     simulation = mapping(loaded.registry.get("simulation"), "simulation")
     scenarios = validate_scenarios(
         sequence(simulation.get("operational_scenarios"), "simulation.operational_scenarios")
+    )
+    feature_panel = loaded.context.read("feature_panel", {})
+    feature_registry = [
+        mapping(item, "feature registry item")
+        for item in sequence(loaded.context.read("feature_registry", {}), "feature registry")
+    ]
+    if not isinstance(feature_panel, pd.DataFrame):
+        raise ValueError("P08 feature panel must be a DataFrame")
+    folds = mapping(loaded.registry.get("folds"), "folds")
+    scenarios = attach_development_covariate_pools(
+        scenarios=scenarios,
+        feature_panel=feature_panel,
+        feature_registry=feature_registry,
+        year_column=physical_columns(loaded.registry)[FISCAL_YEAR],
+        development_year_maximum=int(folds["initial_outer_year"]) - 1,
     )
     if args.dry_run:
         print(f"P08 registry dry-run: scenarios={len(scenarios)}")

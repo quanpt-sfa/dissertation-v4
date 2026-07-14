@@ -18,6 +18,8 @@ from core.semantic_keys import (
     OUTER_FOLD,
     PREDICTION,
     SCENARIO_ID,
+    TARGET_ID,
+    TARGET_VALUE,
 )
 
 
@@ -41,6 +43,7 @@ def evaluate_outer_fold(
     confidence_level: float,
     columns: dict[str, str],
     rng: np.random.Generator,
+    oof_training_targets: list[dict[str, object]] | None = None,
 ) -> EvaluationResult:
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
@@ -54,6 +57,7 @@ def evaluate_outer_fold(
     calibration_rows: list[dict[str, object]] = []
     metric_rows: list[dict[str, object]] = []
     calibrated: dict[str, np.ndarray] = {}
+    target_frame = pd.DataFrame(oof_training_targets or [])
     for learner_id, frame in outer.groupby(learner, sort=True):
         development_frame = development.loc[development[learner] == learner_id]
         intercept, slope, status = _fit_platt(
@@ -74,9 +78,26 @@ def evaluate_outer_fold(
         )
         truth = frame[outcome].astype(bool).tolist()
         scores = probabilities.tolist()
+        target_column = columns.get(TARGET_ID)
+        target_ids = (
+            sorted(str(value) for value in frame[target_column].unique())
+            if isinstance(target_column, str) and target_column in frame.columns
+            else ["L1"]
+        )
+        target_id = target_ids[0] if len(target_ids) == 1 else "mixed"
+        fit_metrics = _track_fit_metrics(
+            development_frame,
+            target_frame,
+            learner_id=str(learner_id),
+            firm=firm,
+            year=year,
+            learner=learner,
+            prediction=prediction,
+        )
         metric_rows.append(
             {
                 LEARNER_ID: str(learner_id),
+                TARGET_ID: target_id,
                 OUTER_FOLD: str(outer_year),
                 "rows": len(frame),
                 "positives": int(frame[outcome].sum()),
@@ -86,6 +107,7 @@ def evaluate_outer_fold(
                 "precision_at_primary_budget": precision_at_fraction(truth, scores, review_fraction)
                 if truth
                 else None,
+                **fit_metrics,
             }
         )
     comparisons = _comparisons(outer, calibrated, learner, outcome)
@@ -249,3 +271,73 @@ def _utility(
             raise ValueError("utility scenario is incomplete")
         results.append({"status": "REGISTERED", **scenario})
     return results
+
+
+def _track_fit_metrics(
+    development: pd.DataFrame,
+    targets: pd.DataFrame,
+    *,
+    learner_id: str,
+    firm: str,
+    year: str,
+    learner: str,
+    prediction: str,
+) -> dict[str, object]:
+    required = {FIRM_ID, FISCAL_YEAR, LEARNER_ID, TARGET_VALUE}
+    if targets.empty or not required.issubset(targets.columns):
+        return {
+            "soft_log_loss": None,
+            "spearman_target_concordance": None,
+            "pairwise_concordance": None,
+            "fit_metric_status": "UNAVAILABLE",
+        }
+    selected = targets.loc[targets[LEARNER_ID].astype(str) == learner_id].rename(
+        columns={FIRM_ID: firm, FISCAL_YEAR: year, TARGET_VALUE: "_soft_target"}
+    )
+    merged = development.loc[:, [firm, year, learner, prediction]].merge(
+        selected.loc[:, [firm, year, "_soft_target"]],
+        on=[firm, year],
+        how="inner",
+        validate="1:1",
+    )
+    if merged.empty:
+        return {
+            "soft_log_loss": None,
+            "spearman_target_concordance": None,
+            "pairwise_concordance": None,
+            "fit_metric_status": "UNAVAILABLE",
+        }
+    soft = merged["_soft_target"].to_numpy(dtype=float)
+    score = np.clip(merged[prediction].to_numpy(dtype=float), 1e-9, 1.0 - 1e-9)
+    loss = float(np.mean(-(soft * np.log(score) + (1.0 - soft) * np.log(1.0 - score))))
+    soft_rank = merged["_soft_target"].rank(method="average").to_numpy(dtype=float)
+    score_rank = merged[prediction].rank(method="average").to_numpy(dtype=float)
+    spearman = (
+        float(np.corrcoef(soft_rank, score_rank)[0, 1])
+        if np.std(soft_rank) > 0 and np.std(score_rank) > 0
+        else None
+    )
+    return {
+        "soft_log_loss": loss,
+        "spearman_target_concordance": spearman,
+        "pairwise_concordance": _pairwise_concordance(soft, score),
+        "fit_metric_status": "PASS",
+    }
+
+
+def _pairwise_concordance(target: np.ndarray, score: np.ndarray) -> float | None:
+    order = np.argsort(target, kind="stable")
+    target = target[order]
+    score = score[order]
+    comparable = 0
+    concordant = 0.0
+    for right in range(1, len(target)):
+        mask = target[:right] < target[right]
+        if not np.any(mask):
+            continue
+        differences = score[right] - score[:right][mask]
+        comparable += len(differences)
+        concordant += float(np.count_nonzero(differences > 0)) + 0.5 * float(
+            np.count_nonzero(differences == 0)
+        )
+    return concordant / comparable if comparable else None

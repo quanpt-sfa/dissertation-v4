@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
-from core.pipeline import load_run, mapping, physical_columns
+from core.pipeline import load_run, mapping, physical_columns, sequence
 from risksets.service import build_risk_set
 
 
@@ -45,13 +45,19 @@ def main() -> int:
         print(f"P04 dry-run: cutoff={cutoff.isoformat()} horizon_months={horizon}")
         return 0
     panel = loaded.context.read("firm_year_panel", {})
-    if not isinstance(panel, pd.DataFrame):
-        raise ValueError("firm_year_panel must be a DataFrame")
+    evidence = loaded.context.read("evidence_ledger", {})
+    if not isinstance(panel, pd.DataFrame) or not isinstance(evidence, pd.DataFrame):
+        raise ValueError("P04 panel and evidence inputs must be DataFrames")
     result = build_risk_set(
         panel=panel,
         data_cutoff=cutoff,
         horizon_months=horizon,
         columns=physical_columns(loaded.registry),
+        evidence=evidence,
+        sensitivity_horizons_months=[
+            int(value)
+            for value in sequence(horizons.get("sensitivity"), "study horizon sensitivities")
+        ],
     )
     if args.validate_only:
         return 0

@@ -7,7 +7,16 @@ from datetime import datetime
 
 import pandas as pd
 
-from core.semantic_keys import ELIGIBLE, FIRM_ID, FISCAL_YEAR, MATURE, PREDICTION_TIME
+from core.semantic_keys import (
+    AVAILABILITY_DATE,
+    CHANNEL_ID,
+    ELIGIBLE,
+    FIRM_ID,
+    FISCAL_YEAR,
+    MATURE,
+    PREDICTION_TIME,
+    SOURCE_ID,
+)
 
 
 @dataclass(frozen=True)
@@ -24,6 +33,8 @@ def build_risk_set(
     data_cutoff: datetime,
     horizon_months: int,
     columns: dict[str, str],
+    evidence: pd.DataFrame | None = None,
+    sensitivity_horizons_months: list[int] | None = None,
 ) -> RiskSetResult:
     """Classify maturity without converting immature observations to negatives."""
     firm = columns[FIRM_ID]
@@ -60,6 +71,19 @@ def build_risk_set(
         }
         for row in result.to_dict(orient="records")
     ]
+    horizons = [horizon_months, *(sensitivity_horizons_months or [])]
+    maturity_counts = {
+        str(value): int(
+            (prediction_values + pd.DateOffset(months=value) <= pd.Timestamp(data_cutoff)).sum()
+        )
+        for value in sorted(set(horizons))
+    }
+    source_curves = _source_maturity_curves(
+        panel=panel,
+        evidence=evidence,
+        horizons_months=sorted(set(horizons)),
+        columns=columns,
+    )
     return RiskSetResult(
         risk_sets=result,
         prospective_set=prospective,
@@ -73,5 +97,54 @@ def build_risk_set(
             "prospective_count": len(result) - mature_count,
             "immature_assigned_negative_count": 0,
             "exit_or_code_change_assigned_negative_count": 0,
+            "mature_count_by_horizon_months": maturity_counts,
+            "source_maturity_curves": source_curves,
+            "source_maturity_curves_executed": evidence is not None,
         },
     )
+
+
+def _source_maturity_curves(
+    *,
+    panel: pd.DataFrame,
+    evidence: pd.DataFrame | None,
+    horizons_months: list[int],
+    columns: dict[str, str],
+) -> list[dict[str, object]]:
+    if evidence is None:
+        return []
+    firm = columns[FIRM_ID]
+    year = columns[FISCAL_YEAR]
+    prediction = columns[PREDICTION_TIME]
+    availability = columns[AVAILABILITY_DATE]
+    source = columns[SOURCE_ID]
+    channel = columns[CHANNEL_ID]
+    required = {firm, year, availability, source, channel}
+    if not required.issubset(evidence.columns):
+        raise ValueError("evidence ledger is incomplete for source maturity curves")
+    linked = evidence.merge(
+        panel.loc[:, [firm, year, prediction]],
+        on=[firm, year],
+        how="inner",
+        validate="many_to_one",
+    )
+    linked["_detection_lag_days"] = (
+        pd.to_datetime(linked[availability]) - pd.to_datetime(linked[prediction])
+    ).dt.days
+    rows: list[dict[str, object]] = []
+    for (source_id, channel_id), frame in linked.groupby([source, channel], sort=True):
+        lags = frame["_detection_lag_days"].to_numpy(dtype=float)
+        rows.append(
+            {
+                SOURCE_ID: str(source_id),
+                CHANNEL_ID: str(channel_id),
+                "observed_event_count": len(lags),
+                "negative_detection_lag_count": int((lags < 0).sum()),
+                "median_detection_lag_days": float(pd.Series(lags).median()) if len(lags) else None,
+                "availability_fraction_by_horizon": {
+                    str(horizon): float((lags <= horizon * 365.25 / 12.0).mean())
+                    for horizon in horizons_months
+                },
+            }
+        )
+    return rows

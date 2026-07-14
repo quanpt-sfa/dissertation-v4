@@ -20,7 +20,13 @@ learners:
       maximum_iterations: 200
       learning_rate: 0.05
       maximum_leaf_nodes: 15
+    anchor_pu:
+      bags: 25
+      unlabeled_to_positive_ratio: 1.0
+      inverse_regularization: 1.0
+      maximum_iterations: 2000
   tuning:
     max_valid_configurations_per_learner_inner_fold: 50
     equivalent_budget_allowed: true
     runtime_and_valid_configuration_count_reported: true
+    search_spaces: {}

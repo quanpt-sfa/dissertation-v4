@@ -22,6 +22,7 @@ def select_measurement(
     outer_year: int,
     candidates: list[str],
     l3_capability: dict[str, Any],
+    minimum_observed_channels: int | None = None,
 ) -> SelectionResult:
     """Select using years before the outer fold and held-channel predictions only."""
     raw_rows = matrices.get("rows")
@@ -39,6 +40,9 @@ def select_measurement(
     if not isinstance(expected, list):
         raise ValueError("measurement matrices require expected_channels")
     expected = cast(list[Any], expected)
+    raw_l2_scoring = matrices.get("l2_scoring")
+    l2_scoring = cast(dict[str, Any], raw_l2_scoring) if isinstance(raw_l2_scoring, dict) else {}
+    l2_available = l2_scoring.get("status") == "AVAILABLE"
     channel_results: list[dict[str, Any]] = []
     for heldout in sorted(str(value) for value in expected):
         losses: list[float] = []
@@ -47,14 +51,18 @@ def select_measurement(
             if not isinstance(outcomes, dict):
                 continue
             outcomes = cast(dict[str, Any], outcomes)
+            raw_scores = row.get("channel_evidence_scores")
+            if not isinstance(raw_scores, dict) or not l2_available:
+                continue
+            scores = cast(dict[str, Any], raw_scores)
             if outcomes.get(heldout) is None:
                 continue
             remaining = [
                 float(value)
-                for channel, value in outcomes.items()
+                for channel, value in scores.items()
                 if channel != heldout and value is not None
             ]
-            if not remaining:
+            if minimum_observed_channels is None or len(remaining) < minimum_observed_channels:
                 continue
             probability = min(1.0 - 1e-6, max(1e-6, sum(remaining) / len(remaining)))
             outcome = float(bool(outcomes[heldout]))
@@ -81,9 +89,16 @@ def select_measurement(
         results.append(
             {
                 "candidate": "L2",
-                ELIGIBLE: complete,
+                ELIGIBLE: complete and minimum_observed_channels is not None and l2_available,
                 "objective": sum(losses) / len(losses) if complete and losses else None,
-                "reason_code": None if complete else "INSUFFICIENT_CHANNELS",
+                "reason_code": None
+                if complete and minimum_observed_channels is not None and l2_available
+                else str(l2_scoring.get("reason_code"))
+                if not l2_available
+                else "L2_MINIMUM_COVERAGE_NOT_LOCKED"
+                if minimum_observed_channels is None
+                else "INSUFFICIENT_CHANNELS",
+                "minimum_observed_channels": minimum_observed_channels,
             }
         )
     if "L3_fixed_pi" in candidates:

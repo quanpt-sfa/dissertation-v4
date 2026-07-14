@@ -20,6 +20,7 @@ inference:
     confirmatory_block: pressure_x_monitoring
     remaining_interactions_role: exploratory
     operational_bindings:
+      threshold_feature_ids: []
       pressure_feature_id: null
       monitoring_feature_id: null
       parent_model_id: null

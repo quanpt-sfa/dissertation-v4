@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
+import numpy as np
 import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from core.semantic_keys import (
     ELIGIBLE,
@@ -38,6 +43,7 @@ def build_splits_and_weights(
     ess_fraction_minimum: float,
     ess_absolute_minimum: float,
     columns: dict[str, str],
+    verification_feature_ids: list[str] | None = None,
 ) -> SplitWeightResult:
     """Build strict rolling splits; no outer-year row enters a weight fit."""
     firm = columns[FIRM_ID]
@@ -74,7 +80,12 @@ def build_splits_and_weights(
             for row in train.to_dict(orient="records")
         ]
         has_observed_verification = bool(verification_channels and any(observed))
-        proposed_weights, propensities = _stabilized_year_weights(train, year, observed)
+        features = verification_feature_ids or []
+        proposed_weights, propensities, propensity_details = _fit_verification_propensity(
+            train=eligible_panel.loc[eligible_panel[year] < outer_year].copy(),
+            observed=observed,
+            feature_ids=features,
+        )
         proposed_ess = _effective_sample_size(proposed_weights)
         support_fraction = (
             sum(support_bounds[0] <= value <= support_bounds[1] for value in propensities)
@@ -85,17 +96,20 @@ def build_splits_and_weights(
         required_ess = max(ess_absolute_minimum, ess_fraction_minimum * len(train))
         ipw_diagnostics_pass = bool(
             has_observed_verification
+            and propensity_details["status"] == "PASS"
             and proposed_ess >= required_ess
             and support_fraction is not None
             and support_fraction >= support_fraction_minimum
         )
         applied_weights = proposed_weights if ipw_diagnostics_pass else [1.0] * len(train)
-        weight_method = "stabilized_year_ipw" if ipw_diagnostics_pass else "unweighted"
+        weight_method = "stabilized_verification_ipw" if ipw_diagnostics_pass else "unweighted"
         reason_code = (
             None
             if ipw_diagnostics_pass
             else "NO_OBSERVED_VERIFICATION"
             if not has_observed_verification
+            else str(propensity_details["reason_code"])
+            if propensity_details["status"] != "PASS"
             else "WEIGHT_DIAGNOSTICS_FAILED"
         )
         weights = train.copy()
@@ -134,9 +148,10 @@ def build_splits_and_weights(
             "fit_scope": "development_history",
             "development_years": sorted(int(value) for value in train[year].unique()),
             "outer_rows_used_in_fit": 0,
-            "requested_weight_method": "stabilized_year_ipw",
+            "requested_weight_method": "stabilized_verification_ipw",
             "applied_weight_method": weight_method,
             "verification_observed": has_observed_verification,
+            "propensity_model": propensity_details,
             "proposed_ipw_ess": proposed_ess,
             "required_ess": required_ess,
             "propensity_support_bounds": list(support_bounds),
@@ -146,29 +161,130 @@ def build_splits_and_weights(
             "analytical_use_allowed": True,
             "reason_code": reason_code,
             "estimand": "target_population" if ipw_diagnostics_pass else "unweighted_mature_cohort",
+            "overlap_weight_sensitivity": _overlap_weight_summary(propensities, observed),
         }
     return SplitWeightResult(splits, channel_splits, results, diagnostics)
 
 
-def _stabilized_year_weights(
-    train: pd.DataFrame, year: str, observed: list[bool]
-) -> tuple[list[float], list[float]]:
-    if not observed or not any(observed):
-        return [1.0] * len(train), []
-    overall = (sum(observed) + 1.0) / (len(observed) + 2.0)
-    counts: dict[int, list[int]] = {}
-    years = [int(value) for value in train[year].tolist()]
-    for value, flag in zip(years, observed, strict=True):
-        bucket = counts.setdefault(value, [0, 0])
-        bucket[0] += int(flag)
-        bucket[1] += 1
-    propensity = {value: (count[0] + 1.0) / (count[1] + 2.0) for value, count in counts.items()}
-    propensities = [propensity[value] for value in years]
-    weights = [
-        overall / propensity[value] if flag else (1.0 - overall) / (1.0 - propensity[value])
-        for value, flag in zip(years, observed, strict=True)
+def _fit_verification_propensity(
+    *, train: pd.DataFrame, observed: list[bool], feature_ids: list[str]
+) -> tuple[list[float], list[float], dict[str, Any]]:
+    if not observed or len(observed) != len(train):
+        return (
+            [1.0] * len(train),
+            [],
+            {
+                "status": "SKIPPED",
+                "reason_code": "NO_OBSERVED_VERIFICATION",
+            },
+        )
+    if not feature_ids:
+        return (
+            [1.0] * len(train),
+            [],
+            {
+                "status": "SKIPPED",
+                "reason_code": "NO_PREDECISION_VERIFICATION_FEATURES",
+            },
+        )
+    missing = sorted(set(feature_ids) - set(train.columns))
+    if missing:
+        raise ValueError(f"verification propensity features are absent: {missing}")
+    outcome = pd.Series(observed, index=train.index, dtype=int)
+    if outcome.nunique() < 2:
+        return (
+            [1.0] * len(train),
+            [],
+            {
+                "status": "SKIPPED",
+                "reason_code": "INSUFFICIENT_VERIFICATION_CLASSES",
+            },
+        )
+    estimator = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+            ("model", LogisticRegression(C=1.0, solver="lbfgs", max_iter=2000)),
+        ]
+    )
+    cast(Any, estimator).fit(train[feature_ids], outcome.to_numpy())
+    propensities = np.asarray(cast(Any, estimator).predict_proba(train[feature_ids]), dtype=float)[
+        :, 1
     ]
-    return weights, propensities
+    overall = float(outcome.mean())
+    weights = [
+        overall / probability if flag else (1.0 - overall) / (1.0 - probability)
+        for probability, flag in zip(propensities, observed, strict=True)
+    ]
+    return (
+        weights,
+        propensities.tolist(),
+        {
+            "status": "PASS",
+            "reason_code": None,
+            "model": "logistic_with_median_imputation_and_standardization",
+            "feature_ids": feature_ids,
+            "fit_rows": len(train),
+            "verified_rows": int(outcome.sum()),
+            "predecision_features_only": True,
+            "balance": _balance_diagnostics(train, feature_ids, observed, weights),
+        },
+    )
+
+
+def _balance_diagnostics(
+    frame: pd.DataFrame,
+    feature_ids: list[str],
+    observed: list[bool],
+    weights: list[float],
+) -> list[dict[str, float | str | None]]:
+    mask = np.asarray(observed, dtype=bool)
+    analytical_weights = np.asarray(weights, dtype=float)
+    rows: list[dict[str, float | str | None]] = []
+    for feature_id in feature_ids:
+        values = pd.to_numeric(frame[feature_id], errors="coerce").to_numpy(dtype=float)
+        valid = np.isfinite(values)
+        pooled_sd = float(np.nanstd(values[valid], ddof=1)) if np.sum(valid) > 1 else 0.0
+        before = _standardized_difference(values, mask, np.ones(len(values)), pooled_sd)
+        after = _standardized_difference(values, mask, analytical_weights, pooled_sd)
+        rows.append(
+            {
+                "feature_id": feature_id,
+                "smd_before": before,
+                "smd_after": after,
+            }
+        )
+    return rows
+
+
+def _standardized_difference(
+    values: np.ndarray, mask: np.ndarray, weights: np.ndarray, pooled_sd: float
+) -> float | None:
+    if pooled_sd <= 0:
+        return 0.0
+    valid = np.isfinite(values)
+    first = valid & mask
+    second = valid & ~mask
+    if not np.any(first) or not np.any(second):
+        return None
+    first_mean = float(np.average(values[first], weights=weights[first]))
+    second_mean = float(np.average(values[second], weights=weights[second]))
+    return (first_mean - second_mean) / pooled_sd
+
+
+def _overlap_weight_summary(propensities: list[float], observed: list[bool]) -> dict[str, object]:
+    if not propensities:
+        return {"status": "SKIPPED", "reason_code": "PROPENSITY_MODEL_UNAVAILABLE"}
+    weights = [
+        1.0 - probability if flag else probability
+        for probability, flag in zip(propensities, observed, strict=True)
+    ]
+    return {
+        "status": "AVAILABLE",
+        "estimand": "overlap_population",
+        "effective_sample_size": _effective_sample_size(weights),
+        "changes_estimand": True,
+    }
 
 
 def _effective_sample_size(weights: list[float]) -> float:

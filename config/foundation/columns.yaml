@@ -39,6 +39,10 @@ columns:
     physical_name: target_id
     dtype: string
     semantic_role: target_key
+  target_value:
+    physical_name: target_value
+    dtype: float64
+    semantic_role: soft_measurement_target
   outcome:
     physical_name: outcome
     dtype: bool

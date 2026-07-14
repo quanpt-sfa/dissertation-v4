@@ -217,6 +217,7 @@ Source: config/pipeline.yaml
       "restricted"
     ],
     "reads": [
+      "feature_panel",
       "feature_registry",
       "source_channel_matrices",
       "simulation_scenario_registry",
@@ -244,6 +245,7 @@ Source: config/pipeline.yaml
     ],
     "reads": [
       "feature_panel",
+      "feature_registry",
       "risk_sets",
       "observability_registry",
       "source_channel_matrices",
@@ -305,6 +307,8 @@ Source: config/pipeline.yaml
     ],
     "reads": [
       "measurement_selection_registry",
+      "source_channel_matrices",
+      "anchor_capability",
       "temporal_split_registry",
       "feature_panel",
       "feature_registry",
@@ -335,10 +339,13 @@ Source: config/pipeline.yaml
     ],
     "read_sensitivity_classes": [
       "outer",
+      "public",
       "restricted"
     ],
     "reads": [
+      "mcse_report",
       "model_freeze_receipt",
+      "model_artifacts",
       "development_oof_predictions",
       "raw_outer_predictions",
       "sealed_outcome_store"
@@ -378,7 +385,9 @@ Source: config/pipeline.yaml
       "evidence_ledger",
       "lag_decomposition",
       "censoring_registry",
-      "weight_diagnostics"
+      "weight_diagnostics",
+      "fold_aware_weights",
+      "source_channel_matrices"
     ],
     "required_receipts": [],
     "writes": [
@@ -462,6 +471,7 @@ Source: config/pipeline.yaml
     "reads": [
       "known_case_results",
       "gate2_verdict",
+      "measurement_selection_registry",
       "evaluation_metrics",
       "feature_panel",
       "raw_outer_predictions",

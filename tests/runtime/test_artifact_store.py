@@ -47,6 +47,35 @@ def test_parquet_round_trip_and_manifest(tmp_path: Path) -> None:
     assert abs(float(observed["prediction"].iloc[0]) - 0.25) < 1e-12
 
 
+def test_manifest_records_verified_upstream_dependencies(tmp_path: Path) -> None:
+    artifact_store = store(tmp_path)
+    coordinates = {"outer_fold": "2021"}
+    dependency: dict[str, object] = {
+        "artifact_id": "feature_panel",
+        "coordinates": {},
+        "content_hash": "a" * 64,
+        "producer_step": "P07",
+        "protocol_hash": artifact_store.protocol_hash,
+    }
+    artifact_store.write(
+        "raw_outer_predictions", predictions(), coordinates, "P11", dependencies=[dependency]
+    )
+    manifest = artifact_store.manifest("raw_outer_predictions", coordinates)
+    assert manifest["dependencies"] == [dependency]
+
+
+def test_immutable_retry_is_idempotent_but_changed_retry_fails(tmp_path: Path) -> None:
+    artifact_store = store(tmp_path)
+    coordinates = {"outer_fold": "2021"}
+    first = artifact_store.write("raw_outer_predictions", predictions(), coordinates, "P11")
+    second = artifact_store.write("raw_outer_predictions", predictions(), coordinates, "P11")
+    assert second["content_hash"] == first["content_hash"]
+    changed = predictions()
+    changed.loc[0, "prediction"] = 0.5
+    with pytest.raises(ConfigurationError, match="different content or provenance"):
+        artifact_store.write("raw_outer_predictions", changed, coordinates, "P11")
+
+
 def test_missing_manifest_fails_closed(tmp_path: Path) -> None:
     artifact_store = store(tmp_path)
     coordinates = {"outer_fold": "2021"}

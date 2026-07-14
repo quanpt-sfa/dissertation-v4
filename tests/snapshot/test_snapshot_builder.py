@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import cast
 
 import openpyxl
 import pandas as pd
 
+from core.hashing import protocol_hash
 from snapshot.builder import build_snapshot, load_snapshot, write_snapshot
 from snapshot.injection import inject_snapshot
 
@@ -136,6 +138,22 @@ def test_snapshot_is_immutable_and_hash_verified(tmp_path: Path) -> None:
         assert "hash mismatch" in str(exc)
     else:
         raise AssertionError("tampered snapshot was accepted")
+
+
+def test_snapshot_content_hash_ignores_capture_identity(tmp_path: Path) -> None:
+    root = _raw_root(tmp_path)
+    first = build_snapshot(registry={"source_catalog": _catalog()}, raw_root=root, snapshot_id="a")
+    second = build_snapshot(registry={"source_catalog": _catalog()}, raw_root=root, snapshot_id="b")
+    assert first["snapshot_hash"] != second["snapshot_hash"]
+    assert first["snapshot_content_hash"] == second["snapshot_content_hash"]
+    first_path = tmp_path / "first.json"
+    second_path = tmp_path / "second.json"
+    write_snapshot(first_path, first)
+    write_snapshot(second_path, second)
+    base: dict[str, object] = {"data_sources": {}}
+    first_registry = inject_snapshot(deepcopy(base), first_path)
+    second_registry = inject_snapshot(deepcopy(base), second_path)
+    assert protocol_hash(first_registry) == protocol_hash(second_registry)
 
 
 def test_snapshot_injection_populates_runtime_source_registry(tmp_path: Path) -> None:

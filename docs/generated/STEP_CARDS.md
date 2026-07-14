@@ -86,7 +86,7 @@ Required receipts: []
 
 Method simulation
 
-Reads: ['feature_registry', 'source_channel_matrices', 'simulation_scenario_registry', 'simulation_batches']
+Reads: ['feature_panel', 'feature_registry', 'source_channel_matrices', 'simulation_scenario_registry', 'simulation_batches']
 
 Writes: ['simulation_scenario_registry', 'simulation_batches', 'mcse_report']
 
@@ -96,7 +96,7 @@ Required receipts: []
 
 Splits and weights
 
-Reads: ['feature_panel', 'risk_sets', 'observability_registry', 'source_channel_matrices', 'fold_eligibility']
+Reads: ['feature_panel', 'feature_registry', 'risk_sets', 'observability_registry', 'source_channel_matrices', 'fold_eligibility']
 
 Writes: ['temporal_split_registry', 'channel_time_split_registry', 'fold_aware_weights', 'weight_diagnostics']
 
@@ -116,7 +116,7 @@ Required receipts: []
 
 Learner fitting and freeze
 
-Reads: ['measurement_selection_registry', 'temporal_split_registry', 'feature_panel', 'feature_registry', 'l0_l1_inputs', 'fold_aware_weights', 'weight_diagnostics', 'source_config_manifest', 'environment_observation']
+Reads: ['measurement_selection_registry', 'source_channel_matrices', 'anchor_capability', 'temporal_split_registry', 'feature_panel', 'feature_registry', 'l0_l1_inputs', 'fold_aware_weights', 'weight_diagnostics', 'source_config_manifest', 'environment_observation']
 
 Writes: ['model_artifacts', 'development_oof_predictions', 'raw_outer_predictions', 'model_freeze_receipt']
 
@@ -126,7 +126,7 @@ Required receipts: []
 
 Outer opening and evaluation
 
-Reads: ['model_freeze_receipt', 'development_oof_predictions', 'raw_outer_predictions', 'sealed_outcome_store']
+Reads: ['mcse_report', 'model_freeze_receipt', 'model_artifacts', 'development_oof_predictions', 'raw_outer_predictions', 'sealed_outcome_store']
 
 Writes: ['outer_open_receipt', 'calibration_outputs', 'evaluation_metrics', 'bootstrap_batches', 'utility_scenarios']
 
@@ -136,7 +136,7 @@ Required receipts: ['model_freeze_receipt']
 
 Sensitivity and transfer
 
-Reads: ['evaluation_metrics', 'raw_outer_predictions', 'sealed_outcome_store', 'feature_panel', 'feature_registry', 'l3_pilot_capability', 'evidence_ledger', 'lag_decomposition', 'censoring_registry', 'weight_diagnostics']
+Reads: ['evaluation_metrics', 'raw_outer_predictions', 'sealed_outcome_store', 'feature_panel', 'feature_registry', 'l3_pilot_capability', 'evidence_ledger', 'lag_decomposition', 'censoring_registry', 'weight_diagnostics', 'fold_aware_weights', 'source_channel_matrices']
 
 Writes: ['domain_transfer_outputs', 'source_sensitivity_outputs', 'censoring_sensitivity_outputs', 'hierarchical_pi_sensitivity', 'ablation_results']
 
@@ -166,7 +166,7 @@ Required receipts: ['known_cases_seal', 'gate2_verdict']
 
 Gate 3
 
-Reads: ['known_case_results', 'gate2_verdict', 'evaluation_metrics', 'feature_panel', 'raw_outer_predictions', 'sealed_outcome_store', 'feature_registry']
+Reads: ['known_case_results', 'gate2_verdict', 'measurement_selection_registry', 'evaluation_metrics', 'feature_panel', 'raw_outer_predictions', 'sealed_outcome_store', 'feature_registry']
 
 Writes: ['threshold_interaction_results', 'gate3_verdict']
 

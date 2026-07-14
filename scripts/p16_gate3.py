@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
 from core.pipeline import load_run, mapping, outer_fold_ids, physical_columns, sequence
+from core.rng import generator
 from core.semantic_keys import OUTER_FOLD
 from gates.service import gate3_verdict
 
@@ -45,12 +47,32 @@ def main() -> int:
     for name in ("pressure_feature_id", "monitoring_feature_id", "domain_feature_id"):
         if bindings.get(name) is not None and str(bindings[name]) not in registered_ids:
             raise ValueError(f"Gate 3 binding {name} is not a registered feature")
+    raw_threshold_features = bindings.get("threshold_feature_ids")
+    if isinstance(raw_threshold_features, list):
+        missing_thresholds = sorted(
+            str(value)
+            for value in cast(list[object], raw_threshold_features)
+            if str(value) not in registered_ids
+        )
+        if missing_thresholds:
+            raise ValueError(f"Gate 3 threshold bindings are not registered: {missing_thresholds}")
     folds = mapping(loaded.registry.get("folds"), "folds")
     confirmatory = [
         int(value)
         for value in sequence(folds.get("fully_nested_outer_years"), "fully_nested_outer_years")
     ]
+    measurement_selections = [
+        mapping(
+            loaded.context.read("measurement_selection_registry", {OUTER_FOLD: str(fold_id)}),
+            "measurement selection",
+        )
+        for fold_id in confirmatory
+    ]
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    selection_config = mapping(measurement.get("selection"), "measurement.selection")
     evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
+    bootstrap = mapping(inference.get("bootstrap"), "inference.bootstrap")
+    common = mapping(evaluation.get("gate_common"), "evaluation.gate_common")
     threshold, receipt = gate3_verdict(
         gate2=gate2,
         known_case_results=[mapping(item, "known case result") for item in known],
@@ -61,11 +83,18 @@ def main() -> int:
         gate=mapping(evaluation.get("gate3"), "evaluation.gate3"),
         confirmatory_folds=confirmatory,
         columns=physical_columns(loaded.registry),
+        bootstrap_replications=int(bootstrap["replications"]),
+        familywise_alpha=float(common["familywise_alpha"]),
+        confirmatory_threshold_claims=int(library["confirmatory_threshold_claims"]),
+        measurement_selections=measurement_selections,
+        measurement_stability_minimum=int(selection_config["stability_minimum_selected_folds"]),
+        measurement_stability_denominator=int(selection_config["stability_denominator_folds"]),
+        rng=generator(loaded.protocol_hash, "P16", {}, "gate3_family_bootstrap"),
     )
     receipt["protocol_hash"] = loaded.protocol_hash
     loaded.context.write("threshold_interaction_results", threshold, {})
     loaded.context.write("gate3_verdict", receipt, {})
-    print(f"P16 status=PASS verdict={receipt['verdict']}")
+    print(f"P16 status={receipt['status']} verdict={receipt['verdict']}")
     return 0
 
 

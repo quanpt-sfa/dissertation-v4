@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+import numpy as np
 import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from core.metrics import average_precision
 from core.semantic_keys import (
@@ -12,11 +17,15 @@ from core.semantic_keys import (
     FIRM_ID,
     FISCAL_YEAR,
     LEARNER_ID,
+    MATURE,
     OUTCOME,
     OUTER_FOLD,
     PREDICTION,
     SOURCE_ID,
+    TARGET_ID,
 )
+from labels.service import aggregate_l1
+from modeling.service import fit_fold_models
 
 
 def domain_transfer(
@@ -26,6 +35,7 @@ def domain_transfer(
     feature_panel: pd.DataFrame,
     feature_registry: list[dict[str, object]],
     noninferiority_margin: float,
+    support_fraction_minimum: float,
     columns: dict[str, str],
 ) -> dict[str, object]:
     bindings = [item for item in feature_registry if isinstance(item.get("domain_id"), str)]
@@ -38,64 +48,112 @@ def domain_transfer(
         }
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
-    learner = columns[LEARNER_ID]
-    prediction = columns[PREDICTION]
     outcome = columns[OUTCOME]
-    joined = predictions.merge(outcomes, on=[firm, year], how="inner", validate="m:1")
+    content = [
+        str(item["feature_id"]) for item in feature_registry if item.get("role") == "content"
+    ]
+    observability = [
+        str(item["feature_id"]) for item in feature_registry if item.get("role") == "observability"
+    ]
+    if not content or not observability:
+        return {
+            "status": "SKIPPED",
+            "reason_code": "DOMAIN_REFIT_FEATURE_BLOCKS_UNAVAILABLE",
+            "domains": [],
+            "robust_scenario_fraction": None,
+            "leave_one_domain_out_refit_executed": False,
+        }
+    data_base = feature_panel.merge(outcomes, on=[firm, year], how="inner", validate="1:1")
+    outer_years = sorted(int(value) for value in predictions[year].unique())
     rows: list[dict[str, object]] = []
     robust: list[bool] = []
     for binding in bindings:
         feature_id = str(binding["feature_id"])
         if feature_id not in feature_panel.columns:
             raise ValueError(f"domain feature={feature_id}: absent from feature panel")
-        data = joined.merge(
-            feature_panel[[firm, year, feature_id]], on=[firm, year], how="inner", validate="m:1"
-        )
-        for level, level_frame in data.groupby(feature_id, dropna=False, sort=True):
-            model_ap: dict[str, float | None] = {}
-            for model_id, model_frame in level_frame.groupby(learner, sort=True):
-                model_ap[str(model_id)] = average_precision(
-                    model_frame[outcome].astype(bool).tolist(),
-                    model_frame[prediction].astype(float).tolist(),
-                )
-            comparisons: list[dict[str, object]] = []
-            for candidate, candidate_ap in model_ap.items():
-                if not candidate.endswith(":full"):
+        level_values = cast(list[object], data_base[feature_id].dropna().tolist())
+        for level in sorted(set(level_values), key=str):
+            for outer_year in outer_years:
+                train: pd.DataFrame = data_base.loc[
+                    (data_base[year] < outer_year) & (data_base[feature_id] != level)
+                ].dropna(subset=[outcome])
+                test: pd.DataFrame = data_base.loc[
+                    (data_base[year] == outer_year) & (data_base[feature_id] == level)
+                ].dropna(subset=[outcome])
+                if train.empty or test.empty or train[outcome].nunique() < 2:
                     continue
-                reference = candidate.removesuffix(":full") + ":observability_only"
-                reference_ap = model_ap.get(reference)
-                passed = (
-                    candidate_ap is not None
+                support = _rectangular_common_support(
+                    train, test, sorted(set(observability + content))
+                )
+                reference_scores = _domain_refit_predict(train, test, observability, outcome)
+                candidate_scores = _domain_refit_predict(
+                    train, test, sorted(set(observability + content)), outcome
+                )
+                truth = test[outcome].astype(bool).tolist()
+                reference_ap = average_precision(truth, reference_scores.tolist())
+                candidate_ap = average_precision(truth, candidate_scores.tolist())
+                passed = bool(
+                    support >= support_fraction_minimum
+                    and candidate_ap is not None
                     and reference_ap is not None
                     and candidate_ap >= reference_ap * (1.0 - noninferiority_margin)
                 )
                 robust.append(passed)
-                comparisons.append(
+                rows.append(
                     {
-                        "candidate": candidate,
-                        "reference": reference,
+                        "domain_id": binding["domain_id"],
+                        "level": str(level),
+                        OUTER_FOLD: str(outer_year),
+                        "train_rows_other_domains": len(train),
+                        "test_rows_held_domain": len(test),
+                        "positives": int(test[outcome].sum()),
+                        "common_support_fraction": support,
                         "candidate_ap": candidate_ap,
                         "reference_ap": reference_ap,
                         "noninferior": passed,
+                        "refit_executed": True,
                     }
                 )
-            rows.append(
-                {
-                    "domain_id": binding["domain_id"],
-                    "level": None if pd.isna(level) else str(level),
-                    "rows": int(level_frame[[firm, year]].drop_duplicates().shape[0]),
-                    "positives": int(
-                        level_frame[[firm, year, outcome]].drop_duplicates()[outcome].sum()
-                    ),
-                    "comparisons": comparisons,
-                }
-            )
+    domain_count = len({(str(item["domain_id"]), str(item["level"])) for item in rows})
     return {
-        "status": "PASS" if robust else "SKIPPED",
-        "reason_code": None if robust else "INSUFFICIENT_POSITIVES",
+        "status": "PASS" if robust and domain_count >= 2 else "SKIPPED",
+        "reason_code": None if robust and domain_count >= 2 else "INSUFFICIENT_DOMAIN_REFITS",
         "domains": rows,
         "robust_scenario_fraction": sum(robust) / len(robust) if robust else None,
+        "leave_one_domain_out_refit_executed": bool(robust and domain_count >= 2),
     }
+
+
+def _domain_refit_predict(
+    train: pd.DataFrame, test: pd.DataFrame, feature_ids: list[str], outcome: str
+) -> np.ndarray:
+    estimator = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+            ("model", LogisticRegression(C=1.0, solver="lbfgs", max_iter=2000)),
+        ]
+    )
+    cast(Any, estimator).fit(train[feature_ids], train[outcome].astype(int))
+    return np.asarray(cast(Any, estimator).predict_proba(test[feature_ids]), dtype=float)[:, 1]
+
+
+def _rectangular_common_support(
+    train: pd.DataFrame, test: pd.DataFrame, feature_ids: list[str]
+) -> float:
+    supported = np.ones(len(test), dtype=bool)
+    for feature_id in feature_ids:
+        train_values = pd.to_numeric(train[feature_id], errors="coerce")
+        test_values = pd.to_numeric(test[feature_id], errors="coerce").to_numpy(dtype=float)
+        finite = train_values.dropna().to_numpy(dtype=float)
+        if len(finite) == 0:
+            return 0.0
+        supported &= (
+            np.isfinite(test_values)
+            & (test_values >= np.min(finite))
+            & (test_values <= np.max(finite))
+        )
+    return float(np.mean(supported)) if len(supported) else 0.0
 
 
 def ablation_summary(evaluations: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -154,6 +212,142 @@ def source_sensitivity_summary(
     }
 
 
+def source_exclusion_refits(
+    *,
+    matrices: dict[str, Any],
+    feature_panel: pd.DataFrame,
+    feature_registry: list[dict[str, Any]],
+    weights_by_fold: dict[str, pd.DataFrame],
+    outcomes: pd.DataFrame,
+    outer_folds: list[str],
+    learner_ids: list[str],
+    learner_settings: dict[str, Any],
+    learner_search_spaces: dict[str, Any],
+    maximum_valid_configurations: int,
+    columns: dict[str, str],
+    seed_by_fold_and_exclusion: dict[tuple[str, str], int],
+) -> dict[str, object]:
+    """Actually refit Track A after each source and channel exclusion."""
+    raw_rows = matrices.get("rows")
+    expected_sources = matrices.get("expected_sources")
+    if not isinstance(raw_rows, list) or not isinstance(expected_sources, dict):
+        raise ValueError("source sensitivity requires source-channel matrices")
+    source_channels = {
+        str(key): str(value) for key, value in cast(dict[object, object], expected_sources).items()
+    }
+    exclusions: dict[str, set[str]] = {
+        f"source:{source}": {source} for source in sorted(source_channels)
+    }
+    for channel in sorted(set(source_channels.values())):
+        exclusions[f"channel:{channel}"] = {
+            source
+            for source, source_channel in source_channels.items()
+            if source_channel == channel
+        }
+    rows: list[dict[str, object]] = []
+    for exclusion_id, excluded_sources in exclusions.items():
+        labels = _alternative_l1_labels(
+            matrix_rows=cast(list[object], raw_rows),
+            excluded_sources=excluded_sources,
+            target_id=f"L1_without_{exclusion_id}",
+            columns=columns,
+        )
+        for fold_id in outer_folds:
+            weights = weights_by_fold.get(fold_id)
+            if weights is None:
+                raise ValueError(f"fold={fold_id}: sensitivity weights required")
+            fit = fit_fold_models(
+                feature_panel=feature_panel,
+                feature_registry=feature_registry,
+                label_inputs=labels,
+                weights=weights,
+                outer_year=int(fold_id),
+                learner_ids=learner_ids,
+                learner_settings=learner_settings,
+                target_id=f"L1_without_{exclusion_id}",
+                measurement_id=f"L1_without_{exclusion_id}",
+                columns=columns,
+                random_state=seed_by_fold_and_exclusion[(fold_id, exclusion_id)],
+                track_id="source_sensitivity",
+                learner_search_spaces=learner_search_spaces,
+                maximum_valid_configurations=maximum_valid_configurations,
+            )
+            evaluated = fit.outer_predictions.merge(
+                outcomes,
+                on=[columns[FIRM_ID], columns[FISCAL_YEAR]],
+                how="inner",
+                validate="m:1",
+            )
+            for model_id, frame in evaluated.groupby(columns[LEARNER_ID], sort=True):
+                truth = frame[columns[OUTCOME]].astype(bool).tolist()
+                scores = frame[columns[PREDICTION]].astype(float).tolist()
+                rows.append(
+                    {
+                        "exclusion_id": exclusion_id,
+                        "excluded_source_ids": sorted(excluded_sources),
+                        OUTER_FOLD: fold_id,
+                        "model_id": str(model_id),
+                        "fit_status": fit.models["status"],
+                        "rows": len(frame),
+                        "positives": int(frame[columns[OUTCOME]].sum()),
+                        "average_precision": average_precision(truth, scores),
+                        "outer_outcomes_used_in_fit": False,
+                        "tuning_scope": "development_history_only",
+                        "tuning_budget_maximum": maximum_valid_configurations,
+                    }
+                )
+    return {
+        "status": "PASS" if rows else "SKIPPED",
+        "reason_code": None if rows else "INSUFFICIENT_SOURCE_REFITS",
+        "refit_executed": bool(rows),
+        "results": rows,
+    }
+
+
+def _alternative_l1_labels(
+    *,
+    matrix_rows: list[object],
+    excluded_sources: set[str],
+    target_id: str,
+    columns: dict[str, str],
+) -> pd.DataFrame:
+    firm = columns[FIRM_ID]
+    year = columns[FISCAL_YEAR]
+    target = columns[TARGET_ID]
+    outcome = columns[OUTCOME]
+    rows: list[dict[str, object]] = []
+    for raw in matrix_rows:
+        if not isinstance(raw, dict):
+            continue
+        row = cast(dict[str, Any], raw)
+        source_outcomes = row.get("source_outcomes")
+        if not isinstance(source_outcomes, dict):
+            continue
+        remaining = {
+            str(source): cast(bool | None, value)
+            for source, value in cast(dict[object, object], source_outcomes).items()
+            if str(source) not in excluded_sources
+        }
+        value = aggregate_l1(remaining) if row.get(MATURE) is True else None
+        rows.append(
+            {
+                firm: str(row[FIRM_ID]),
+                year: int(row[FISCAL_YEAR]),
+                target: target_id,
+                outcome: value,
+            }
+        )
+    frame = pd.DataFrame(rows, columns=[firm, year, target, outcome])
+    return frame.astype(
+        {
+            firm: "string",
+            year: "int16",
+            target: "string",
+            outcome: "boolean",
+        }
+    )
+
+
 def censoring_sensitivity_summary(
     diagnostics: list[dict[str, Any]], censoring_registry: list[dict[str, Any]]
 ) -> dict[str, object]:
@@ -169,10 +363,13 @@ def censoring_sensitivity_summary(
         item.get("classification") == "prospective_immature" for item in censoring_registry
     )
     return {
-        "status": "AVAILABLE" if eligible_folds else "SKIPPED",
-        "reason_code": None if eligible_folds else "IPCW_DIAGNOSTICS_UNAVAILABLE",
+        "status": "SKIPPED",
+        "reason_code": "CENSORING_TIME_OR_EXIT_SOURCE_UNAVAILABLE"
+        if eligible_folds
+        else "IPCW_DIAGNOSTICS_UNAVAILABLE",
         "eligible_outer_folds": eligible_folds,
         "role": "sensitivity_only",
+        "rerun_executed": False,
         "prospective_immature_count": prospective,
         "immature_or_exit_assigned_negative": False,
     }

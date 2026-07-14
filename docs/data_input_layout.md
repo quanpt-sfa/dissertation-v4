@@ -82,5 +82,7 @@ uv run python scripts/run_pipeline.py `
   --through P17
 ```
 
-Mỗi `run-id` là bất biến. Nếu thư mục run đã tồn tại, dùng một `run-id` mới; không
-xóa hoặc ghi đè run cũ để tái sử dụng tên.
+Mỗi `run-id` là bất biến. Nếu một run bị gián đoạn nhưng input/code/config không
+đổi, tiếp tục bằng đúng lệnh trên và thêm `--resume`; runner xác minh mọi hash trước
+khi skip unit hoàn tất. Nếu dữ liệu, code, config hoặc snapshot thay đổi, phải dùng
+`run-id` mới; không xóa hoặc ghi đè run cũ.

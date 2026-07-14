@@ -233,6 +233,7 @@ steps:
     - method_id
     - batch_id
     reads:
+    - feature_panel
     - feature_registry
     - source_channel_matrices
     - simulation_scenario_registry
@@ -275,6 +276,7 @@ steps:
     - fold_id
     reads:
     - feature_panel
+    - feature_registry
     - risk_sets
     - observability_registry
     - source_channel_matrices
@@ -352,6 +354,8 @@ steps:
     - outer_fold
     reads:
     - measurement_selection_registry
+    - source_channel_matrices
+    - anchor_capability
     - temporal_split_registry
     - feature_panel
     - feature_registry
@@ -392,7 +396,9 @@ steps:
     unit_coordinates:
     - outer_fold
     reads:
+    - mcse_report
     - model_freeze_receipt
+    - model_artifacts
     - development_oof_predictions
     - raw_outer_predictions
     - sealed_outcome_store
@@ -444,6 +450,8 @@ steps:
     - lag_decomposition
     - censoring_registry
     - weight_diagnostics
+    - fold_aware_weights
+    - source_channel_matrices
     optional_reads: []
     writes:
     - domain_transfer_outputs
@@ -533,6 +541,7 @@ steps:
     reads:
     - known_case_results
     - gate2_verdict
+    - measurement_selection_registry
     - evaluation_metrics
     - feature_panel
     - raw_outer_predictions

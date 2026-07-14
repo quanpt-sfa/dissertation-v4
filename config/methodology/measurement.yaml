@@ -32,6 +32,20 @@ measurement:
       role: sensitivity_only
       estimated_parameter_bias_only: true
     pairwise_dependence_role: sensitivity_only
+    operational:
+      fixed_pi_grid: []
+      accuracy_priors_by_profile: {}
+      pilot_max_rows: 2000
+      mcmc:
+        chains: 4
+        warmup_per_chain: 500
+        draws_per_chain: 1000
+        alpha_proposal_sd: 0.15
+        random_effect_proposal_sd: 0.15
+        rhat_max: 1.05
+        ess_min: 200
+        posterior_predictive_source_rate_error_max: 0.10
+        minimum_observations_per_source: 30
   fixed_pi:
     report_pi_bias: false
     report_pi_rmse: false
@@ -54,7 +68,15 @@ measurement:
   l2_missingness:
     normalize_over_observed_channels: true
     minimum_coverage_required: true
+    minimum_observed_channels: null
+    training_normalization: empirical_cdf_within_training_fold
     sensitivities:
     - mean
     - neutral
     - complete_channel_subset
+  l2_scoring:
+    formula: null
+    supported_formula: quality_delay_weighted_observed_source_mean
+    source_quality_by_profile: {}
+    delay_half_life_days: null
+    channel_weights: equal
