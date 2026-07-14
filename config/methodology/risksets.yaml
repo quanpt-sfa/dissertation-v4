@@ -4,4 +4,4 @@ risksets:
   complete_followup_required: true
   ipcw_role: sensitivity_only_when_diagnostics_pass
   data_cutoff_required: true
-  data_cutoff: null
+  data_cutoff: "2026-03-31"
