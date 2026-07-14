@@ -33,7 +33,7 @@ from core.semantic_keys import (
     WEIGHT,
 )
 from evaluation.service import evaluate_outer_fold
-from evidence.service import EvidenceRecord, build_evidence_ledger
+from evidence.service import EvidenceRecord, build_evidence_ledger, map_evidence_outcome
 from features.service import build_feature_panel
 from gates.service import breakpoint_stability_pass, gate2_verdict, gate3_verdict
 from labels.service import aggregate_l1, evidence_score_l2, posterior_l3_fixed_pi
@@ -222,7 +222,7 @@ def test_p03_row_inclusion_exclusion_does_not_create_negative_outcome() -> None:
                 outcome=None,
                 event_id="excluded-event",
                 event_cluster_id="excluded-cluster",
-                outcome_basis="included_event_positive",
+                outcome_basis="explicit_hard_positive_indicator",
                 row_included=False,
             )
         ],
@@ -233,6 +233,17 @@ def test_p03_row_inclusion_exclusion_does_not_create_negative_outcome() -> None:
     assert result.ledger.empty
     assert result.availability_registry[0]["status"] == "EXCLUDED_BY_SOURCE_RULE"
     assert result.availability_registry[0][OUTCOME] is None
+
+
+def test_p03_positive_indicator_false_is_unknown_not_explicit_negative() -> None:
+    outcome, basis = map_evidence_outcome(
+        outcome_mode="positive_indicator",
+        direct_outcome=None,
+        positive_indicator=False,
+        row_included=True,
+    )
+    assert outcome is None
+    assert basis == "explicit_hard_positive_indicator"
 
 
 def test_p03_keeps_distinct_events_and_p05_applies_horizon_before_aggregation() -> None:

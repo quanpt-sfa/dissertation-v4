@@ -214,6 +214,8 @@ def _build_entry(
         source["evidence_mapping"] = {
             "outcome_mode": profile.evidence_mapping.outcome_mode,
             "row_inclusion_semantic": profile.evidence_mapping.row_inclusion_semantic,
+            "positive_semantic": profile.evidence_mapping.positive_semantic,
+            "false_indicator_policy": profile.evidence_mapping.false_indicator_policy,
             "absence_policy": profile.evidence_mapping.absence_policy,
             "opportunity_semantic": profile.evidence_mapping.opportunity_semantic,
             "duplicate_representative_rule": (

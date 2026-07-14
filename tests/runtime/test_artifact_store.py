@@ -123,7 +123,7 @@ def test_nullable_evidence_outcome_matches_dataframe_contract(tmp_path: Path) ->
             "period_link_source": pd.Series(["affected_year", pd.NA], dtype="string"),
             "period_link_confidence": pd.Series(["high", pd.NA], dtype="string"),
             "outcome_basis": pd.Series(
-                ["included_event_positive", "direct_source_outcome"], dtype="string"
+                ["explicit_hard_positive_indicator", "direct_source_outcome"], dtype="string"
             ),
             "availability_date": pd.Series(
                 [pd.Timestamp("2022-03-31"), pd.Timestamp("2022-04-01")],

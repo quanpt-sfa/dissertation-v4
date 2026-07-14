@@ -87,6 +87,7 @@ source_catalog:
         fiscal_year: [label_year]
         availability_date: [publish_date]
         row_inclusion: [train_include_flag]
+        hard_positive: [is_direct_label]
         event_id: [firm_event_id]
         event_cluster_id: [bundle_id]
         period_link_source: [label_year_source]
@@ -96,12 +97,15 @@ source_catalog:
       - fiscal_year
       - availability_date
       - row_inclusion
+      - hard_positive
       - event_id
       key_semantics: [event_id]
       date_semantics: [availability_date]
       evidence_mapping:
-        outcome_mode: included_event_positive
+        outcome_mode: positive_indicator
         row_inclusion_semantic: row_inclusion
+        positive_semantic: hard_positive
+        false_indicator_policy: unknown
         absence_policy: unknown
         opportunity_semantic: null
         duplicate_representative_rule: identical_signature_then_source_event_id

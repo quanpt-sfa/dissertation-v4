@@ -10,7 +10,7 @@ Cardinality = Literal["one", "one_or_none", "many"]
 SourceFormat = Literal["csv", "tsv", "parquet", "json", "jsonl", "xlsx"]
 AvailabilityDateRule = Literal["physical_column", "fiscal_year_plus_one_month_day"]
 RowAggregation = Literal["one_row_per_firm_year", "firm_year_presence"]
-EvidenceOutcomeMode = Literal["direct_outcome", "included_event_positive"]
+EvidenceOutcomeMode = Literal["direct_outcome", "positive_indicator"]
 EvidenceAbsencePolicy = Literal["unknown"]
 DuplicateRepresentativeRule = Literal["identical_signature_then_source_event_id"]
 
@@ -139,6 +139,8 @@ class PanelProfile:
 class EvidenceProfile:
     outcome_mode: EvidenceOutcomeMode
     row_inclusion_semantic: str | None
+    positive_semantic: str | None
+    false_indicator_policy: EvidenceAbsencePolicy
     absence_policy: EvidenceAbsencePolicy
     opportunity_semantic: str | None
     duplicate_representative_rule: DuplicateRepresentativeRule
@@ -147,11 +149,17 @@ class EvidenceProfile:
     def from_mapping(cls, value: object, context: str) -> EvidenceProfile:
         raw = _mapping(value, context)
         outcome_mode = raw.get("outcome_mode")
-        if outcome_mode not in {"direct_outcome", "included_event_positive"}:
+        if outcome_mode not in {"direct_outcome", "positive_indicator"}:
             raise ValueError(f"{context}.outcome_mode: unsupported {outcome_mode}")
         row_inclusion = raw.get("row_inclusion_semantic")
         if row_inclusion is not None:
             row_inclusion = _string(row_inclusion, f"{context}.row_inclusion_semantic")
+        positive_semantic = raw.get("positive_semantic")
+        if positive_semantic is not None:
+            positive_semantic = _string(positive_semantic, f"{context}.positive_semantic")
+        false_indicator_policy = raw.get("false_indicator_policy", "unknown")
+        if false_indicator_policy != "unknown":
+            raise ValueError(f"{context}.false_indicator_policy must be unknown")
         absence_policy = raw.get("absence_policy")
         if absence_policy != "unknown":
             raise ValueError(f"{context}.absence_policy must be unknown")
@@ -164,6 +172,8 @@ class EvidenceProfile:
         return cls(
             outcome_mode=cast(EvidenceOutcomeMode, outcome_mode),
             row_inclusion_semantic=row_inclusion,
+            positive_semantic=positive_semantic,
+            false_indicator_policy="unknown",
             absence_policy="unknown",
             opportunity_semantic=opportunity,
             duplicate_representative_rule="identical_signature_then_source_event_id",
@@ -244,8 +254,18 @@ class SourceProfile:
                 and evidence_mapping.opportunity_semantic not in semantics
             ):
                 raise ValueError(f"profile={profile_id}: opportunity semantic is not registered")
+            if (
+                evidence_mapping.positive_semantic is not None
+                and evidence_mapping.positive_semantic not in semantics
+            ):
+                raise ValueError(f"profile={profile_id}: positive semantic is not registered")
             if evidence_mapping.outcome_mode == "direct_outcome" and "outcome" not in semantics:
                 raise ValueError(f"profile={profile_id}: direct outcome semantic is required")
+            if (
+                evidence_mapping.outcome_mode == "positive_indicator"
+                and evidence_mapping.positive_semantic is None
+            ):
+                raise ValueError(f"profile={profile_id}: positive indicator semantic is required")
         return cls(
             profile_id=profile_id,
             enabled=enabled,

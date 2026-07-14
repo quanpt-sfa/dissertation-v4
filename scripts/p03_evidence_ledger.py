@@ -23,12 +23,13 @@ from core.semantic_keys import (
     EVENT_ID,
     FIRM_ID,
     FISCAL_YEAR,
+    HARD_POSITIVE,
     OUTCOME,
     PERIOD_LINK_CONFIDENCE,
     PERIOD_LINK_SOURCE,
     SOURCE_ID,
 )
-from evidence.service import EvidenceRecord, build_evidence_ledger
+from evidence.service import EvidenceRecord, build_evidence_ledger, map_evidence_outcome
 from p01.readers import iter_rows
 from p01.registry import resolve_source
 from p02.builder import normalize_entity_field, resolve_entity_link
@@ -96,6 +97,7 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
         )
         outcome_mode = evidence_mapping.get("outcome_mode")
         row_inclusion_semantic = evidence_mapping.get("row_inclusion_semantic")
+        positive_semantic = evidence_mapping.get("positive_semantic")
         duplicate_rule = evidence_mapping.get("duplicate_representative_rule")
         if evidence_mapping.get("absence_policy") != "unknown":
             raise ValueError(f"source={source_id}: evidence absence must remain unknown")
@@ -106,8 +108,14 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
             required.add(row_inclusion_semantic)
         if outcome_mode == "direct_outcome":
             required.add(OUTCOME)
-        elif outcome_mode != "included_event_positive":
+        elif outcome_mode == "positive_indicator" and isinstance(positive_semantic, str):
+            if positive_semantic != HARD_POSITIVE:
+                raise ValueError(f"source={source_id}: hard-positive semantic required")
+            required.add(positive_semantic)
+        else:
             raise ValueError(f"source={source_id}: unsupported evidence outcome mode")
+        if evidence_mapping.get("false_indicator_policy") != "unknown":
+            raise ValueError(f"source={source_id}: false positive-indicator must remain unknown")
         if not required.issubset(semantics):
             raise ValueError(
                 f"source={source_id}: unresolved evidence semantics {sorted(required - set(semantics))}"
@@ -126,12 +134,19 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
                 if parsed_inclusion is None:
                     raise ValueError(f"source={source_id}: row inclusion cannot be missing")
                 row_included = parsed_inclusion
-            outcome = (
-                True
-                if outcome_mode == "included_event_positive" and row_included
-                else None
-                if outcome_mode == "included_event_positive"
-                else _boolean(row.get(str(semantics[OUTCOME])))
+            outcome, outcome_basis = map_evidence_outcome(
+                outcome_mode=str(outcome_mode),
+                direct_outcome=(
+                    _boolean(row.get(str(semantics[OUTCOME])))
+                    if outcome_mode == "direct_outcome"
+                    else None
+                ),
+                positive_indicator=(
+                    _boolean(row.get(str(semantics[str(positive_semantic)])))
+                    if outcome_mode == "positive_indicator"
+                    else None
+                ),
+                row_included=row_included,
             )
             event_id = _optional_text(row, semantics, EVENT_ID) or _derived_event_id(
                 source_id, canonical, fiscal_year, availability, row
@@ -149,11 +164,7 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
                     event_cluster_id=cluster,
                     period_link_source=_optional_text(row, semantics, PERIOD_LINK_SOURCE),
                     period_link_confidence=_optional_text(row, semantics, PERIOD_LINK_CONFIDENCE),
-                    outcome_basis=(
-                        "included_event_positive"
-                        if outcome_mode == "included_event_positive"
-                        else "direct_source_outcome"
-                    ),
+                    outcome_basis=outcome_basis,
                     row_included=row_included,
                     duplicate_representative_rule=str(duplicate_rule),
                 )

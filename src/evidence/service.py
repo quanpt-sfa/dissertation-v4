@@ -48,6 +48,26 @@ class EvidenceBuildResult:
     lag_decomposition: dict[str, object]
 
 
+def map_evidence_outcome(
+    *,
+    outcome_mode: str,
+    direct_outcome: bool | None,
+    positive_indicator: bool | None,
+    row_included: bool,
+) -> tuple[bool | None, str]:
+    """Map explicit source semantics without converting false indicators to negatives."""
+    if not row_included:
+        return None, "excluded_by_row_inclusion"
+    if outcome_mode == "direct_outcome":
+        return direct_outcome, "direct_source_outcome"
+    if outcome_mode == "positive_indicator":
+        return (
+            True if positive_indicator is True else None,
+            "explicit_hard_positive_indicator",
+        )
+    raise ValueError("unsupported evidence outcome semantics")
+
+
 def build_evidence_ledger(
     *,
     panel: pd.DataFrame,
