@@ -1,1 +1,5 @@
-risksets: {maturity_required: true}
+risksets:
+  maturity_required: true
+  main_requires_tau_plus_h_le_tcut: true
+  complete_followup_required: true
+  ipcw_role: sensitivity_only_when_diagnostics_pass

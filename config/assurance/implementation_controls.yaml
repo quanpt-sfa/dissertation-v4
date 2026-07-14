@@ -1,6 +1,34 @@
 implementation_controls:
-  IC001: {statement: Sole configuration manifest with exclusive namespace ownership., test_ids: [T001], output_evidence: [registry_lock]}
-  IC002: {statement: Generated documentation and bindings are checked for drift., test_ids: [T043], output_evidence: [p00_audit_report]}
-  IC003: {statement: P00 publication stages privately and publishes atomically., test_ids: [T002], output_evidence: [success_receipt]}
-  IC004: {statement: Artifact paths and contracts are catalog-owned., test_ids: [T039, T040], output_evidence: [artifact_catalog, schema_catalog]}
-  IC005: {statement: Shared artifact append is forbidden., test_ids: [T002], output_evidence: [job_manifest]}
+  IC001:
+    statement: Sole configuration manifest with exclusive namespace ownership and no override merge.
+    pytest_nodes:
+    - tests/test_p0_protocol.py::test_missing_module_duplicate_owner_and_undeclared_yaml_fail
+    output_evidence:
+    - registry_lock
+  IC002:
+    statement: Generated documentation is derived from the locked registry and checked for drift.
+    pytest_nodes:
+    - tests/test_p0_protocol.py::test_generated_docs_have_header_and_drift_is_detected
+    output_evidence:
+    - p00_audit_report
+  IC003:
+    statement: P00 publication uses private staging, detached manifest hashing, and immutable success receipts.
+    pytest_nodes:
+    - tests/provenance/test_p00_manifests.py::test_p00_detached_manifest_hash_and_output_hashes
+    output_evidence:
+    - success_receipt
+  IC004:
+    statement: Artifact paths, contracts, sensitivity classes, producers, and receipt requirements are catalog-owned.
+    pytest_nodes:
+    - tests/runtime/test_artifact_store.py::test_wrong_producer_fails
+    - tests/access/test_firewalls.py::test_p10_cannot_read_sealed_outer_outcomes
+    output_evidence:
+    - artifact_catalog
+    - schema_catalog
+    - access_matrix
+  IC005:
+    statement: Direct artifact I/O and shared append operations outside the core runtime are forbidden.
+    pytest_nodes:
+    - tests/test_p0_protocol.py::test_forbidden_pattern_guard_uses_compiled_columns
+    output_evidence:
+    - job_manifest

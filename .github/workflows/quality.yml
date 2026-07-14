@@ -1,3 +1,4 @@
+
 name: quality
 
 on: [push, pull_request]
@@ -7,12 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: {python-version: '3.11'}
-      - run: python -m pip install -e '.[dev]'
-      - run: python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
-      - run: python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
-      - run: python -m ruff check .
-      - run: python -m ruff format --check .
-      - run: python -m pyright
-      - run: python -m pytest -q
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
+      - run: uv run pytest --collect-only -q
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: uv run pytest -q
+      - run: uv run pre-commit run --all-files

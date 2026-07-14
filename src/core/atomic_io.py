@@ -1,9 +1,10 @@
-"""Restartable atomic publication for the P00 lock directory."""
+"""Atomic P00 directory publication with detached manifest hash."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import tempfile
 from collections.abc import Callable
@@ -19,16 +20,15 @@ def publish_p00(
     validate: Callable[[str, object], None],
     receipt: dict[str, object],
 ) -> None:
-    """Stage, validate, hash, receipt, then atomically publish without overwrite."""
     success_name = "_SUCCESS.json"
     if final_directory.exists():
-        success_path = final_directory / success_name
-        if success_path.is_file():
+        if (final_directory / success_name).is_file():
             raise ConfigurationError(f"output={final_directory}: successful run is immutable")
         quarantine = final_directory.with_name(final_directory.name + ".quarantine")
         if quarantine.exists():
             shutil.rmtree(quarantine)
         final_directory.replace(quarantine)
+
     final_directory.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=".p00-staging-", dir=final_directory.parent))
     try:
@@ -40,26 +40,35 @@ def publish_p00(
             destination = staging / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             rendered = (
-                json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True)
-                if not isinstance(content, str)
-                else content
+                content
+                if isinstance(content, str)
+                else json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True)
             )
-            destination.write_text(rendered, encoding="utf-8")
-            hashes[name] = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
-        manifest_raw = files.get("job_manifest.json")
-        if not isinstance(manifest_raw, dict):
-            raise ConfigurationError("job_manifest.json: required for P00 publication")
-        manifest = dict(cast(dict[str, Any], manifest_raw))
+            encoded = rendered.encode("utf-8")
+            destination.write_bytes(encoded)
+            hashes[name] = hashlib.sha256(encoded).hexdigest()
+
+        raw_manifest = files.get("job_manifest.json")
+        if not isinstance(raw_manifest, dict):
+            raise ConfigurationError("job_manifest.json is required")
+        manifest = dict(cast(dict[str, Any], raw_manifest))
         manifest["output_hashes"] = hashes
         validate("job_manifest.json", manifest)
         manifest_text = json.dumps(manifest, indent=2, sort_keys=True)
-        (staging / "job_manifest.json").write_text(manifest_text, encoding="utf-8")
-        receipt = dict(receipt)
-        receipt["manifest_hash"] = hashlib.sha256(manifest_text.encode("utf-8")).hexdigest()
-        validate(success_name, receipt)
-        (staging / success_name).write_text(
-            json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8"
+        (staging / "job_manifest.json").write_bytes(manifest_text.encode("utf-8"))
+
+        success = dict(receipt)
+        success["manifest_hash"] = hashlib.sha256(manifest_text.encode("utf-8")).hexdigest()
+        validate(success_name, success)
+        (staging / success_name).write_bytes(
+            json.dumps(success, indent=2, sort_keys=True).encode("utf-8")
         )
+        if os.name != "nt":
+            descriptor = os.open(staging, os.O_RDONLY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
         staging.replace(final_directory)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)

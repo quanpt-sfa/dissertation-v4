@@ -1,4 +1,4 @@
-"""D01--D45 traceability validation and machine-readable rows."""
+"""Validate canonical Appendix B decisions, crosswalks, and executable pytest nodes."""
 
 from __future__ import annotations
 
@@ -10,8 +10,13 @@ from typing import Any, cast
 from .errors import DecisionTraceabilityError
 
 
+def _mapping(value: object, context: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise DecisionTraceabilityError(f"{context}: mapping required")
+    return cast(dict[str, Any], value)
+
+
 def path_exists(registry: object, dotted: str) -> bool:
-    """Resolve a dotted anchor against normalized registry mappings."""
     current: object = registry
     for part in dotted.split("."):
         if not isinstance(current, dict) or part not in current:
@@ -21,127 +26,124 @@ def path_exists(registry: object, dotted: str) -> bool:
 
 
 def validate_decisions(registry: dict[str, object]) -> list[dict[str, object]]:
-    """Require exactly D01 through D45, anchors, tests, steps, and evidence."""
-    decisions = registry.get("decisions")
-    tests = registry.get("tests")
-    steps = registry.get("steps")
-    artifacts = registry.get("artifacts")
-    if not all(isinstance(item, dict) for item in (decisions, tests, steps, artifacts)):
-        raise DecisionTraceabilityError(
-            "decisions: decisions, tests, steps, and artifacts must be mappings"
-        )
-    decisions = cast(dict[str, Any], decisions)
-    tests = cast(dict[str, Any], tests)
-    steps = cast(dict[str, Any], steps)
-    artifacts = cast(dict[str, Any], artifacts)
+    appendix_b = _mapping(registry.get("appendix_b"), "appendix_b")
+    decisions = _mapping(registry.get("decisions"), "decisions")
+    tests = _mapping(registry.get("tests"), "tests")
+    steps = _mapping(registry.get("steps"), "steps")
+    artifacts = _mapping(registry.get("artifacts"), "artifacts")
+    controls = _mapping(registry.get("implementation_controls"), "implementation_controls")
+
     expected = {f"D{number:02d}" for number in range(1, 46)}
-    if set(decisions) != expected:
-        raise DecisionTraceabilityError(
-            "decisions: require exactly D01 through D45; complete missing IDs"
-        )
+    if set(appendix_b) != expected or set(decisions) != expected:
+        raise DecisionTraceabilityError("appendix_b and decisions must contain exactly D01-D45")
+
     rows: list[dict[str, object]] = []
-    used_tests: set[str] = set()
-    for decision_id in sorted(decisions):
-        item = decisions[decision_id]
-        if not isinstance(item, dict):
-            raise DecisionTraceabilityError(f"decision={decision_id}: mapping required")
-        item = cast(dict[str, Any], item)
-        if (
-            not isinstance(item.get("canonical_title"), str)
-            or not isinstance(item.get("statement"), str)
-            or item["statement"].startswith(("TODO", "TBD", "placeholder"))
+    for decision_id in sorted(expected):
+        canonical = _mapping(appendix_b[decision_id], f"appendix_b.{decision_id}")
+        crosswalk = _mapping(decisions[decision_id], f"decisions.{decision_id}")
+        if crosswalk.get("appendix_b_id") != decision_id:
+            raise DecisionTraceabilityError(f"decision={decision_id}: appendix_b_id mismatch")
+        if canonical.get("chapter_reference") != f"Appendix B, Table B.1, {decision_id}":
+            raise DecisionTraceabilityError(
+                f"decision={decision_id}: exact Table B.1 reference required"
+            )
+        for key in ("canonical_title", "main_specification", "sensitivity_or_rule", "lock_status"):
+            if not isinstance(canonical.get(key), str) or not str(canonical[key]).strip():
+                raise DecisionTraceabilityError(f"decision={decision_id}: canonical {key} required")
+
+        anchors = crosswalk.get("config_anchors")
+        test_ids = crosswalk.get("test_ids")
+        evidence = crosswalk.get("output_evidence")
+        enforced = crosswalk.get("enforced_by_steps")
+        implementation_controls = crosswalk.get("implementation_controls")
+        for name, value in (
+            ("config_anchors", anchors),
+            ("test_ids", test_ids),
+            ("output_evidence", evidence),
+            ("enforced_by_steps", enforced),
+            ("implementation_controls", implementation_controls),
         ):
-            raise DecisionTraceabilityError(
-                f"decision={decision_id}: canonical title and completed statement required"
-            )
-        anchors = item.get("config_anchors")
-        test_ids = item.get("test_ids")
-        evidence = item.get("output_evidence")
-        if not isinstance(anchors, list) or not anchors:
-            raise DecisionTraceabilityError(
-                f"decision={decision_id}: at least one config anchor required"
-            )
-        if not isinstance(test_ids, list) or not test_ids:
-            raise DecisionTraceabilityError(
-                f"decision={decision_id}: at least one test ID required"
-            )
-        if not isinstance(evidence, list) or not evidence:
-            raise DecisionTraceabilityError(
-                f"decision={decision_id}: at least one output evidence artifact required"
-            )
-        if not all(isinstance(anchor, str) for anchor in anchors):
-            raise DecisionTraceabilityError(f"decision={decision_id}: anchor strings required")
-        if not all(isinstance(test_id, str) for test_id in test_ids):
-            raise DecisionTraceabilityError(f"decision={decision_id}: test ID strings required")
-        if not all(isinstance(artifact_id, str) for artifact_id in evidence):
-            raise DecisionTraceabilityError(f"decision={decision_id}: evidence strings required")
-        anchors = cast(list[str], anchors)
-        test_ids = cast(list[str], test_ids)
-        evidence = cast(list[str], evidence)
-        for anchor in anchors:
+            if (
+                not isinstance(value, list)
+                or not value
+                or not all(isinstance(item, str) for item in value)
+            ):
+                raise DecisionTraceabilityError(
+                    f"decision={decision_id}: non-empty {name} required"
+                )
+
+        for anchor in cast(list[str], anchors):
             if not path_exists(registry, anchor):
                 raise DecisionTraceabilityError(
-                    f"decision={decision_id}, anchor={anchor}: unknown normalized registry path"
+                    f"decision={decision_id}, anchor={anchor}: unknown registry path"
                 )
-        for test_id in test_ids:
+        for test_id in cast(list[str], test_ids):
             if test_id not in tests:
                 raise DecisionTraceabilityError(
-                    f"decision={decision_id}, test={test_id}: unknown test ID"
+                    f"decision={decision_id}, test={test_id}: unknown test"
                 )
-        for step_id in cast(list[str], item.get("enforced_by_steps", [])):
+            test_spec = _mapping(tests[test_id], f"tests.{test_id}")
+            if decision_id not in test_spec.get("decision_ids", []):
+                raise DecisionTraceabilityError(
+                    f"decision={decision_id}, test={test_id}: reciprocal link missing"
+                )
+        for step_id in cast(list[str], enforced):
             if step_id not in steps:
                 raise DecisionTraceabilityError(
-                    f"decision={decision_id}, step={step_id}: unknown step ID"
+                    f"decision={decision_id}, step={step_id}: unknown step"
                 )
-        for artifact_id in evidence:
+        for artifact_id in cast(list[str], evidence):
             if artifact_id not in artifacts:
                 raise DecisionTraceabilityError(
-                    f"decision={decision_id}, artifact={artifact_id}: unknown output artifact"
+                    f"decision={decision_id}, artifact={artifact_id}: unknown artifact"
                 )
-        expected_reference = f"Appendix B, {decision_id}"
-        if item.get("chapter_reference") != expected_reference:
-            raise DecisionTraceabilityError(
-                f"decision={decision_id}: chapter_reference must be {expected_reference}"
-            )
-        controls = item.get("implementation_controls")
-        if not isinstance(controls, list) or not controls:
-            raise DecisionTraceabilityError(
-                f"decision={decision_id}: implementation_controls required"
-            )
-        used_tests.update(test_ids)
-        rows.append({"decision_id": decision_id, **item})
-    if len(used_tests) < 10:
-        raise DecisionTraceabilityError(
-            "decisions: traceability cannot assign one generic test to all decisions"
+        for control_id in cast(list[str], implementation_controls):
+            if control_id not in controls:
+                raise DecisionTraceabilityError(
+                    f"decision={decision_id}, control={control_id}: unknown control"
+                )
+
+        rows.append(
+            {
+                "decision_id": decision_id,
+                **canonical,
+                "config_anchors": anchors,
+                "lock_stage": crosswalk.get("lock_stage"),
+                "enforced_by_steps": enforced,
+                "test_ids": test_ids,
+                "output_evidence": evidence,
+                "implementation_controls": implementation_controls,
+            }
         )
     return rows
 
 
 def validate_test_registry(registry: dict[str, object], root: Path) -> None:
-    """Require every declared pytest node to exist in pytest collection."""
-    tests = registry.get("tests")
-    if not isinstance(tests, dict):
-        raise DecisionTraceabilityError("tests: mapping required")
-    tests = cast(dict[str, Any], tests)
+    tests = _mapping(registry.get("tests"), "tests")
     expected = {f"T{number:03d}" for number in range(1, 46)}
     if set(tests) != expected:
-        raise DecisionTraceabilityError("tests: require exactly T001 through T045")
+        raise DecisionTraceabilityError("tests must contain exactly T001-T045")
+
     declared_nodes: set[str] = set()
-    for test_id in sorted(tests):
-        item = tests[test_id]
-        if not isinstance(item, dict):
-            raise DecisionTraceabilityError(f"test={test_id}: mapping required")
-        item = cast(dict[str, Any], item)
+    for test_id in sorted(expected):
+        item = _mapping(tests[test_id], f"tests.{test_id}")
         nodes = item.get("pytest_nodes")
-        if not isinstance(nodes, list) or not nodes:
+        decision_ids = item.get("decision_ids")
+        if (
+            not isinstance(nodes, list)
+            or not nodes
+            or not all(isinstance(node, str) for node in nodes)
+        ):
             raise DecisionTraceabilityError(f"test={test_id}: pytest_nodes required")
-        if not all(isinstance(node, str) for node in nodes):
-            raise DecisionTraceabilityError(f"test={test_id}: pytest node strings required")
-        nodes = cast(list[str], nodes)
-        for node in nodes:
-            if not node.startswith("tests/"):
-                raise DecisionTraceabilityError(f"test={test_id}: invalid pytest node")
+        if not isinstance(decision_ids, list) or len(decision_ids) != 1:
+            raise DecisionTraceabilityError(f"test={test_id}: exactly one decision_id required")
+        for node in cast(list[str], nodes):
+            if node in declared_nodes:
+                raise DecisionTraceabilityError(
+                    f"test={test_id}: pytest node reused by another required test"
+                )
             declared_nodes.add(node)
+
     collected = _collect_pytest_nodes(root)
     missing = sorted(declared_nodes - collected)
     if missing:
@@ -158,10 +160,10 @@ def _collect_pytest_nodes(root: Path) -> set[str]:
             check=True,
         )
     except (OSError, subprocess.CalledProcessError) as exc:
-        raise DecisionTraceabilityError("tests: pytest collection failed") from exc
-    nodes: set[str] = set()
-    for raw_line in result.stdout.splitlines():
-        line = raw_line.strip()
-        if line.startswith("tests/") and "::" in line:
-            nodes.add(line)
-    return nodes
+        detail = getattr(exc, "stderr", "") or getattr(exc, "stdout", "")
+        raise DecisionTraceabilityError(f"tests: pytest collection failed: {detail}") from exc
+    return {
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip().startswith("tests/") and "::" in line
+    }

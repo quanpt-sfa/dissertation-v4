@@ -17,7 +17,8 @@ Source: config/pipeline.yaml
 | development_oof_predictions | P11 | development_oof_predictions_frame | `P11/oof/{outer_fold}.parquet` |
 | domain_transfer_outputs | P13 | json_object | `P13/domain_transfer.json` |
 | duplicate_map | P02 | json_array | `P02/duplicate_map.json` |
-| environment_expectation | P00 | environment_observation_schema | `P00/environment_expectation.json` |
+| environment_expectation | P00 | environment_expectation_schema | `P00/environment_expectation.json` |
+| environment_observation | P00 | environment_observation_schema | `P00/environment_observation.json` |
 | evaluation_metrics | P12 | json_object | `P12/metrics/{outer_fold}.json` |
 | evidence_ledger | P03 | evidence_ledger_frame | `P03/evidence_ledger.parquet` |
 | feature_panel | P07 | feature_panel_frame | `P07/feature_panel.parquet` |
@@ -27,8 +28,8 @@ Source: config/pipeline.yaml
 | firm_master | P02 | firm_master_frame | `P02/firm_master.parquet` |
 | firm_year_panel | P02 | firm_year_panel_frame | `P02/firm_year_panel.parquet` |
 | fold_aware_weights | P09 | fold_weights_frame | `P09/weights/{fold_id}.parquet` |
-| gate2_verdict | P14 | receipt_schema | `P14/gate2.json` |
-| gate3_verdict | P16 | receipt_schema | `P16/gate3.json` |
+| gate2_verdict | P14 | gate_receipt_schema | `P14/gate2.json` |
+| gate3_verdict | P16 | gate_receipt_schema | `P16/gate3.json` |
 | hierarchical_pi_sensitivity | P13 | json_object | `P13/hierarchical_pi.json` |
 | job_manifest | P00 | job_manifest_schema | `P00/job_manifest.json` |
 | known_case_results | P15 | json_array | `P15/known_cases.json` |
@@ -41,9 +42,9 @@ Source: config/pipeline.yaml
 | measurement_candidate_results | P10 | json_array | `P10/candidates/{outer_fold}.json` |
 | measurement_selection_registry | P10 | json_object | `P10/selection/{outer_fold}.json` |
 | model_artifacts | P11 | json_object | `P11/models/{outer_fold}.json` |
-| model_freeze_receipt | P11 | receipt_schema | `P11/freeze/{outer_fold}.json` |
+| model_freeze_receipt | P11 | model_freeze_receipt_schema | `P11/freeze/{outer_fold}.json` |
 | observability_registry | P06 | json_object | `P06/observability_registry.json` |
-| outer_open_receipt | P12 | receipt_schema | `P12/outer_open/{outer_fold}.json` |
+| outer_open_receipt | P12 | outer_open_receipt_schema | `P12/outer_open/{outer_fold}.json` |
 | p00_audit_report | P00 | p00_audit_markdown | `P00/P00_AUDIT_REPORT.md` |
 | protocol_hash | P00 | protocol_hash_schema | `P00/protocol_hash.txt` |
 | raw_audit | P01 | json_object | `P01/raw_audit/{source_id}.json` |
@@ -52,7 +53,7 @@ Source: config/pipeline.yaml
 | risk_sets | P04 | risk_sets_frame | `P04/risk_sets.parquet` |
 | schema_catalog | P00 | schema_catalog_schema | `P00/schema_catalog.json` |
 | sealed_outcome_store | P05 | sealed_outcome_frame | `P05/sealed_outcomes.parquet` |
-| simulation_batches | P08 | json_array | `P08/batches/{scenario_id}.json` |
+| simulation_batches | P08 | simulation_batch_frame | `P08/batches/{scenario_id}.parquet` |
 | simulation_scenario_registry | P08 | json_array | `P08/scenario_registry.json` |
 | source_channel_matrices | P05 | json_object | `P05/source_channel_matrices.json` |
 | source_config_manifest | P00 | source_config_manifest_schema | `P00/source_config_manifest.json` |

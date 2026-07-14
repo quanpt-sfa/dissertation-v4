@@ -1,2 +1,13 @@
 learners:
-  registered: [logistic, main_boosting]
+  confirmatory:
+  - elastic_net_logistic
+  - random_forest
+  - main_boosting
+  pu_branch:
+  - anchor_pu
+  sensitivity:
+  - noisy_positive_pu
+  tuning:
+    max_valid_configurations_per_learner_inner_fold: 50
+    equivalent_budget_allowed: true
+    runtime_and_valid_configuration_count_reported: true

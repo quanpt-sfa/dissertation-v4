@@ -62,6 +62,15 @@ def load_modules(manifest: Manifest) -> tuple[dict[str, Any], dict[str, str]]:
     """Load every declared module into its own namespace and reject stray YAML."""
     root = manifest.path.parent.resolve()
     declared = {manifest.path.resolve()}
+    expected = {manifest.path.resolve()}
+    for relative in [*manifest.modules.values(), *manifest.schema_modules]:
+        expected.add((root / relative).resolve())
+    actual = {item.resolve() for item in root.rglob("*.yaml")}
+    undeclared = actual - expected
+    if undeclared:
+        raise UndeclaredConfigurationFileError(
+            f"source={root}: undeclared YAML files {sorted(str(item.relative_to(root)) for item in undeclared)}; list them in pipeline.yaml"
+        )
     registry: dict[str, Any] = {}
     hashes: dict[str, str] = capture_hash({}, root, manifest.path.resolve())
     for module_id, relative in manifest.modules.items():
@@ -104,12 +113,6 @@ def load_modules(manifest: Manifest) -> tuple[dict[str, Any], dict[str, str]]:
         declared.add(candidate)
         hashes = capture_hash(hashes, root, candidate)
     registry["schemas"] = schemas
-    actual = {item.resolve() for item in root.rglob("*.yaml")}
-    undeclared = actual - declared
-    if undeclared:
-        raise UndeclaredConfigurationFileError(
-            f"source={root}: undeclared YAML files {sorted(str(item.relative_to(root)) for item in undeclared)}; list them in pipeline.yaml"
-        )
     return registry, hashes
 
 

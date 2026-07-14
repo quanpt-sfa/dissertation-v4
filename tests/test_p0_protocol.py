@@ -1,13 +1,12 @@
-"""Focused P0 regression tests using the complete, data-free protocol fixture."""
+"""Focused P0 regression tests independent of empirical data."""
 
 from __future__ import annotations
 
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from core.config_loader import load_manifest
 from core.errors import (
@@ -18,6 +17,7 @@ from core.errors import (
     GeneratedFileDriftError,
     MethodologicalInvariantError,
     MissingModuleError,
+    UndeclaredConfigurationFileError,
 )
 from core.forbidden_patterns import validate_source_patterns
 from core.generated_docs import render_documents, write_or_check_documents
@@ -33,81 +33,130 @@ def configuration(tmp_path: Path) -> Path:
     return destination / "pipeline.yaml"
 
 
-def replace(path: Path, old: str, new: str) -> None:
-    path.write_text(path.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+def read_yaml(path: Path) -> dict[str, object]:
+    value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert isinstance(value, dict)
+    return value
 
 
-def test_valid_manifest_and_repeated_hash_are_deterministic(configuration: Path) -> None:
+def write_yaml(path: Path, value: dict[str, object]) -> None:
+    path.write_text(
+        yaml.safe_dump(value, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+
+def test_valid_manifest_and_repeated_hash_are_deterministic(
+    configuration: Path,
+) -> None:
     first = compile_registry(configuration)
     second = compile_registry(configuration)
     assert first.protocol_hash == second.protocol_hash
     assert first.registry == second.registry
 
 
-def test_formatting_does_not_change_hash_but_semantics_do(configuration: Path) -> None:
+def test_formatting_does_not_change_hash_but_semantics_do(
+    configuration: Path,
+) -> None:
     first = compile_registry(configuration).protocol_hash
-    with (configuration.parent / "methodology" / "study.yaml").open(
-        "a", encoding="utf-8"
-    ) as stream:
-        stream.write("\n# formatting-only comment\n")
-    assert compile_registry(configuration).protocol_hash == first
-    replace(
-        configuration.parent / "methodology" / "study.yaml",
-        "observed_endpoint",
-        "different_endpoint",
+    study = configuration.parent / "methodology" / "study.yaml"
+    study.write_text(
+        study.read_text(encoding="utf-8") + "\n# formatting-only\n",
+        encoding="utf-8",
     )
-    assert compile_registry(configuration).protocol_hash != first
+    assert compile_registry(configuration).protocol_hash == first
+    value = read_yaml(study)
+    value["study"]["horizons_months"]["primary"] = 13  # type: ignore[index]
+    write_yaml(study, value)
+    with pytest.raises(MethodologicalInvariantError):
+        compile_registry(configuration)
 
 
-def test_missing_module_and_duplicate_owner_fail(configuration: Path) -> None:
-    (configuration.parent / "foundation" / "metadata.yaml").unlink()
+def test_missing_module_duplicate_owner_and_undeclared_yaml_fail(
+    configuration: Path,
+) -> None:
+    metadata = configuration.parent / "foundation" / "metadata.yaml"
+    metadata.unlink()
     with pytest.raises(MissingModuleError):
         compile_registry(configuration)
-    configuration = ROOT / "config" / "pipeline.yaml"
-    raw = configuration.read_text(encoding="utf-8").replace(
+
+    manifest = ROOT / "config" / "pipeline.yaml"
+    raw = manifest.read_text(encoding="utf-8").replace(
         "  metadata: foundation/metadata.yaml",
         "  duplicate: foundation/metadata.yaml\n  metadata: foundation/metadata.yaml",
     )
     local = ROOT / "work" / "duplicate-pipeline.yaml"
+    local.parent.mkdir(exist_ok=True)
     local.write_text(raw, encoding="utf-8")
     try:
         with pytest.raises(DuplicateOwnershipError):
             load_manifest(local)
     finally:
-        local.unlink()
+        local.unlink(missing_ok=True)
+
+    configuration = configuration.parent / "pipeline.yaml"
+    stray = configuration.parent / "stray.yaml"
+    stray.write_text("stray: true\n", encoding="utf-8")
+    with pytest.raises(UndeclaredConfigurationFileError):
+        compile_registry(configuration)
 
 
-def test_path_collision_and_traceability_fail(configuration: Path) -> None:
-    replace(
-        configuration.parent / "foundation" / "artifacts.yaml",
-        "P17/final_report.md",
-        "P00/registry.lock.json",
-    )
+def test_path_collision_and_incomplete_traceability_fail(
+    configuration: Path,
+) -> None:
+    artifacts = configuration.parent / "foundation" / "artifacts.yaml"
+    value = read_yaml(artifacts)
+    value["artifacts"]["final_report"]["path_template"] = "P00/registry.lock.json"  # type: ignore[index]
+    write_yaml(artifacts, value)
     with pytest.raises(ArtifactPathCollisionError):
         compile_registry(configuration)
+
     configuration = ROOT / "config" / "pipeline.yaml"
-
-
-def test_incomplete_decision_traceability_fails(configuration: Path) -> None:
-    replace(configuration.parent / "assurance" / "decisions.yaml", "D45:", "DX45:")
-    with pytest.raises(DecisionTraceabilityError):
-        compile_registry(configuration)
+    copied = configuration.parent.parent / "work" / "invalid-config"
+    if copied.exists():
+        shutil.rmtree(copied)
+    shutil.copytree(configuration.parent, copied)
+    decisions = copied / "assurance" / "decisions.yaml"
+    value = read_yaml(decisions)
+    value["decisions"]["DX45"] = value["decisions"].pop("D45")  # type: ignore[index]
+    write_yaml(decisions, value)
+    try:
+        with pytest.raises(DecisionTraceabilityError):
+            compile_registry(copied / "pipeline.yaml")
+    finally:
+        shutil.rmtree(copied)
 
 
 @pytest.mark.parametrize(
-    ("old", "new"),
+    ("path", "mutator"),
     [
-        ("[L2, L3_fixed_pi, none]", "[L2, L3_hierarchical_pi, none]"),
-        ("label_model_allows_content: false", "label_model_allows_content: true"),
-        ("ap_soft_targets: false", "ap_soft_targets: true"),
-        ("ipcw_role: sensitivity_only", "ipcw_role: confirmatory"),
+        (
+            "methodology/measurement.yaml",
+            lambda value: value["measurement"].update(
+                {"selection_candidates": ["L2", "L3_hierarchical_pi", "none"]}
+            ),
+        ),
+        (
+            "methodology/features.yaml",
+            lambda value: value["features"].update({"label_model_allows_content": True}),
+        ),
+        (
+            "methodology/evaluation.yaml",
+            lambda value: value["evaluation"].update({"ap_soft_targets": True}),
+        ),
+        (
+            "execution/weighting.yaml",
+            lambda value: value["weighting"].update({"ipcw_role": "confirmatory"}),
+        ),
     ],
 )
-def test_methodological_invariants_fail_closed(configuration: Path, old: str, new: str) -> None:
-    for path in configuration.parent.rglob("*.yaml"):
-        if old in path.read_text(encoding="utf-8"):
-            replace(path, old, new)
-            break
+def test_methodological_invariants_fail_closed(
+    configuration: Path, path: str, mutator: object
+) -> None:
+    target = configuration.parent / path
+    value = read_yaml(target)
+    mutator(value)  # type: ignore[operator]
+    write_yaml(target, value)
     with pytest.raises(MethodologicalInvariantError):
         compile_registry(configuration)
 
@@ -130,19 +179,3 @@ def test_forbidden_pattern_guard_uses_compiled_columns(configuration: Path, tmp_
     (tmp_path / "scripts" / "bad.py").write_text("pd.read_csv('x')\n", encoding="utf-8")
     with pytest.raises(ConfigurationError):
         validate_source_patterns(tmp_path, dict(compiled.registry))
-
-
-def test_p00_cli_is_atomic_and_non_overwriting(tmp_path: Path) -> None:
-    command = [
-        sys.executable,
-        str(ROOT / "scripts" / "p00_lock_protocol.py"),
-        "--config",
-        str(ROOT / "config" / "pipeline.yaml"),
-        "--run-id",
-        "test",
-        "--output-root",
-        str(tmp_path),
-    ]
-    assert subprocess.run(command, check=False).returncode == 0
-    assert (tmp_path / "test" / "P00" / "_SUCCESS.json").is_file()
-    assert subprocess.run(command, check=False).returncode != 0

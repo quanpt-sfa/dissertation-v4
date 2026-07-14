@@ -1,1 +1,11 @@
-folds: {initial_in_confirmatory_pool: false, prospective_in_retrospective_evaluation: false}
+folds:
+  initial_outer_year: 2020
+  fully_nested_outer_years:
+  - 2021
+  - 2022
+  - 2023
+  - 2024
+  prospective_year: 2025
+  initial_in_confirmatory_pool: false
+  prospective_in_retrospective_evaluation: false
+  maturity_audit_required_before_lock: true

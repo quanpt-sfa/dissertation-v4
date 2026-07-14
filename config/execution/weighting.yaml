@@ -1,1 +1,12 @@
-weighting: {full_sample_role: descriptive_only, analytical_fit_scope: development_history, ipcw_role: sensitivity_only}
+weighting:
+  verification_diagnostics_always: true
+  stabilized_ipw:
+    role: target_population
+    requires_observed_verification: true
+    requires_support: true
+  overlap_weights:
+    role: overlap_population_sensitivity
+  trimming_changes_estimand: true
+  full_sample_role: descriptive_only
+  analytical_fit_scope: development_history
+  ipcw_role: sensitivity_only

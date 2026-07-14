@@ -1,46 +1,316 @@
 tests:
-  T001: {description: D01 prediction-date traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T001]"]}
-  T002: {description: D02 horizon traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T002]"]}
-  T003: {description: D03 source-set traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T003]"]}
-  T004: {description: D04 primary-outcome traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T004]"]}
-  T005: {description: D05 prior-domain traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T005]"]}
-  T006: {description: D06 review-budget traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T006]"]}
-  T007: {description: D07 learner-roster traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T007]"]}
-  T008: {description: D08 tuning-budget traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T008]"]}
-  T009: {description: D09 outer-fold traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T009]"]}
-  T010: {description: D10 gate-2 traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T010]"]}
-  T011: {description: D11 gate-3 traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T011]"]}
-  T012: {description: D12 transfer-domain traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T012]"]}
-  T013: {description: D13 source-retention traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T013]"]}
-  T014: {description: D14 L0-L3 ladder traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T014]"]}
-  T015: {description: D15 measurement-learner traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T015]"]}
-  T016: {description: D16 L2-L3 objective traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T016]"]}
-  T017: {description: D17 L3 model-role traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T017]"]}
-  T018: {description: D18 selective-verification traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T018]"]}
-  T019: {description: D19 K1-K4 firewall traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T019]"]}
-  T020: {description: D20 label-model firewall traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T020]"]}
-  T021: {description: D21 maturity traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T021]"]}
-  T022: {description: D22 source-horizon traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T022]"]}
-  T023: {description: D23 gate-criteria traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T023]"]}
-  T024: {description: D24 interaction-library traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T024]"]}
-  T025: {description: D25 exit-censoring traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T025]"]}
-  T026: {description: D26 CHNC1 transfer traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T026]"]}
-  T027: {description: D27 source-candidate traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T027]"]}
-  T028: {description: D28 PU-positive traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T028]"]}
-  T029: {description: D29 uncertainty-unit traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T029]"]}
-  T030: {description: D30 known-case veto traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T030]"]}
-  T031: {description: D31 track-B metric traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T031]"]}
-  T032: {description: D32 measurement-selection traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T032]"]}
-  T033: {description: D33 measurement-stability traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T033]"]}
-  T034: {description: D34 L2-missingness traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T034]"]}
-  T035: {description: D35 final-calibration traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T035]"]}
-  T036: {description: D36 multiple-testing traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T036]"]}
-  T037: {description: D37 censoring traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T037]"]}
-  T038: {description: D38 simulation-objective traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T038]"]}
-  T039: {description: D39 two-level simulation traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T039]"]}
-  T040: {description: D40 DGP traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T040]"]}
-  T041: {description: D41 scenario-space traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T041]"]}
-  T042: {description: D42 simulation-methods traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T042]"]}
-  T043: {description: D43 simulation-metrics traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T043]"]}
-  T044: {description: D44 replications traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T044]"]}
-  T045: {description: D45 protocol-role traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T045]"]}
+  T001:
+    description: D01 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T001_prediction_date
+    decision_ids:
+    - D01
+  T002:
+    description: D02 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T002_horizon
+    decision_ids:
+    - D02
+  T003:
+    description: D03 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T003_source_set
+    decision_ids:
+    - D03
+  T004:
+    description: D04 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T004_anchor_source
+    decision_ids:
+    - D04
+  T005:
+    description: D05 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T005_primary_outcome
+    decision_ids:
+    - D05
+  T006:
+    description: D06 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T006_prior_accuracy
+    decision_ids:
+    - D06
+  T007:
+    description: D07 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T007_review_budget
+    decision_ids:
+    - D07
+  T008:
+    description: D08 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T008_learner_roster
+    decision_ids:
+    - D08
+  T009:
+    description: D09 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T009_tuning_budget
+    decision_ids:
+    - D09
+  T010:
+    description: D10 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T010_outer_folds
+    decision_ids:
+    - D10
+  T011:
+    description: D11 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T011_gate2
+    decision_ids:
+    - D11
+  T012:
+    description: D12 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T012_gate3
+    decision_ids:
+    - D12
+  T013:
+    description: D13 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T013_transfer_domains
+    decision_ids:
+    - D13
+  T014:
+    description: D14 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T014_measurement_roles
+    decision_ids:
+    - D14
+  T015:
+    description: D15 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T015_measurement_learner
+    decision_ids:
+    - D15
+  T016:
+    description: D16 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T016_soft_objectives
+    decision_ids:
+    - D16
+  T017:
+    description: D17 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T017_l3_model
+    decision_ids:
+    - D17
+  T018:
+    description: D18 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T018_selective_verification
+    decision_ids:
+    - D18
+  T019:
+    description: D19 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T019_known_case_firewall
+    decision_ids:
+    - D19
+  T020:
+    description: D20 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T020_label_model_firewall
+    decision_ids:
+    - D20
+  T021:
+    description: D21 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T021_maturity
+    decision_ids:
+    - D21
+  T022:
+    description: D22 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T022_source_horizon
+    decision_ids:
+    - D22
+  T023:
+    description: D23 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T023_gate_thresholds
+    decision_ids:
+    - D23
+  T024:
+    description: D24 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T024_interaction_library
+    decision_ids:
+    - D24
+  T025:
+    description: D25 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T025_exit_events
+    decision_ids:
+    - D25
+  T026:
+    description: D26 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T026_track_propagation
+    decision_ids:
+    - D26
+  T027:
+    description: D27 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T027_source_holdout
+    decision_ids:
+    - D27
+  T028:
+    description: D28 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T028_pu_positive_set
+    decision_ids:
+    - D28
+  T029:
+    description: D29 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T029_uncertainty_unit
+    decision_ids:
+    - D29
+  T030:
+    description: D30 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T030_known_case_veto
+    decision_ids:
+    - D30
+  T031:
+    description: D31 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T031_track_b_metrics
+    decision_ids:
+    - D31
+  T032:
+    description: D32 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T032_measurement_selection
+    decision_ids:
+    - D32
+  T033:
+    description: D33 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T033_measurement_stability
+    decision_ids:
+    - D33
+  T034:
+    description: D34 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T034_l2_missingness
+    decision_ids:
+    - D34
+  T035:
+    description: D35 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T035_calibration
+    decision_ids:
+    - D35
+  T036:
+    description: D36 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T036_multiple_testing
+    decision_ids:
+    - D36
+  T037:
+    description: D37 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T037_censoring
+    decision_ids:
+    - D37
+  T038:
+    description: D38 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T038_simulation_objective
+    decision_ids:
+    - D38
+  T039:
+    description: D39 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T039_simulation_tiers
+    decision_ids:
+    - D39
+  T040:
+    description: D40 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T040_simulation_dgp
+    decision_ids:
+    - D40
+  T041:
+    description: D41 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T041_scenario_space
+    decision_ids:
+    - D41
+  T042:
+    description: D42 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T042_simulation_methods
+    decision_ids:
+    - D42
+  T043:
+    description: D43 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T043_simulation_metrics
+    decision_ids:
+    - D43
+  T044:
+    description: D44 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T044_replications
+    decision_ids:
+    - D44
+  T045:
+    description: D45 substantive Appendix B control
+    severity: required
+    pytest_nodes:
+    - tests/assurance/test_appendix_b_decisions.py::test_T045_protocol_role
+    decision_ids:
+    - D45

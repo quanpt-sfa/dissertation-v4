@@ -1,1 +1,21 @@
-known_cases: {content_ids: [K1, K2, K3, K4], opening_step: P15}
+known_cases:
+  content_ids:
+  - K1
+  - K2
+  - K3
+  - K4
+  opening_step: P15
+  sealed_before_development: true
+  forbidden_uses_before_opening:
+  - prior
+  - anchor
+  - gate
+  - source_tier
+  - tuning
+  - measurement_selection
+  soft_veto:
+    minimum_cases: 4
+    below_median_cases: 3
+    scenario_fraction_min: 0.75
+    strong_falsification_all_below_percentile: 0.25
+    fewer_than_minimum_role: casewise_reporting_only

@@ -1,0 +1,278 @@
+appendix_b:
+  D01:
+    canonical_title: Ngày dự báo τit
+    main_specification: Ngày muộn nhất mà toàn bộ predictor lõi hợp lệ đã khả dụng; mặc định gắn với ngày BCTC kiểm toán công
+      bố.
+    sensitivity_or_rule: Chuẩn hóa theo lịch và audit ngày khả dụng.
+    lock_status: Khóa sau audit
+    chapter_reference: Appendix B, Table B.1, D01
+  D02:
+    canonical_title: Chân trời chính
+    main_specification: 12 tháng sau τit.
+    sensitivity_or_rule: 24 tháng và đường cong trưởng thành theo nguồn.
+    lock_status: Khóa trước outer test
+    chapter_reference: Appendix B, Table B.1, D02
+  D03:
+    canonical_title: Tập nguồn J
+    main_specification: Chỉ kênh có ngày khả dụng rõ và liên kết firm-year đủ tin cậy.
+    sensitivity_or_rule: Leave-one-channel-out và thay đổi tập nguồn tạo estimand khác.
+    lock_status: Khóa sau evidence audit
+    chapter_reference: Appendix B, Table B.1, D03
+  D04:
+    canonical_title: Nguồn neo
+    main_specification: Nguồn chính thức hoặc tư pháp có độ xác nhận cao theo tiêu chí.
+    sensitivity_or_rule: 1 − SpA ∈ {0, 0.01, 0.03, 0.05}.
+    lock_status: Khóa trước L3
+    chapter_reference: Appendix B, Table B.1, D04
+  D05:
+    canonical_title: Outcome chính
+    main_specification: 'L1: BJ_i,t,h đã trưởng thành và follow-up đầy đủ.'
+    sensitivity_or_rule: L0, L2, L3 là benchmark hoặc độ nhạy.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D05
+  D06:
+    canonical_title: Miền prior/accuracy
+    main_specification: Lower bound từ nguồn xác nhận cao; upper bound từ coverage và likelihood.
+    sensitivity_or_rule: Fixed-π grid chính; hierarchical prior là độ nhạy.
+    lock_status: Khóa trước L3
+    chapter_reference: Appendix B, Table B.1, D06
+  D07:
+    canonical_title: Ngân sách rà soát
+    main_specification: Top 5% tập rủi ro.
+    sensitivity_or_rule: Top 1%, 10% và số hồ sơ cố định.
+    lock_status: Khóa trước đánh giá
+    chapter_reference: Appendix B, Table B.1, D07
+  D08:
+    canonical_title: Learner roster
+    main_specification: Elastic-net logistic, random forest, một boosting chính; nhánh Anchor-PU.
+    sensitivity_or_rule: Noisy-positive PU và mô hình khác là độ nhạy.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D08
+  D09:
+    canonical_title: Tuning budget
+    main_specification: Không quá 50 cấu hình hợp lệ mỗi learner/inner fold hoặc ngân sách tương đương.
+    sensitivity_or_rule: Báo runtime và số cấu hình.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D09
+  D10:
+    canonical_title: Outer folds
+    main_specification: 2020 là initial; 2021–2024 là fully nested nếu maturity cho phép.
+    sensitivity_or_rule: 2025 chỉ prospective khi chưa trưởng thành.
+    lock_status: Khóa sau maturity audit
+    chapter_reference: Appendix B, Table B.1, D10
+  D11:
+    canonical_title: Cổng 2
+    main_specification: Simultaneous 95% interval của ΔAP nằm trên 0; ΔAP ≥ max{0,01; 0,10×APref}; cùng hướng 3/4 fold; yield@5%
+      không giảm quá 5%.
+    sensitivity_or_rule: Chỉ endpoint–fold có n+ ≥ 25 tham gia xác nhận; 15–24 là độ nhạy.
+    lock_status: Khóa trước outer test
+    chapter_reference: Appendix B, Table B.1, D11
+  D12:
+    canonical_title: Cổng 3
+    main_specification: Breakpoint trong ±0,10 SD, lệch giữa miền ≤ 0,20 SD; support ≥ 80% mỗi miền và ≥ 10% quan sát mỗi
+      phía; tái lập 3/4 fold và ít nhất hai miền.
+    sensitivity_or_rule: Interaction block phải đạt Cổng 2; initial fold báo riêng.
+    lock_status: Khóa trước CHNC3
+    chapter_reference: Appendix B, Table B.1, D12
+  D13:
+    canonical_title: Miền chuyển giao
+    main_specification: Sàn, tầng kiểm toán viên và độ bao phủ.
+    sensitivity_or_rule: Ngành hoặc chế độ thể chế nếu đủ cỡ mẫu.
+    lock_status: Khóa sau audit
+    chapter_reference: Appendix B, Table B.1, D13
+  D14:
+    canonical_title: Vai trò L0–L3
+    main_specification: L0 benchmark, L1 chính, L2 tổng hợp thay thế, L3 measurement sensitivity.
+    sensitivity_or_rule: Không coi bốn target ngang hàng.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D14
+  D15:
+    canonical_title: Measurement × learner
+    main_specification: So sánh measurement giữ learner; so sánh learner giữ endpoint đánh giá.
+    sensitivity_or_rule: Tương tác target–learner là thứ cấp.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D15
+  D16:
+    canonical_title: Objective L2/L3
+    main_specification: Soft cross-entropy; posterior draws cho L3.
+    sensitivity_or_rule: Ranking loss là robustness.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D16
+  D17:
+    canonical_title: Mô hình L3
+    main_specification: Fixed-π latent class, source-specific Se/Sp, channel random effect, MCMC.
+    sensitivity_or_rule: Hierarchical prior và pairwise dependence là độ nhạy.
+    lock_status: Khóa sau pilot
+    chapter_reference: Appendix B, Table B.1, D17
+  D18:
+    canonical_title: Xác minh chọn lọc
+    main_specification: Diagnostic luôn chạy; stabilized IPW khi V quan sát và support đủ.
+    sensitivity_or_rule: Overlap weights có estimand overlap population; trimming đổi miền suy luận.
+    lock_status: Khóa theo nguồn
+    chapter_reference: Appendix B, Table B.1, D18
+  D19:
+    canonical_title: Firewall K1–K4
+    main_specification: Niêm phong; không dùng đặt prior, gate, nguồn hoặc tuning.
+    sensitivity_or_rule: Hash ledger.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D19
+  D20:
+    canonical_title: Biến trong label model
+    main_specification: Chỉ S, M, T, Q, ZM; không dùng content predictors.
+    sensitivity_or_rule: Mở rộng cross-fitted chỉ là độ nhạy.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D20
+  D21:
+    canonical_title: Maturity
+    main_specification: Chỉ dùng cohort có τ + h ≤ Tcut và follow-up đầy đủ.
+    sensitivity_or_rule: IPCW censoring là độ nhạy.
+    lock_status: Khóa khi trích dữ liệu
+    chapter_reference: Appendix B, Table B.1, D21
+  D22:
+    canonical_title: Horizon theo nguồn
+    main_specification: Một horizon chung chính và maturity curve theo kênh.
+    sensitivity_or_rule: Horizon 24 tháng và nhóm nguồn chậm.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D22
+  D23:
+    canonical_title: Tiêu chí cổng
+    main_specification: δNI = 5% AP tương đối; MMI = max{0,01; 0,10×APref}; robustness ≥ 80%; FWER α = 0,05; power mục tiêu
+      ≥ 0,80.
+    sensitivity_or_rule: ESS/N ≥ 0,50, ESS ≥ 100, propensity [0,05; 0,95] và support ≥ 80%.
+    lock_status: Khóa trước mô phỏng chính
+    chapter_reference: Appendix B, Table B.1, D23
+  D24:
+    canonical_title: Interaction library
+    main_specification: Hai threshold claims và pressure × monitoring block.
+    sensitivity_or_rule: Tương tác còn lại là thăm dò.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D24
+  D25:
+    canonical_title: Exit/competing events
+    main_specification: Không tự động gán âm khi delisting hoặc merger.
+    sensitivity_or_rule: IPCW và worst–best case.
+    lock_status: Khóa
+    chapter_reference: Appendix B, Table B.1, D25
+  D26:
+    canonical_title: Truyền CHNC1
+    main_specification: Tuyến A luôn chạy; Tuyến B dùng M*f hoặc M*f,c theo thiết kế.
+    sensitivity_or_rule: Giá trị bằng ∅ khi không ứng viên đạt.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D26
+  D27:
+    canonical_title: Giữ lại nguồn
+    main_specification: Nested channel-within-time; chọn M*f,c sau khi loại kênh c khỏi toàn bộ selection.
+    sensitivity_or_rule: Standard holdout là thứ cấp.
+    lock_status: Khóa
+    chapter_reference: Appendix B, Table B.1, D27
+  D28:
+    canonical_title: Tập dương PU
+    main_specification: Anchor-PU chỉ dùng nguồn neo.
+    sensitivity_or_rule: Noisy-positive PU là độ nhạy; L1 không gọi là PU sạch.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D28
+  D29:
+    canonical_title: Đơn vị bất định
+    main_specification: Bootstrap theo doanh nghiệp và phân tầng outer year.
+    sensitivity_or_rule: Event-cluster bootstrap là độ nhạy.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D29
+  D30:
+    canonical_title: Soft veto known case
+    main_specification: Nếu đủ 4 case và 3/4 dưới median trong ≥ 75% scenario, hạ cấp; cả 4 dưới P25 là phản chứng mạnh.
+    sensitivity_or_rule: Nếu ít hơn 4 case, chỉ báo riêng.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D30
+  D31:
+    canonical_title: Metric Tuyến B
+    main_specification: Soft loss/concordance cho fit; AP/top-k cho endpoint nhị phân giữ lại.
+    sensitivity_or_rule: Không tính AP trực tiếp trên L2/L3.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D31
+  D32:
+    canonical_title: Chọn measurement specification
+    main_specification: Dùng M*f cho time-only; dùng M*f,c cho strict channel, đều chọn trong development.
+    sensitivity_or_rule: Không ứng viên đạt thì ∅.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D32
+  D33:
+    canonical_title: Ổn định đo lường
+    main_specification: Chỉ tổng hợp hình dạng khi cùng đặc tả được chọn ở ít nhất 3/4 fold.
+    sensitivity_or_rule: Nếu không, báo theo fold.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D33
+  D34:
+    canonical_title: Missingness L2
+    main_specification: Chuẩn hóa trên kênh quan sát và yêu cầu coverage tối thiểu.
+    sensitivity_or_rule: Mean, neutral và complete-channel subset.
+    lock_status: Khóa sau coverage audit
+    chapter_reference: Appendix B, Table B.1, D34
+  D35:
+    canonical_title: Hiệu chuẩn cuối
+    main_specification: Calibrator từ pooled cross-fitted development predictions.
+    sensitivity_or_rule: Không dùng dự báo in-sample sau refit.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D35
+  D36:
+    canonical_title: Nhiều phép thử
+    main_specification: Hai family CHNC2 và CHNC3; simultaneous intervals/max-T hoặc Holm.
+    sensitivity_or_rule: Kết quả nguồn/miền riêng là thứ cấp.
+    lock_status: Khóa trước outer test
+    chapter_reference: Appendix B, Table B.1, D36
+  D37:
+    canonical_title: Censoring
+    main_specification: Main estimand dùng complete mature follow-up.
+    sensitivity_or_rule: IPCW chỉ khi diagnostics đạt.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D37
+  D38:
+    canonical_title: Mục tiêu mô phỏng
+    main_specification: Đánh giá L1–L3, selective verification, ba cổng và utility dưới ground truth đã biết.
+    sensitivity_or_rule: Không dùng mô phỏng để ước lượng prevalence Việt Nam.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D38
+  D39:
+    canonical_title: Hai tầng mô phỏng
+    main_specification: Tổng hợp hoàn toàn và bán tổng hợp từ development covariates.
+    sensitivity_or_rule: Không dùng outer outcomes hoặc K1–K4.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D39
+  D40:
+    canonical_title: Cơ chế sinh dữ liệu
+    main_specification: Sinh Y*, V/O, nguồn Sj, phụ thuộc kênh, độ trễ và dịch chuyển.
+    sensitivity_or_rule: Đặc tả đúng/sai của L3 đều được kiểm tra.
+    lock_status: Khóa trước chạy
+    chapter_reference: Appendix B, Table B.1, D40
+  D41:
+    canonical_title: Không gian kịch bản
+    main_specification: Prevalence, Se/Sp, dependence, verification, delay, shift, cỡ mẫu và signal structure.
+    sensitivity_or_rule: Kịch bản cơ sở cộng stress blocks; không chạy tích Descartes toàn phần.
+    lock_status: Khóa trước chạy
+    chapter_reference: Appendix B, Table B.1, D41
+  D42:
+    canonical_title: Phương pháp mô phỏng
+    main_specification: L0–L3, logistic, boosting, observability/content/full và Anchor-PU; oracle chỉ làm chuẩn trên.
+    sensitivity_or_rule: Noisy-positive PU và đặc tả sai là sensitivity.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D42
+  D43:
+    canonical_title: Chỉ số mô phỏng
+    main_specification: 'Fixed-π: ranking recovery, misspecification regret và ổn định M*; hierarchical-π: bias/RMSE/coverage
+      của π. Bias Se/Sp chỉ khi được ước lượng.'
+    sensitivity_or_rule: Transfer, gate operating characteristics, utility regret và MCSE thực tế.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D43
+  D44:
+    canonical_title: Số lần lặp
+    main_specification: 'Kịch bản lõi/phương pháp nhẹ: R ≥ 2.500 và MCSE pass/fail ≤ 0,01. L3: bắt đầu R = 1.000, tăng tuần
+      tự tới MCSE ≤ 0,02.'
+    sensitivity_or_rule: Báo MCSE thực; continuous-metric MCSE ≤ 10% MMI; không tuyên bố đạt 0,01 nếu chưa đạt.
+    lock_status: Khóa sau pilot
+    chapter_reference: Appendix B, Table B.1, D44
+  D45:
+    canonical_title: Vai trò protocol
+    main_specification: Mô phỏng hoàn tất trước outer test; chỉ cho phép hạ địa vị phương pháp hoặc sửa lỗi phương pháp có
+      log.
+    sensitivity_or_rule: Không điều chỉnh gate để tối đa hóa outer performance.
+    lock_status: Đã chốt
+    chapter_reference: Appendix B, Table B.1, D45

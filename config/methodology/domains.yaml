@@ -1,1 +1,14 @@
-domains: {registry: [all_firms]}
+domains:
+  primary:
+    listing_boards:
+    - HOSE
+    - HNX
+    - UPCoM
+    auditor_tier: true
+    coverage_strata:
+    - high
+    - low
+  sensitivity:
+  - industry
+  - institutional_regime
+  minimum_sample_required: true

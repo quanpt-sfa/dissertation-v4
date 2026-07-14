@@ -1,1 +1,20 @@
-data_sources: {declared_channels: [S1, S2, S3]}
+data_sources:
+  declared_channels:
+  - S1
+  - S2
+  - S3
+  eligibility:
+    availability_date_required: true
+    firm_year_link_reliability_required: true
+  source_set_changes_create_new_estimand: true
+  leave_one_channel_out_required: true
+  anchor:
+    eligible_source_types:
+    - official
+    - judicial
+    high_confirmation_required: true
+    false_positive_rate_grid:
+    - 0.0
+    - 0.01
+    - 0.03
+    - 0.05

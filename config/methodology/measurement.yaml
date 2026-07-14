@@ -1,6 +1,60 @@
 measurement:
   track_a_primary_endpoint: L1
-  selection_candidates: [L2, L3_fixed_pi, none]
-  hierarchical_pi: {role: sensitivity_only, estimated_parameter_bias_only: true}
-  fixed_pi: {report_pi_bias: false, report_pi_rmse: false}
-  strict_selection: {remove_heldout_channel_from: [target, label_model, features, tuning, calibration]}
+  roles:
+    L0: single_source_benchmark
+    L1: primary
+    L2: alternative_aggregation
+    L3: measurement_sensitivity
+  selection_candidates:
+  - L2
+  - L3_fixed_pi
+  - none
+  prior_accuracy_domain:
+    lower_bound_source: high_confirmation_sources
+    upper_bound_sources:
+    - coverage
+    - likelihood
+    primary_prior: fixed_pi_grid
+    hierarchical_prior_role: sensitivity_only
+  objectives:
+    L2:
+    - soft_cross_entropy
+    L3:
+    - soft_cross_entropy
+    - posterior_draws
+    ranking_loss_role: robustness
+  l3_model:
+    primary: fixed_pi_latent_class
+    source_specific_sensitivity_specificity: true
+    channel_random_effect: true
+    estimation: MCMC
+    hierarchical_pi:
+      role: sensitivity_only
+      estimated_parameter_bias_only: true
+    pairwise_dependence_role: sensitivity_only
+  fixed_pi:
+    report_pi_bias: false
+    report_pi_rmse: false
+  strict_selection:
+    design: nested_channel_within_time
+    remove_heldout_channel_from:
+    - target
+    - label_model
+    - features
+    - tuning
+    - calibration
+    standard_holdout_role: secondary
+  selection:
+    time_only: M_f_star
+    strict_channel: M_f_c_star
+    development_only: true
+    no_candidate_value: none
+    stability_minimum_selected_folds: 3
+    stability_denominator_folds: 4
+  l2_missingness:
+    normalize_over_observed_channels: true
+    minimum_coverage_required: true
+    sensitivities:
+    - mean
+    - neutral
+    - complete_channel_subset

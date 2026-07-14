@@ -1,1 +1,8 @@
-features: {label_model_allows_content: false}
+features:
+  label_model_allows_content: false
+  label_model_allowed_blocks:
+  - S
+  - M
+  - T
+  - Q
+  - Z_M

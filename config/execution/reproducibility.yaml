@@ -3,18 +3,12 @@ reproducibility:
   shared_ledger_append: forbidden
   output_root_template: artifacts/runs/{run_id}
   recovery_policy: quarantine_incomplete
+  package_lock_file: uv.lock
+  require_clean_tree_for_acceptance: true
   environment_expectations:
-    python: ">=3.11"
-    package_lock_file: pyproject.toml
-    container_policy: recorded_when_available
-    os_base_image: recorded
-    blas_policy: recorded
-    cpu_gpu_policy: cpu_or_gpu_recorded
-    cpu_architecture: recorded
-    thread_policy: configured
+    python: '>=3.11'
+    reproducibility_mode: strict
     rng_policy: explicit_seed
     numpy_generator_policy: default_rng_only
-    learner_determinism: configured
-    xgboost: {threads: configured, tree_method: configured}
-    pymc: {chains: configured, cores: configured, seed: configured}
-    reproducibility_mode: strict
+    thread_policy: record_and_lock
+    container_policy: record_digest_or_explicit_absence

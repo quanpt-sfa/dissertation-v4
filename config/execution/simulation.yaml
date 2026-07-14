@@ -1,16 +1,103 @@
 simulation:
   imports_production_labels: true
-  core: {minimum_replications: 2500, pass_fail_mcse_max: 0.01, batch_size: 250, maximum_replications: 10000}
-  l3: {initial_replications: 1000, pass_fail_mcse_max: 0.02, batch_size: 100, maximum_replications: 5000}
-  continuous_metrics: {mcse_fraction_of_minimum_meaningful_improvement_max: 0.10}
-  adaptive_replication: {enabled: true}
-  prevalence: {low: 0.01, medium: 0.05, high: 0.10, independent_scenario_dimension: true}
-  anchor_false_positive_grid: [0.00, 0.01, 0.03, 0.05]
-  targets: [L1, L2, L3_fixed_pi]
-  methods: [oracle, observability_only, content_only, full, anchor_pu]
-  learners: [logistic, main_boosting]
-  model_roster: [oracle, observability_only, content_only, full, anchor_pu]
-  fixed_pi_output_policy: {report_pi_bias: false, report_pi_rmse: false}
-  hierarchical_pi_output_policy: {role: sensitivity_only, bias_for_estimated_parameters_only: true}
-  gate3_operating_characteristics: true
-  dimensions: [source_dependence, selective_verification, delay_and_maturity, concept_drift, label_policy_drift, sample_size, channel_count]
+  objective:
+    targets:
+    - L1
+    - L2
+    - L3
+    selective_verification: true
+    gates:
+    - 1
+    - 2
+    - 3
+    utility: true
+    ground_truth_known: true
+    estimate_vietnam_prevalence: false
+  tiers:
+  - fully_synthetic
+  - semi_synthetic_development_covariates
+  outer_outcomes_allowed: false
+  known_cases_allowed: false
+  dgp:
+  - Y_star
+  - verification_or_observability
+  - sources
+  - channel_dependence
+  - delay
+  - shift
+  l3_correct_and_misspecified_checked: true
+  scenario_space:
+  - prevalence
+  - Se
+  - Sp
+  - dependence
+  - verification
+  - delay
+  - shift
+  - sample_size
+  - signal_structure
+  scenario_design: baseline_plus_locked_stress_blocks
+  full_cartesian_product: false
+  targets:
+  - L0
+  - L1
+  - L2
+  - L3_fixed_pi
+  - L3_hierarchical_pi
+  learners:
+  - elastic_net_logistic
+  - main_boosting
+  methods:
+  - observability_only
+  - content_only
+  - full
+  - anchor_pu
+  oracle_role: upper_benchmark_only
+  sensitivities:
+  - noisy_positive_pu
+  - misspecified_l3
+  metrics:
+    fixed_pi:
+    - ranking_recovery
+    - misspecification_regret
+    - measurement_selection_stability
+    hierarchical_pi:
+    - pi_bias
+    - pi_rmse
+    - pi_coverage
+    source_accuracy_bias_only_when_estimated: true
+    other:
+    - transfer
+    - gate_operating_characteristics
+    - utility_regret
+    - actual_mcse
+  core:
+    minimum_replications: 2500
+    pass_fail_mcse_max: 0.01
+    batch_size: 250
+    maximum_replications: 10000
+  l3:
+    initial_replications: 1000
+    pass_fail_mcse_max: 0.02
+    batch_size: 100
+    maximum_replications: 5000
+  continuous_metrics:
+    mcse_fraction_of_minimum_meaningful_improvement_max: 0.1
+  adaptive_replication:
+    enabled: true
+  prevalence:
+    low: 0.01
+    medium: 0.05
+    high: 0.1
+    independent_scenario_dimension: true
+  anchor_false_positive_grid:
+  - 0.0
+  - 0.01
+  - 0.03
+  - 0.05
+  protocol_role:
+    must_complete_before_outer_test: true
+    allowed_post_simulation_changes:
+    - method_demotion
+    - logged_method_error_fix
+    gate_optimization_on_outer_performance_forbidden: true

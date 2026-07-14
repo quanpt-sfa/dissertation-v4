@@ -1,1 +1,5 @@
-utility: {components: [review_cost, additional_false_positive_cost]}
+utility:
+  components:
+  - review_cost
+  - additional_false_positive_cost
+  review_budget_source: evaluation.review_budget

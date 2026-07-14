@@ -11,7 +11,7 @@ def normalize(value: object) -> object:
     """Recursively sort mappings while preserving semantically ordered lists."""
     if isinstance(value, Mapping):
         return {str(key): normalize(value[key]) for key in sorted(value, key=str)}
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         return [normalize(item) for item in value]
     return value
 

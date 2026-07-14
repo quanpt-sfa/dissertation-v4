@@ -1,1 +1,4 @@
-calibration: {development_cross_fitted_only: true}
+calibration:
+  source: pooled_cross_fitted_development_predictions
+  development_cross_fitted_only: true
+  in_sample_predictions_after_refit_forbidden: true

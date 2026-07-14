@@ -22,6 +22,10 @@ Version: 1
 
 Version: 1
 
+## environment_expectation_schema
+
+Version: 1
+
 ## environment_observation_schema
 
 Version: 1
@@ -46,6 +50,10 @@ Version: 1
 
 Version: 1
 
+## gate_receipt_schema
+
+Version: 1
+
 ## job_manifest_schema
 
 Version: 1
@@ -66,6 +74,14 @@ Version: 1
 
 Version: 1
 
+## model_freeze_receipt_schema
+
+Version: 1
+
+## outer_open_receipt_schema
+
+Version: 1
+
 ## p00_audit_markdown
 
 Version: 1
@@ -75,10 +91,6 @@ Version: 1
 Version: 1
 
 ## raw_outer_predictions_frame
-
-Version: 1
-
-## receipt_schema
 
 Version: 1
 
@@ -99,6 +111,10 @@ Version: 1
 Version: 1
 
 ## sealed_outcome_frame
+
+Version: 1
+
+## simulation_batch_frame
 
 Version: 1
 

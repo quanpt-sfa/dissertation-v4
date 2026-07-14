@@ -1,46 +1,722 @@
 decisions:
-  D01: {canonical_title: Prediction date tau_it, statement: Forecasts are dated at the latest time when all core predictors are valid and auditable for a firm-year., chapter_reference: "Appendix B, D01", config_anchors: [study.prediction_time_definition, evidence.availability_date_required], lock_stage: P03, enforced_by_steps: [P03, P04], test_ids: [T001], output_evidence: [availability_registry, evidence_ledger], implementation_controls: [IC001, IC003]}
-  D02: {canonical_title: Primary prediction horizon, statement: The primary horizon is twelve months after tau_it, with source-maturity sensitivity at the configured longer horizon., chapter_reference: "Appendix B, D02", config_anchors: [study.primary_horizon_months, study.sensitivity_horizon_months], lock_stage: P00, enforced_by_steps: [P00, P12], test_ids: [T002], output_evidence: [registry_lock, evaluation_metrics], implementation_controls: [IC001]}
-  D03: {canonical_title: Source set J, statement: Source channels enter J only when availability dates and firm-year links are reliable; channel holdouts and source-set sensitivities are explicit., chapter_reference: "Appendix B, D03", config_anchors: [data_sources.declared_channels, measurement.strict_selection], lock_stage: P01, enforced_by_steps: [P01, P10, P13], test_ids: [T003], output_evidence: [raw_audit, channel_measurement_selection, ablation_results], implementation_controls: [IC001, IC004]}
-  D04: {canonical_title: Primary outcome definition, statement: The primary outcome uses high-confirmation official or judicial evidence; softer labels are benchmark or sensitivity targets only., chapter_reference: "Appendix B, D04", config_anchors: [measurement.track_a_primary_endpoint, evaluation.ap_soft_targets], lock_stage: P05, enforced_by_steps: [P05, P12], test_ids: [T004], output_evidence: [measurement_selection_registry, evaluation_metrics], implementation_controls: [IC001, IC003]}
-  D05: {canonical_title: Prior and accuracy domain, statement: Prior and accuracy evaluations are scoped to the registered production label and benchmark domains., chapter_reference: "Appendix B, D05", config_anchors: [domains.registry, simulation.imports_production_labels], lock_stage: P08, enforced_by_steps: [P08, P13], test_ids: [T005], output_evidence: [simulation_scenario_registry, domain_transfer_outputs], implementation_controls: [IC001]}
-  D06: {canonical_title: Review budget, statement: Review and false-positive costs are distinct utility components and must not be collapsed into one tuning target., chapter_reference: "Appendix B, D06", config_anchors: [utility.components], lock_stage: P12, enforced_by_steps: [P12], test_ids: [T006], output_evidence: [utility_scenarios], implementation_controls: [IC001]}
-  D07: {canonical_title: Learner roster, statement: Confirmatory learners are the registered logistic and main boosting learners; alternative learners require protocol changes., chapter_reference: "Appendix B, D07", config_anchors: [learners.registered], lock_stage: P11, enforced_by_steps: [P11], test_ids: [T007], output_evidence: [model_artifacts], implementation_controls: [IC001, IC004]}
-  D08: {canonical_title: Tuning budget, statement: Tuning is confined to the registered development budget and cannot look into outer outcomes., chapter_reference: "Appendix B, D08", config_anchors: [folds.initial_in_confirmatory_pool, weighting.analytical_fit_scope], lock_stage: P09, enforced_by_steps: [P09, P11], test_ids: [T008], output_evidence: [temporal_split_registry, model_freeze_receipt], implementation_controls: [IC001, IC004]}
-  D09: {canonical_title: Outer folds, statement: Outer folds are fixed before modeling; the initial fold is excluded from confirmatory pooling and prospective evaluation remains distinct., chapter_reference: "Appendix B, D09", config_anchors: [folds.initial_in_confirmatory_pool, folds.prospective_in_retrospective_evaluation], lock_stage: P09, enforced_by_steps: [P09], test_ids: [T009], output_evidence: [temporal_split_registry], implementation_controls: [IC001]}
-  D10: {canonical_title: Gate 2 criterion, statement: Gate 2 consumes the locked benchmark and sensitivity outputs after outer evaluation and before known-case opening., chapter_reference: "Appendix B, D10", config_anchors: [evaluation.benchmark_ladder, steps.P14], lock_stage: P14, enforced_by_steps: [P14], test_ids: [T010], output_evidence: [gate2_verdict], implementation_controls: [IC001, IC004]}
-  D11: {canonical_title: Gate 3 interaction gate, statement: Gate 3 threshold interactions are evaluated only after the known-case step and use family-adjusted inference., chapter_reference: "Appendix B, D11", config_anchors: [inference.chnc3_family_adjusted, simulation.gate3_operating_characteristics], lock_stage: P16, enforced_by_steps: [P16], test_ids: [T011], output_evidence: [threshold_interaction_results, gate3_verdict], implementation_controls: [IC001, IC004]}
-  D12: {canonical_title: Transfer domains, statement: Internal-external validation domains are registered in advance and reported as sensitivity evidence rather than replacing the primary target., chapter_reference: "Appendix B, D12", config_anchors: [domains.registry], lock_stage: P13, enforced_by_steps: [P13], test_ids: [T012], output_evidence: [domain_transfer_outputs], implementation_controls: [IC001]}
-  D13: {canonical_title: Source retention rule, statement: Candidate source retention and source-set changes are treated as registered sensitivity dimensions, not silent data cleaning., chapter_reference: "Appendix B, D13", config_anchors: [data_sources.declared_channels, simulation.dimensions], lock_stage: P08, enforced_by_steps: [P08, P13], test_ids: [T013], output_evidence: [simulation_scenario_registry, ablation_results], implementation_controls: [IC001]}
-  D14: {canonical_title: L0-L3 role ladder, statement: L0, L2, and L3 labels are benchmark or sensitivity roles while the primary L1 role remains locked for the main endpoint., chapter_reference: "Appendix B, D14", config_anchors: [measurement.track_a_primary_endpoint, measurement.hierarchical_pi.role], lock_stage: P05, enforced_by_steps: [P05, P13], test_ids: [T014], output_evidence: [l0_l1_inputs, hierarchical_pi_sensitivity], implementation_controls: [IC001]}
-  D15: {canonical_title: Measurement by learner grid, statement: Measurement candidates are selected before learner fitting and learner comparisons use the locked measurement registry., chapter_reference: "Appendix B, D15", config_anchors: [measurement.strict_selection, learners.registered], lock_stage: P10, enforced_by_steps: [P10, P11], test_ids: [T015], output_evidence: [measurement_candidate_results, model_artifacts], implementation_controls: [IC001, IC004]}
-  D16: {canonical_title: Objective for L2 and L3, statement: L2 and fixed-pi L3 objectives are explicit simulation targets and may not redefine the primary outcome., chapter_reference: "Appendix B, D16", config_anchors: [simulation.targets, measurement.fixed_pi], lock_stage: P08, enforced_by_steps: [P08], test_ids: [T016], output_evidence: [simulation_scenario_registry, mcse_report], implementation_controls: [IC001]}
-  D17: {canonical_title: L3 model role, statement: Hierarchical-pi is a sensitivity model only; fixed-pi output excludes pi bias and RMSE from confirmatory reporting., chapter_reference: "Appendix B, D17", config_anchors: [measurement.hierarchical_pi.role, simulation.fixed_pi_output_policy], lock_stage: P08, enforced_by_steps: [P08, P13], test_ids: [T017], output_evidence: [mcse_report, hierarchical_pi_sensitivity], implementation_controls: [IC001]}
-  D18: {canonical_title: Selective verification, statement: Selective verification is represented as an observability and simulation dimension rather than converted to negative labels., chapter_reference: "Appendix B, D18", config_anchors: [steps.P06, simulation.dimensions], lock_stage: P06, enforced_by_steps: [P06, P08], test_ids: [T018], output_evidence: [observability_registry, simulation_scenario_registry], implementation_controls: [IC001, IC003]}
-  D19: {canonical_title: K1-K4 firewall, statement: K1-K4 content and known cases remain sealed until their configured opening steps., chapter_reference: "Appendix B, D19", config_anchors: [access_control.known_cases_open_after, known_cases.opening_step], lock_stage: P00, enforced_by_steps: [P00, P15, P16], test_ids: [T019], output_evidence: [access_matrix, known_cases_seal, known_case_results], implementation_controls: [IC002, IC004]}
-  D20: {canonical_title: Label-model variable firewall, statement: Content predictors cannot enter label models or observability-only mechanisms., chapter_reference: "Appendix B, D20", config_anchors: [features.label_model_allows_content], lock_stage: P07, enforced_by_steps: [P07], test_ids: [T020], output_evidence: [feature_registry], implementation_controls: [IC001, IC004]}
-  D21: {canonical_title: Maturity rule, statement: Follow-up maturity is required for risk sets; immature follow-up is not a negative outcome., chapter_reference: "Appendix B, D21", config_anchors: [risksets.maturity_required, evidence.immature_is_negative], lock_stage: P04, enforced_by_steps: [P03, P04], test_ids: [T021], output_evidence: [maturity_audit, risk_sets], implementation_controls: [IC001, IC003]}
-  D22: {canonical_title: Source horizon, statement: Source maturity and availability horizons are explicit configuration settings and sensitivity dimensions., chapter_reference: "Appendix B, D22", config_anchors: [study.sensitivity_horizon_months, simulation.dimensions], lock_stage: P08, enforced_by_steps: [P08, P12], test_ids: [T022], output_evidence: [simulation_scenario_registry, evaluation_metrics], implementation_controls: [IC001]}
-  D23: {canonical_title: Gate criteria, statement: Gate criteria are registered before reporting and must publish receipts rather than implicit decisions., chapter_reference: "Appendix B, D23", config_anchors: [steps.P14, steps.P16], lock_stage: P14, enforced_by_steps: [P14, P16], test_ids: [T023], output_evidence: [gate2_verdict, gate3_verdict], implementation_controls: [IC001, IC004]}
-  D24: {canonical_title: Interaction library, statement: Threshold interaction analysis uses the registered interaction library and family-adjusted inference., chapter_reference: "Appendix B, D24", config_anchors: [inference.chnc3_family_adjusted], lock_stage: P16, enforced_by_steps: [P16], test_ids: [T024], output_evidence: [threshold_interaction_results], implementation_controls: [IC001]}
-  D25: {canonical_title: Exit and competing events, statement: Exit and competing-event handling is defined in the risk-set and evidence ledger interfaces before evaluation., chapter_reference: "Appendix B, D25", config_anchors: [risksets.maturity_required, evidence.missing_is_zero], lock_stage: P04, enforced_by_steps: [P03, P04], test_ids: [T025], output_evidence: [evidence_ledger, risk_sets], implementation_controls: [IC001]}
-  D26: {canonical_title: CHNC1 transfer role, statement: CHNC1 transfer is a registered domain-transfer analysis and not a substitute for the primary endpoint., chapter_reference: "Appendix B, D26", config_anchors: [domains.registry], lock_stage: P13, enforced_by_steps: [P13], test_ids: [T026], output_evidence: [domain_transfer_outputs], implementation_controls: [IC001]}
-  D27: {canonical_title: Retained-source candidate selection, statement: Candidate source-retention choices are selected from predeclared channel and measurement registries., chapter_reference: "Appendix B, D27", config_anchors: [data_sources.declared_channels, measurement.strict_selection], lock_stage: P10, enforced_by_steps: [P10], test_ids: [T027], output_evidence: [measurement_candidate_results, channel_measurement_selection], implementation_controls: [IC001]}
-  D28: {canonical_title: PU positive set, statement: Positive-unlabeled anchors are explicit benchmark methods and cannot silently become observed negatives., chapter_reference: "Appendix B, D28", config_anchors: [simulation.methods, evidence.missing_is_zero], lock_stage: P08, enforced_by_steps: [P03, P08], test_ids: [T028], output_evidence: [evidence_ledger, simulation_scenario_registry], implementation_controls: [IC001, IC003]}
-  D29: {canonical_title: Uncertainty unit, statement: The uncertainty unit is the registered firm-year prediction unit, with logical columns resolved through the schema registry., chapter_reference: "Appendix B, D29", config_anchors: [columns.firm_id, columns.fiscal_year, schemas.development_oof_predictions_frame], lock_stage: P00, enforced_by_steps: [P00, P11], test_ids: [T029], output_evidence: [schema_catalog, development_oof_predictions], implementation_controls: [IC001, IC005]}
-  D30: {canonical_title: Soft known-case veto, statement: Known-case results cannot influence model fitting or outer evaluation before their configured opening step., chapter_reference: "Appendix B, D30", config_anchors: [known_cases.opening_step, access_control.known_cases_open_after], lock_stage: P15, enforced_by_steps: [P15], test_ids: [T030], output_evidence: [known_cases_seal, known_case_results], implementation_controls: [IC002, IC004]}
-  D31: {canonical_title: Track B metric, statement: Track B and utility metrics are reported from configured metric and utility registries, not ad hoc artifact code., chapter_reference: "Appendix B, D31", config_anchors: [evaluation.benchmark_ladder, utility.components], lock_stage: P12, enforced_by_steps: [P12], test_ids: [T031], output_evidence: [evaluation_metrics, utility_scenarios], implementation_controls: [IC001]}
-  D32: {canonical_title: Measurement selection, statement: Measurement selection is performed inside P10 with held-out channel and outer-outcome firewalls intact., chapter_reference: "Appendix B, D32", config_anchors: [measurement.strict_selection, steps.P10], lock_stage: P10, enforced_by_steps: [P10], test_ids: [T032], output_evidence: [measurement_selection_registry, channel_measurement_selection], implementation_controls: [IC001, IC004]}
-  D33: {canonical_title: Measurement stability, statement: Measurement stability is assessed with predeclared simulation and selection outputs before final evaluation., chapter_reference: "Appendix B, D33", config_anchors: [simulation.core.minimum_replications, measurement.strict_selection], lock_stage: P10, enforced_by_steps: [P08, P10], test_ids: [T033], output_evidence: [mcse_report, measurement_selection_registry], implementation_controls: [IC001]}
-  D34: {canonical_title: L2 missingness, statement: Missing sources are modeled as missingness or observability information and not as evidence zero., chapter_reference: "Appendix B, D34", config_anchors: [evidence.missing_is_zero, simulation.methods], lock_stage: P03, enforced_by_steps: [P03, P08], test_ids: [T034], output_evidence: [evidence_ledger, simulation_scenario_registry], implementation_controls: [IC001, IC003]}
-  D35: {canonical_title: Final calibration, statement: Calibration is development cross-fitted and evaluated only after model freeze and outer opening., chapter_reference: "Appendix B, D35", config_anchors: [calibration.development_cross_fitted_only, access_control.outer_outcomes_open_after], lock_stage: P12, enforced_by_steps: [P11, P12], test_ids: [T035], output_evidence: [model_freeze_receipt, calibration_outputs], implementation_controls: [IC001, IC004]}
-  D36: {canonical_title: Multiple testing, statement: Family-adjusted inference is required for the registered interaction and gate analyses., chapter_reference: "Appendix B, D36", config_anchors: [inference.chnc3_family_adjusted], lock_stage: P16, enforced_by_steps: [P16], test_ids: [T036], output_evidence: [gate3_verdict], implementation_controls: [IC001]}
-  D37: {canonical_title: Censoring, statement: Censoring and immature follow-up are represented in the evidence and risk-set contracts before any learner sees the data., chapter_reference: "Appendix B, D37", config_anchors: [evidence.immature_is_negative, risksets.maturity_required], lock_stage: P04, enforced_by_steps: [P03, P04], test_ids: [T037], output_evidence: [evidence_ledger, maturity_audit], implementation_controls: [IC001, IC003]}
-  D38: {canonical_title: Simulation objective, statement: Simulation objectives include the registered target labels, benchmark methods, learners, and MCSE stopping rules., chapter_reference: "Appendix B, D38", config_anchors: [simulation.targets, simulation.methods, simulation.learners, simulation.core.minimum_replications], lock_stage: P08, enforced_by_steps: [P08], test_ids: [T038], output_evidence: [simulation_scenario_registry, mcse_report], implementation_controls: [IC001]}
-  D39: {canonical_title: Two-level simulation, statement: The simulation distinguishes core and L3 replication budgets and precision targets., chapter_reference: "Appendix B, D39", config_anchors: [simulation.core.minimum_replications, simulation.l3.initial_replications], lock_stage: P08, enforced_by_steps: [P08], test_ids: [T039], output_evidence: [mcse_report], implementation_controls: [IC001]}
-  D40: {canonical_title: Data-generating process, statement: DGP dimensions include source dependence, selective verification, maturity delay, concept drift, label-policy drift, sample size, and channel count., chapter_reference: "Appendix B, D40", config_anchors: [simulation.dimensions], lock_stage: P08, enforced_by_steps: [P08], test_ids: [T040], output_evidence: [simulation_scenario_registry], implementation_controls: [IC001]}
-  D41: {canonical_title: Scenario space, statement: Scenario space includes prevalence levels, anchor false-positive grid, target labels, methods, and learner roster., chapter_reference: "Appendix B, D41", config_anchors: [simulation.prevalence, simulation.anchor_false_positive_grid, simulation.targets, simulation.methods, simulation.learners], lock_stage: P08, enforced_by_steps: [P08], test_ids: [T041], output_evidence: [simulation_scenario_registry], implementation_controls: [IC001]}
-  D42: {canonical_title: Simulation methods, statement: Simulation methods are oracle, observability-only, content-only, full, and anchor-PU as configured protocol methods., chapter_reference: "Appendix B, D42", config_anchors: [simulation.methods, simulation.model_roster], lock_stage: P08, enforced_by_steps: [P08], test_ids: [T042], output_evidence: [simulation_scenario_registry], implementation_controls: [IC001]}
-  D43: {canonical_title: Simulation metrics, statement: Simulation metrics use configured MCSE and continuous-metric precision thresholds., chapter_reference: "Appendix B, D43", config_anchors: [simulation.core.pass_fail_mcse_max, simulation.continuous_metrics], lock_stage: P08, enforced_by_steps: [P08], test_ids: [T043], output_evidence: [mcse_report], implementation_controls: [IC001]}
-  D44: {canonical_title: Replications, statement: Replications are adaptive with registered minimum, batch-size, maximum, and stopping thresholds., chapter_reference: "Appendix B, D44", config_anchors: [simulation.core.batch_size, simulation.core.maximum_replications, simulation.adaptive_replication], lock_stage: P08, enforced_by_steps: [P08], test_ids: [T044], output_evidence: [mcse_report], implementation_controls: [IC001]}
-  D45: {canonical_title: Protocol role, statement: P00 publishes the immutable lock, catalogs, provenance, access matrix, generated documents, and success receipt before any downstream step can run., chapter_reference: "Appendix B, D45", config_anchors: [artifacts.registry_lock.immutability, steps.P00, reproducibility.hash_algorithm], lock_stage: P00, enforced_by_steps: [P00], test_ids: [T045], output_evidence: [registry_lock, source_config_manifest, access_matrix, success_receipt], implementation_controls: [IC001, IC002, IC005]}
+  D01:
+    appendix_b_id: D01
+    config_anchors:
+    - study.prediction_time
+    lock_stage: P01
+    enforced_by_steps:
+    - P01
+    - P02
+    - P03
+    test_ids:
+    - T001
+    output_evidence:
+    - availability_registry
+    - evidence_ledger
+    implementation_controls:
+    - IC001
+    - IC004
+  D02:
+    appendix_b_id: D02
+    config_anchors:
+    - study.horizons_months
+    lock_stage: P04
+    enforced_by_steps:
+    - P04
+    - P12
+    test_ids:
+    - T002
+    output_evidence:
+    - risk_sets
+    - evaluation_metrics
+    implementation_controls:
+    - IC001
+    - IC004
+  D03:
+    appendix_b_id: D03
+    config_anchors:
+    - data_sources.eligibility
+    - data_sources.leave_one_channel_out_required
+    lock_stage: P01
+    enforced_by_steps:
+    - P01
+    - P03
+    - P10
+    test_ids:
+    - T003
+    output_evidence:
+    - raw_audit
+    - channel_measurement_selection
+    implementation_controls:
+    - IC001
+    - IC004
+  D04:
+    appendix_b_id: D04
+    config_anchors:
+    - data_sources.anchor
+    lock_stage: P01
+    enforced_by_steps:
+    - P01
+    - P05
+    test_ids:
+    - T004
+    output_evidence:
+    - raw_audit
+    - l3_pilot_capability
+    implementation_controls:
+    - IC001
+    - IC004
+  D05:
+    appendix_b_id: D05
+    config_anchors:
+    - measurement.roles
+    - measurement.track_a_primary_endpoint
+    lock_stage: P05
+    enforced_by_steps:
+    - P05
+    - P12
+    test_ids:
+    - T005
+    output_evidence:
+    - l0_l1_inputs
+    - evaluation_metrics
+    implementation_controls:
+    - IC001
+    - IC004
+  D06:
+    appendix_b_id: D06
+    config_anchors:
+    - measurement.prior_accuracy_domain
+    lock_stage: P05
+    enforced_by_steps:
+    - P05
+    - P08
+    test_ids:
+    - T006
+    output_evidence:
+    - l3_pilot_capability
+    - simulation_scenario_registry
+    implementation_controls:
+    - IC001
+    - IC004
+  D07:
+    appendix_b_id: D07
+    config_anchors:
+    - evaluation.review_budget
+    lock_stage: P12
+    enforced_by_steps:
+    - P12
+    test_ids:
+    - T007
+    output_evidence:
+    - utility_scenarios
+    implementation_controls:
+    - IC001
+    - IC004
+  D08:
+    appendix_b_id: D08
+    config_anchors:
+    - learners.confirmatory
+    - learners.pu_branch
+    - learners.sensitivity
+    lock_stage: P11
+    enforced_by_steps:
+    - P11
+    test_ids:
+    - T008
+    output_evidence:
+    - model_artifacts
+    implementation_controls:
+    - IC001
+    - IC004
+  D09:
+    appendix_b_id: D09
+    config_anchors:
+    - learners.tuning
+    lock_stage: P11
+    enforced_by_steps:
+    - P11
+    test_ids:
+    - T009
+    output_evidence:
+    - model_freeze_receipt
+    implementation_controls:
+    - IC001
+    - IC004
+  D10:
+    appendix_b_id: D10
+    config_anchors:
+    - folds.initial_outer_year
+    - folds.fully_nested_outer_years
+    - folds.prospective_year
+    lock_stage: P09
+    enforced_by_steps:
+    - P09
+    test_ids:
+    - T010
+    output_evidence:
+    - temporal_split_registry
+    implementation_controls:
+    - IC001
+    - IC004
+  D11:
+    appendix_b_id: D11
+    config_anchors:
+    - evaluation.gate2
+    lock_stage: P12
+    enforced_by_steps:
+    - P12
+    - P14
+    test_ids:
+    - T011
+    output_evidence:
+    - evaluation_metrics
+    - gate2_verdict
+    implementation_controls:
+    - IC001
+    - IC004
+  D12:
+    appendix_b_id: D12
+    config_anchors:
+    - evaluation.gate3
+    lock_stage: P16
+    enforced_by_steps:
+    - P16
+    test_ids:
+    - T012
+    output_evidence:
+    - threshold_interaction_results
+    - gate3_verdict
+    implementation_controls:
+    - IC001
+    - IC004
+  D13:
+    appendix_b_id: D13
+    config_anchors:
+    - domains.primary
+    - domains.sensitivity
+    lock_stage: P13
+    enforced_by_steps:
+    - P13
+    test_ids:
+    - T013
+    output_evidence:
+    - domain_transfer_outputs
+    implementation_controls:
+    - IC001
+    - IC004
+  D14:
+    appendix_b_id: D14
+    config_anchors:
+    - measurement.roles
+    lock_stage: P05
+    enforced_by_steps:
+    - P05
+    - P10
+    test_ids:
+    - T014
+    output_evidence:
+    - l0_l1_inputs
+    - measurement_selection_registry
+    implementation_controls:
+    - IC001
+    - IC004
+  D15:
+    appendix_b_id: D15
+    config_anchors:
+    - measurement.selection
+    - learners.confirmatory
+    lock_stage: P10
+    enforced_by_steps:
+    - P10
+    - P11
+    test_ids:
+    - T015
+    output_evidence:
+    - measurement_candidate_results
+    - model_artifacts
+    implementation_controls:
+    - IC001
+    - IC004
+  D16:
+    appendix_b_id: D16
+    config_anchors:
+    - measurement.objectives
+    lock_stage: P08
+    enforced_by_steps:
+    - P08
+    - P10
+    test_ids:
+    - T016
+    output_evidence:
+    - simulation_scenario_registry
+    - measurement_candidate_results
+    implementation_controls:
+    - IC001
+    - IC004
+  D17:
+    appendix_b_id: D17
+    config_anchors:
+    - measurement.l3_model
+    lock_stage: P05
+    enforced_by_steps:
+    - P05
+    - P08
+    - P13
+    test_ids:
+    - T017
+    output_evidence:
+    - l3_pilot_capability
+    - hierarchical_pi_sensitivity
+    implementation_controls:
+    - IC001
+    - IC004
+  D18:
+    appendix_b_id: D18
+    config_anchors:
+    - weighting.verification_diagnostics_always
+    - weighting.stabilized_ipw
+    - weighting.overlap_weights
+    lock_stage: P06
+    enforced_by_steps:
+    - P06
+    - P09
+    test_ids:
+    - T018
+    output_evidence:
+    - observability_registry
+    - fold_aware_weights
+    implementation_controls:
+    - IC001
+    - IC004
+  D19:
+    appendix_b_id: D19
+    config_anchors:
+    - known_cases.sealed_before_development
+    - known_cases.forbidden_uses_before_opening
+    lock_stage: P00
+    enforced_by_steps:
+    - P00
+    - P15
+    test_ids:
+    - T019
+    output_evidence:
+    - known_cases_seal
+    - known_case_results
+    implementation_controls:
+    - IC001
+    - IC004
+  D20:
+    appendix_b_id: D20
+    config_anchors:
+    - evidence.label_model_allowed_blocks
+    - features.label_model_allows_content
+    lock_stage: P07
+    enforced_by_steps:
+    - P07
+    test_ids:
+    - T020
+    output_evidence:
+    - feature_registry
+    implementation_controls:
+    - IC001
+    - IC004
+  D21:
+    appendix_b_id: D21
+    config_anchors:
+    - risksets.main_requires_tau_plus_h_le_tcut
+    - risksets.complete_followup_required
+    lock_stage: P04
+    enforced_by_steps:
+    - P04
+    test_ids:
+    - T021
+    output_evidence:
+    - maturity_audit
+    - risk_sets
+    implementation_controls:
+    - IC001
+    - IC004
+  D22:
+    appendix_b_id: D22
+    config_anchors:
+    - study.horizons_months
+    - study.source_maturity_curves_required
+    lock_stage: P04
+    enforced_by_steps:
+    - P04
+    - P12
+    test_ids:
+    - T022
+    output_evidence:
+    - maturity_audit
+    - evaluation_metrics
+    implementation_controls:
+    - IC001
+    - IC004
+  D23:
+    appendix_b_id: D23
+    config_anchors:
+    - evaluation.gate_common
+    lock_stage: P08
+    enforced_by_steps:
+    - P08
+    - P14
+    - P16
+    test_ids:
+    - T023
+    output_evidence:
+    - mcse_report
+    - gate2_verdict
+    - gate3_verdict
+    implementation_controls:
+    - IC001
+    - IC004
+  D24:
+    appendix_b_id: D24
+    config_anchors:
+    - inference.interaction_library
+    lock_stage: P16
+    enforced_by_steps:
+    - P16
+    test_ids:
+    - T024
+    output_evidence:
+    - threshold_interaction_results
+    implementation_controls:
+    - IC001
+    - IC004
+  D25:
+    appendix_b_id: D25
+    config_anchors:
+    - evidence.exit_events
+    lock_stage: P03
+    enforced_by_steps:
+    - P03
+    - P04
+    test_ids:
+    - T025
+    output_evidence:
+    - evidence_ledger
+    - risk_sets
+    implementation_controls:
+    - IC001
+    - IC004
+  D26:
+    appendix_b_id: D26
+    config_anchors:
+    - measurement.selection
+    lock_stage: P10
+    enforced_by_steps:
+    - P10
+    - P11
+    test_ids:
+    - T026
+    output_evidence:
+    - measurement_selection_registry
+    - model_artifacts
+    implementation_controls:
+    - IC001
+    - IC004
+  D27:
+    appendix_b_id: D27
+    config_anchors:
+    - measurement.strict_selection
+    lock_stage: P09
+    enforced_by_steps:
+    - P09
+    - P10
+    - P11
+    test_ids:
+    - T027
+    output_evidence:
+    - channel_time_split_registry
+    - channel_measurement_selection
+    - model_freeze_receipt
+    implementation_controls:
+    - IC001
+    - IC004
+  D28:
+    appendix_b_id: D28
+    config_anchors:
+    - learners.pu_branch
+    - learners.sensitivity
+    lock_stage: P11
+    enforced_by_steps:
+    - P11
+    test_ids:
+    - T028
+    output_evidence:
+    - model_artifacts
+    implementation_controls:
+    - IC001
+    - IC004
+  D29:
+    appendix_b_id: D29
+    config_anchors:
+    - inference.bootstrap
+    lock_stage: P12
+    enforced_by_steps:
+    - P12
+    test_ids:
+    - T029
+    output_evidence:
+    - bootstrap_batches
+    implementation_controls:
+    - IC001
+    - IC004
+  D30:
+    appendix_b_id: D30
+    config_anchors:
+    - known_cases.soft_veto
+    lock_stage: P15
+    enforced_by_steps:
+    - P15
+    test_ids:
+    - T030
+    output_evidence:
+    - known_case_results
+    implementation_controls:
+    - IC001
+    - IC004
+  D31:
+    appendix_b_id: D31
+    config_anchors:
+    - evaluation.track_b_metrics
+    lock_stage: P12
+    enforced_by_steps:
+    - P12
+    test_ids:
+    - T031
+    output_evidence:
+    - evaluation_metrics
+    implementation_controls:
+    - IC001
+    - IC004
+  D32:
+    appendix_b_id: D32
+    config_anchors:
+    - measurement.selection
+    lock_stage: P10
+    enforced_by_steps:
+    - P10
+    test_ids:
+    - T032
+    output_evidence:
+    - measurement_selection_registry
+    - channel_measurement_selection
+    implementation_controls:
+    - IC001
+    - IC004
+  D33:
+    appendix_b_id: D33
+    config_anchors:
+    - measurement.selection.stability_minimum_selected_folds
+    - measurement.selection.stability_denominator_folds
+    lock_stage: P10
+    enforced_by_steps:
+    - P10
+    - P13
+    test_ids:
+    - T033
+    output_evidence:
+    - measurement_selection_registry
+    - ablation_results
+    implementation_controls:
+    - IC001
+    - IC004
+  D34:
+    appendix_b_id: D34
+    config_anchors:
+    - measurement.l2_missingness
+    lock_stage: P05
+    enforced_by_steps:
+    - P05
+    - P10
+    test_ids:
+    - T034
+    output_evidence:
+    - l0_l1_inputs
+    - measurement_candidate_results
+    implementation_controls:
+    - IC001
+    - IC004
+  D35:
+    appendix_b_id: D35
+    config_anchors:
+    - calibration
+    lock_stage: P11
+    enforced_by_steps:
+    - P11
+    - P12
+    test_ids:
+    - T035
+    output_evidence:
+    - model_freeze_receipt
+    - calibration_outputs
+    implementation_controls:
+    - IC001
+    - IC004
+  D36:
+    appendix_b_id: D36
+    config_anchors:
+    - inference.families
+    - inference.family_adjustment_methods
+    lock_stage: P12
+    enforced_by_steps:
+    - P12
+    - P16
+    test_ids:
+    - T036
+    output_evidence:
+    - evaluation_metrics
+    - gate3_verdict
+    implementation_controls:
+    - IC001
+    - IC004
+  D37:
+    appendix_b_id: D37
+    config_anchors:
+    - risksets.ipcw_role
+    lock_stage: P04
+    enforced_by_steps:
+    - P04
+    - P13
+    test_ids:
+    - T037
+    output_evidence:
+    - risk_sets
+    - ablation_results
+    implementation_controls:
+    - IC001
+    - IC004
+  D38:
+    appendix_b_id: D38
+    config_anchors:
+    - simulation.objective
+    lock_stage: P08
+    enforced_by_steps:
+    - P08
+    test_ids:
+    - T038
+    output_evidence:
+    - simulation_scenario_registry
+    - mcse_report
+    implementation_controls:
+    - IC001
+    - IC004
+  D39:
+    appendix_b_id: D39
+    config_anchors:
+    - simulation.tiers
+    - simulation.outer_outcomes_allowed
+    - simulation.known_cases_allowed
+    lock_stage: P08
+    enforced_by_steps:
+    - P08
+    test_ids:
+    - T039
+    output_evidence:
+    - simulation_scenario_registry
+    implementation_controls:
+    - IC001
+    - IC004
+  D40:
+    appendix_b_id: D40
+    config_anchors:
+    - simulation.dgp
+    - simulation.l3_correct_and_misspecified_checked
+    lock_stage: P08
+    enforced_by_steps:
+    - P08
+    test_ids:
+    - T040
+    output_evidence:
+    - simulation_scenario_registry
+    implementation_controls:
+    - IC001
+    - IC004
+  D41:
+    appendix_b_id: D41
+    config_anchors:
+    - simulation.scenario_space
+    - simulation.scenario_design
+    - simulation.full_cartesian_product
+    lock_stage: P08
+    enforced_by_steps:
+    - P08
+    test_ids:
+    - T041
+    output_evidence:
+    - simulation_scenario_registry
+    implementation_controls:
+    - IC001
+    - IC004
+  D42:
+    appendix_b_id: D42
+    config_anchors:
+    - simulation.targets
+    - simulation.learners
+    - simulation.methods
+    - simulation.oracle_role
+    - simulation.sensitivities
+    lock_stage: P08
+    enforced_by_steps:
+    - P08
+    test_ids:
+    - T042
+    output_evidence:
+    - simulation_scenario_registry
+    implementation_controls:
+    - IC001
+    - IC004
+  D43:
+    appendix_b_id: D43
+    config_anchors:
+    - simulation.metrics
+    lock_stage: P08
+    enforced_by_steps:
+    - P08
+    test_ids:
+    - T043
+    output_evidence:
+    - mcse_report
+    implementation_controls:
+    - IC001
+    - IC004
+  D44:
+    appendix_b_id: D44
+    config_anchors:
+    - simulation.core
+    - simulation.l3
+    - simulation.continuous_metrics
+    - simulation.adaptive_replication
+    lock_stage: P08
+    enforced_by_steps:
+    - P08
+    test_ids:
+    - T044
+    output_evidence:
+    - mcse_report
+    implementation_controls:
+    - IC001
+    - IC004
+  D45:
+    appendix_b_id: D45
+    config_anchors:
+    - simulation.protocol_role
+    - reproducibility.require_clean_tree_for_acceptance
+    lock_stage: P00
+    enforced_by_steps:
+    - P00
+    - P08
+    - P12
+    test_ids:
+    - T045
+    output_evidence:
+    - registry_lock
+    - mcse_report
+    - outer_open_receipt
+    implementation_controls:
+    - IC001
+    - IC004

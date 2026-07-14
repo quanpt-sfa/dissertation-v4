@@ -1,7 +1,15 @@
 study:
   track_a: observed_endpoint
-  prediction_time_definition: latest_time_all_core_predictors_valid_and_auditable
-  primary_horizon_months: 12
-  sensitivity_horizon_months: 24
-  missing_source_policy: not_evidence_zero
-  immature_followup_policy: not_negative
+  prediction_time:
+    rule: latest_time_all_core_predictors_valid
+    default_anchor: audited_financial_statement_publication_date
+    calendar_standardization: true
+    availability_date_audit_required: true
+  horizons_months:
+    primary: 12
+    sensitivity:
+    - 24
+  source_maturity_curves_required: true
+  sample_fiscal_years:
+    start: 2015
+    end: 2025

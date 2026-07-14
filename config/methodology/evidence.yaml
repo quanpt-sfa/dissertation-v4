@@ -2,3 +2,17 @@ evidence:
   availability_date_required: true
   missing_is_zero: false
   immature_is_negative: false
+  label_model_allowed_blocks:
+  - S
+  - M
+  - T
+  - Q
+  - Z_M
+  cross_fitted_expanded_label_model_role: sensitivity_only
+  exit_events:
+    delisting_or_merger_is_negative: false
+    retain_when_evidence_followup_possible: true
+    censor_when_observation_channel_lost: true
+    sensitivities:
+    - IPCW
+    - worst_best_case

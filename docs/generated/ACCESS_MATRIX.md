@@ -15,7 +15,9 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "CONFIGURED"
     ],
+    "read_sensitivity_classes": [],
     "reads": [],
+    "required_receipts": [],
     "writes": [
       "registry_lock",
       "protocol_hash",
@@ -28,6 +30,7 @@ Source: config/pipeline.yaml
       "access_matrix",
       "known_cases_seal",
       "environment_expectation",
+      "environment_observation",
       "p00_audit_report",
       "job_manifest",
       "success_receipt"
@@ -43,7 +46,9 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "LOCKED"
     ],
+    "read_sensitivity_classes": [],
     "reads": [],
+    "required_receipts": [],
     "writes": [
       "raw_audit"
     ]
@@ -58,9 +63,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "AUDITED"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "raw_audit"
     ],
+    "required_receipts": [],
     "writes": [
       "firm_master",
       "firm_year_panel",
@@ -77,9 +86,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "PANELLED"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "firm_year_panel"
     ],
+    "required_receipts": [],
     "writes": [
       "evidence_ledger",
       "availability_registry",
@@ -96,9 +109,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "LEDGERED"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "evidence_ledger"
     ],
+    "required_receipts": [],
     "writes": [
       "risk_sets",
       "maturity_audit"
@@ -114,9 +131,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "RISK_SET"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "risk_sets"
     ],
+    "required_receipts": [],
     "writes": [
       "source_channel_matrices",
       "l0_l1_inputs",
@@ -134,9 +155,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "MEASURED"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "l3_pilot_capability"
     ],
+    "required_receipts": [],
     "writes": [
       "observability_registry"
     ]
@@ -151,9 +176,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "OBSERVABLE"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "observability_registry"
     ],
+    "required_receipts": [],
     "writes": [
       "feature_panel",
       "feature_registry"
@@ -169,9 +198,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "FEATURED"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "feature_registry"
     ],
+    "required_receipts": [],
     "writes": [
       "simulation_scenario_registry",
       "simulation_batches",
@@ -188,9 +221,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "SIMULATED"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "feature_panel"
     ],
+    "required_receipts": [],
     "writes": [
       "temporal_split_registry",
       "channel_time_split_registry",
@@ -207,9 +244,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "SPLIT"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "fold_aware_weights"
     ],
+    "required_receipts": [],
     "writes": [
       "measurement_candidate_results",
       "measurement_selection_registry",
@@ -226,9 +267,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "SELECTED"
     ],
+    "read_sensitivity_classes": [
+      "restricted"
+    ],
     "reads": [
       "measurement_selection_registry"
     ],
+    "required_receipts": [],
     "writes": [
       "model_artifacts",
       "development_oof_predictions",
@@ -247,11 +292,18 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "FROZEN"
     ],
+    "read_sensitivity_classes": [
+      "outer",
+      "restricted"
+    ],
     "reads": [
       "model_freeze_receipt",
       "development_oof_predictions",
       "raw_outer_predictions",
       "sealed_outcome_store"
+    ],
+    "required_receipts": [
+      "model_freeze_receipt"
     ],
     "writes": [
       "outer_open_receipt",
@@ -271,9 +323,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "EVALUATED"
     ],
+    "read_sensitivity_classes": [
+      "outer"
+    ],
     "reads": [
       "evaluation_metrics"
     ],
+    "required_receipts": [],
     "writes": [
       "domain_transfer_outputs",
       "hierarchical_pi_sensitivity",
@@ -290,9 +346,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "SENSITIVITY"
     ],
+    "read_sensitivity_classes": [
+      "outer"
+    ],
     "reads": [
       "domain_transfer_outputs"
     ],
+    "required_receipts": [],
     "writes": [
       "gate2_verdict"
     ]
@@ -307,7 +367,14 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "GATE2"
     ],
+    "read_sensitivity_classes": [
+      "outer"
+    ],
     "reads": [
+      "gate2_verdict"
+    ],
+    "required_receipts": [
+      "known_cases_seal",
       "gate2_verdict"
     ],
     "writes": [
@@ -324,7 +391,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "KNOWN_CASES_OPEN"
     ],
+    "read_sensitivity_classes": [
+      "known_case"
+    ],
     "reads": [
+      "known_case_results"
+    ],
+    "required_receipts": [
       "known_case_results"
     ],
     "writes": [
@@ -342,7 +415,13 @@ Source: config/pipeline.yaml
     "permitted_states": [
       "GATE3"
     ],
+    "read_sensitivity_classes": [
+      "known_case"
+    ],
     "reads": [
+      "gate3_verdict"
+    ],
+    "required_receipts": [
       "gate3_verdict"
     ],
     "writes": [

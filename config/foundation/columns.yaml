@@ -1,4 +1,81 @@
 columns:
-  firm_id: {physical_name: firm_master_id, dtype: string, semantic_role: entity_key}
-  fiscal_year: {physical_name: fiscal_year, dtype: int16, semantic_role: reporting_period}
-  value: {physical_name: protocol_value, dtype: string, semantic_role: payload}
+  firm_id:
+    physical_name: firm_master_id
+    dtype: string
+    semantic_role: entity_key
+  fiscal_year:
+    physical_name: fiscal_year
+    dtype: int16
+    semantic_role: reporting_period
+  prediction_time:
+    physical_name: prediction_time
+    dtype: datetime64[ns]
+    semantic_role: as_of_time
+  availability_date:
+    physical_name: availability_date
+    dtype: datetime64[ns]
+    semantic_role: availability_time
+  source_id:
+    physical_name: source_id
+    dtype: string
+    semantic_role: source_key
+  channel_id:
+    physical_name: channel_id
+    dtype: string
+    semantic_role: channel_key
+  outer_fold:
+    physical_name: outer_fold
+    dtype: string
+    semantic_role: fold_key
+  learner_id:
+    physical_name: learner_id
+    dtype: string
+    semantic_role: learner_key
+  measurement_id:
+    physical_name: measurement_id
+    dtype: string
+    semantic_role: measurement_key
+  target_id:
+    physical_name: target_id
+    dtype: string
+    semantic_role: target_key
+  outcome:
+    physical_name: outcome
+    dtype: bool
+    semantic_role: binary_outcome
+  prediction:
+    physical_name: prediction
+    dtype: float64
+    semantic_role: probability
+  weight:
+    physical_name: weight
+    dtype: float64
+    semantic_role: analytical_weight
+  eligible:
+    physical_name: eligible
+    dtype: bool
+    semantic_role: risk_set_eligibility
+  mature:
+    physical_name: mature
+    dtype: bool
+    semantic_role: outcome_maturity
+  scenario_id:
+    physical_name: scenario_id
+    dtype: string
+    semantic_role: simulation_scenario
+  replication_id:
+    physical_name: replication_id
+    dtype: int64
+    semantic_role: simulation_replication
+  metric_id:
+    physical_name: metric_id
+    dtype: string
+    semantic_role: metric_key
+  estimate:
+    physical_name: estimate
+    dtype: float64
+    semantic_role: metric_estimate
+  mcse:
+    physical_name: mcse
+    dtype: float64
+    semantic_role: monte_carlo_error

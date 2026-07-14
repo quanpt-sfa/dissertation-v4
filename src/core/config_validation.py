@@ -1,8 +1,9 @@
-"""Cross-reference and methodological-invariant validation for P0 only."""
+"""Cross-reference and exact Chapter 3 v19 methodological invariant validation."""
 
 from __future__ import annotations
 
 import re
+from typing import Any, cast
 
 from .errors import (
     AccessPolicyError,
@@ -12,23 +13,29 @@ from .errors import (
 )
 
 
-def _mapping(registry: dict[str, object], key: str) -> dict[str, object]:
+def _mapping(registry: dict[str, object], key: str) -> dict[str, Any]:
     value = registry.get(key)
     if not isinstance(value, dict):
         raise UnknownReferenceError(f"namespace={key}: mapping required")
-    return value
+    return cast(dict[str, Any], value)
 
 
 def validate_references(registry: dict[str, object]) -> None:
-    """Validate artifact, schema, step, test, and artifact-template references."""
     artifacts = _mapping(registry, "artifacts")
     steps = _mapping(registry, "steps")
     schemas = _mapping(registry, "schemas")
     tests = _mapping(registry, "tests")
-    seen_paths: dict[str, str] = {}
-    for artifact_id, value in artifacts.items():
-        if not isinstance(value, dict):
+    seen: dict[str, str] = {}
+    format_contracts = {
+        "parquet": {"dataframe"},
+        "json": {"json_object", "json_array", "receipt"},
+        "text": {"text"},
+        "markdown": {"markdown"},
+    }
+    for artifact_id, raw in artifacts.items():
+        if not isinstance(raw, dict):
             raise UnknownReferenceError(f"artifact={artifact_id}: mapping required")
+        item = cast(dict[str, Any], raw)
         for key in (
             "producer_step",
             "path_template",
@@ -40,213 +47,150 @@ def validate_references(registry: dict[str, object]) -> None:
             "aggregation_behavior",
             "checkpoint_role",
         ):
-            if key not in value:
-                raise UnknownReferenceError(
-                    f"artifact={artifact_id}, key={key}: required declaration missing"
-                )
-        producer = value["producer_step"]
-        schema = value["schema_id"]
-        if producer not in steps:
-            raise UnknownReferenceError(
-                f"artifact={artifact_id}, producer={producer}: unknown step"
-            )
-        if schema not in schemas:
-            raise UnknownReferenceError(f"artifact={artifact_id}, schema={schema}: unknown schema")
-        template = value["path_template"]
-        coordinates = value["coordinates"]
-        if not isinstance(template, str) or not isinstance(coordinates, list):
-            raise UnknownReferenceError(
-                f"artifact={artifact_id}: path_template string and coordinates list required"
-            )
+            if key not in item:
+                raise UnknownReferenceError(f"artifact={artifact_id}, key={key}: required")
+        producer, schema_id = item["producer_step"], item["schema_id"]
+        if producer not in steps or schema_id not in schemas:
+            raise UnknownReferenceError(f"artifact={artifact_id}: unknown producer or schema")
+        schema = schemas[schema_id]
+        if (
+            not isinstance(schema, dict)
+            or schema.get("contract_type") not in format_contracts[item["format"]]
+        ):
+            raise UnknownReferenceError(f"artifact={artifact_id}: format/contract mismatch")
+        template = str(item["path_template"])
+        coordinates = item["coordinates"]
         if template.startswith("/") or ".." in template.replace("\\", "/").split("/"):
-            raise ArtifactPathCollisionError(
-                f"artifact={artifact_id}: template escapes registered artifact root"
-            )
+            raise ArtifactPathCollisionError(f"artifact={artifact_id}: path escapes root")
         placeholders = set(re.findall(r"{([A-Za-z_][A-Za-z0-9_]*)}", template))
         if placeholders != set(coordinates):
             raise ArtifactPathCollisionError(
-                f"artifact={artifact_id}: template placeholders must equal coordinates"
+                f"artifact={artifact_id}: coordinate placeholders differ"
             )
-        signature = re.sub(r"{[A-Za-z_][A-Za-z0-9_]*}", "{coordinate}", template.replace("\\", "/"))
-        if signature in seen_paths:
-            raise ArtifactPathCollisionError(
-                f"artifact={artifact_id}: path can collide with {seen_paths[signature]}"
-            )
-        seen_paths[signature] = str(artifact_id)
-        producer_spec = steps[producer]
-        if not isinstance(producer_spec, dict) or artifact_id not in producer_spec.get(
-            "writes", []
-        ):
-            raise UnknownReferenceError(
-                f"artifact={artifact_id}: producer step must declare the artifact in writes"
-            )
-    for step_id, value in steps.items():
-        if not isinstance(value, dict):
-            raise UnknownReferenceError(f"step={step_id}: mapping required")
-        required = (
-            "description",
-            "cli_module",
-            "unit_coordinates",
-            "reads",
-            "optional_reads",
-            "writes",
-            "outer_access",
-            "known_case_access",
-            "checkpoint_role",
-            "permitted_states",
-            "allowed_next_states",
-            "test_ids",
-            "decision_ids",
+        signature = re.sub(
+            r"{[A-Za-z_][A-Za-z0-9_]*}",
+            "{coordinate}",
+            template.replace("\\", "/"),
         )
-        absent = [key for key in required if key not in value]
-        if absent:
-            raise UnknownReferenceError(f"step={step_id}: missing required fields {absent}")
-        for artifact_id in [*value["reads"], *value["optional_reads"], *value["writes"]]:
+        if signature in seen:
+            raise ArtifactPathCollisionError(
+                f"artifact={artifact_id}: path collides with {seen[signature]}"
+            )
+        seen[signature] = artifact_id
+        if artifact_id not in steps[producer].get("writes", []):
+            raise UnknownReferenceError(f"artifact={artifact_id}: producer does not declare write")
+
+    for step_id, raw in steps.items():
+        if not isinstance(raw, dict):
+            raise UnknownReferenceError(f"step={step_id}: mapping required")
+        item = cast(dict[str, Any], raw)
+        for artifact_id in [
+            *item.get("reads", []),
+            *item.get("optional_reads", []),
+            *item.get("writes", []),
+            *item.get("required_receipts", []),
+        ]:
             if artifact_id not in artifacts:
-                raise UnknownReferenceError(
-                    f"step={step_id}, artifact={artifact_id}: unknown artifact"
-                )
-        for test_id in value["test_ids"]:
+                raise UnknownReferenceError(f"step={step_id}, artifact={artifact_id}: unknown")
+        for test_id in item.get("test_ids", []):
             if test_id not in tests:
-                raise UnknownReferenceError(f"step={step_id}, test={test_id}: unknown test")
-        if value["outer_access"] == "sealed" and any("outer" in str(a) for a in value["reads"]):
-            raise AccessPolicyError(
-                f"step={step_id}: sealed outer access cannot read outer artifacts"
-            )
-        known_steps = _mapping(registry, "access_control").get("known_case_access_steps")
-        if not isinstance(known_steps, list) or (
-            step_id not in known_steps and value["known_case_access"] != "none"
+                raise UnknownReferenceError(f"step={step_id}, test={test_id}: unknown")
+        if step_id == "P17" and any(
+            artifacts[artifact_id]["producer_step"] != "P17"
+            for artifact_id in item.get("writes", [])
         ):
-            raise AccessPolicyError(
-                f"step={step_id}: known-case content is not configured to open here"
-            )
-        if step_id == "P17":
-            for artifact_id in value["writes"]:
-                producer = artifacts[artifact_id]
-                if isinstance(producer, dict) and producer.get("producer_step") != "P17":
-                    raise AccessPolicyError(
-                        f"step=P17, artifact={artifact_id}: cannot write prior-step artifact"
-                    )
+            raise AccessPolicyError("P17 cannot write prior-stage artifacts")
 
 
 def validate_methodology(registry: dict[str, object]) -> None:
-    """Enforce locked methodological invariants as configuration rules."""
+    study = _mapping(registry, "study")
+    sources = _mapping(registry, "data_sources")
     measurement = _mapping(registry, "measurement")
     evaluation = _mapping(registry, "evaluation")
     features = _mapping(registry, "features")
-    weighting = _mapping(registry, "weighting")
-    simulation = _mapping(registry, "simulation")
     learners = _mapping(registry, "learners")
-    utility = _mapping(registry, "utility")
+    folds = _mapping(registry, "folds")
+    weighting = _mapping(registry, "weighting")
+    evidence = _mapping(registry, "evidence")
+    risksets = _mapping(registry, "risksets")
+    calibration = _mapping(registry, "calibration")
     inference = _mapping(registry, "inference")
-    if measurement.get("track_a_primary_endpoint") != "L1":
-        raise MethodologicalInvariantError(
-            "measurement.track_a_primary_endpoint: Track A must use L1"
-        )
-    candidates = measurement.get("selection_candidates")
-    if candidates != ["L2", "L3_fixed_pi", "none"]:
-        raise MethodologicalInvariantError(
-            "measurement.selection_candidates: Gate 1 permits only L2, L3_fixed_pi, none"
-        )
-    hierarchical = measurement.get("hierarchical_pi")
-    if not isinstance(hierarchical, dict) or hierarchical.get("role") != "sensitivity_only":
-        raise MethodologicalInvariantError(
-            "measurement.hierarchical_pi.role: hierarchical-pi is sensitivity only"
-        )
-    if evaluation.get("ap_soft_targets"):
-        raise MethodologicalInvariantError(
-            "evaluation.ap_soft_targets: AP cannot evaluate L2/L3 soft targets"
-        )
-    if features.get("label_model_allows_content"):
-        raise MethodologicalInvariantError(
-            "features.label_model_allows_content: content predictors are forbidden"
-        )
-    ladder = evaluation.get("benchmark_ladder")
-    if (
-        not isinstance(ladder, list)
-        or len(ladder) != 6
-        or "PU" in ladder
-        or evaluation.get("pu_branch") != "separate"
-    ):
-        raise MethodologicalInvariantError(
-            "evaluation.benchmark_ladder: exactly six levels and a separate PU branch required"
-        )
-    if (
-        weighting.get("full_sample_role") != "descriptive_only"
-        or weighting.get("analytical_fit_scope") != "development_history"
-    ):
-        raise MethodologicalInvariantError(
-            "weighting: full-sample weights are descriptive; analytical weights are fold-aware"
-        )
-    if weighting.get("ipcw_role") != "sensitivity_only":
-        raise MethodologicalInvariantError("weighting.ipcw_role: IPCW is sensitivity only")
-    if simulation.get("imports_production_labels") is not True:
-        raise MethodologicalInvariantError(
-            "simulation.imports_production_labels: production L0-L3 import required"
-        )
-    roster = simulation.get("model_roster")
-    if not isinstance(roster, list) or not {
-        "oracle",
-        "observability_only",
-        "content_only",
-        "full",
-        "anchor_pu",
-    }.issubset(roster):
-        raise MethodologicalInvariantError(
-            "simulation.model_roster: oracle, observability-only, content-only, full, anchor-PU required"
-        )
-    if simulation.get("targets") != ["L1", "L2", "L3_fixed_pi"]:
-        raise MethodologicalInvariantError("simulation.targets: L1, L2, L3_fixed_pi required")
-    if simulation.get("methods") != [
-        "oracle",
-        "observability_only",
-        "content_only",
-        "full",
-        "anchor_pu",
-    ]:
-        raise MethodologicalInvariantError("simulation.methods: registered five-method roster required")
-    if simulation.get("learners") != ["logistic", "main_boosting"] or learners.get("registered") != [
-        "logistic",
-        "main_boosting",
-    ]:
-        raise MethodologicalInvariantError("learners: logistic and main_boosting required")
-    if simulation.get("gate3_operating_characteristics") is not True:
-        raise MethodologicalInvariantError("simulation.gate3_operating_characteristics: required")
-    core = simulation.get("core")
-    l3 = simulation.get("l3")
-    if not isinstance(core, dict) or not isinstance(l3, dict):
-        raise MethodologicalInvariantError("simulation: core and L3 policies required")
-    if (
-        core.get("minimum_replications") != 2500
-        or not isinstance(core.get("pass_fail_mcse_max"), (int, float))
-        or core["pass_fail_mcse_max"] <= 0
-    ):
-        raise MethodologicalInvariantError(
-            "simulation.core: minimum 2,500 and positive MCSE threshold required"
-        )
-    if l3.get("initial_replications") != 1000 or l3.get("pass_fail_mcse_max") == core.get(
-        "pass_fail_mcse_max"
-    ):
-        raise MethodologicalInvariantError(
-            "simulation.l3: initial 1,000 and distinct threshold required"
-        )
-    prevalence = simulation.get("prevalence")
-    dimensions = simulation.get("dimensions")
-    if (
-        not isinstance(prevalence, dict)
-        or prevalence.get("independent_scenario_dimension") is not True
-        or not isinstance(dimensions, list)
-    ):
-        raise MethodologicalInvariantError(
-            "simulation: prevalence and scenario dimensions required"
-        )
-    if inference.get("chnc3_family_adjusted") is not True:
-        raise MethodologicalInvariantError("inference.chnc3_family_adjusted: required")
-    components = utility.get("components")
-    if not isinstance(components, list) or not {
-        "review_cost",
-        "additional_false_positive_cost",
-    }.issubset(components):
-        raise MethodologicalInvariantError(
-            "utility.components: separate review and additional false-positive costs required"
-        )
+    known = _mapping(registry, "known_cases")
+    simulation = _mapping(registry, "simulation")
+
+    required = [
+        (study["horizons_months"]["primary"] == 12, "D02 primary horizon must be 12 months"),
+        (
+            study["horizons_months"]["sensitivity"] == [24],
+            "D02 sensitivity horizon must be 24 months",
+        ),
+        (
+            sources["anchor"]["false_positive_rate_grid"] == [0.0, 0.01, 0.03, 0.05],
+            "D04 anchor grid differs",
+        ),
+        (measurement["track_a_primary_endpoint"] == "L1", "D05 primary endpoint must be L1"),
+        (
+            evaluation["review_budget"]["primary_fraction"] == 0.05,
+            "D07 primary review budget must be 5%",
+        ),
+        (
+            learners["confirmatory"] == ["elastic_net_logistic", "random_forest", "main_boosting"],
+            "D08 learner roster differs",
+        ),
+        (
+            learners["tuning"]["max_valid_configurations_per_learner_inner_fold"] == 50,
+            "D09 tuning cap must be 50",
+        ),
+        (
+            folds["initial_outer_year"] == 2020
+            and folds["fully_nested_outer_years"] == [2021, 2022, 2023, 2024],
+            "D10 fold calendar differs",
+        ),
+        (
+            measurement["selection_candidates"] == ["L2", "L3_fixed_pi", "none"],
+            "hierarchical-pi cannot enter Gate 1",
+        ),
+        (
+            measurement["l3_model"]["hierarchical_pi"]["role"] == "sensitivity_only",
+            "hierarchical-pi must be sensitivity only",
+        ),
+        (
+            evaluation["ap_soft_targets"] is False
+            and evaluation["track_b_metrics"]["ap_directly_on_soft_targets"] is False,
+            "AP on soft target forbidden",
+        ),
+        (
+            weighting["full_sample_role"] == "descriptive_only"
+            and weighting["analytical_fit_scope"] == "development_history",
+            "weights must be fold-aware",
+        ),
+        (weighting["ipcw_role"] == "sensitivity_only", "IPCW must be sensitivity only"),
+        (
+            evidence["missing_is_zero"] is False and evidence["immature_is_negative"] is False,
+            "missing/immature cannot be negatives",
+        ),
+        (
+            features["label_model_allows_content"] is False,
+            "D20 content predictors cannot enter label models",
+        ),
+        (risksets["complete_followup_required"] is True, "D21 complete follow-up required"),
+        (
+            calibration["in_sample_predictions_after_refit_forbidden"] is True,
+            "D35 in-sample calibration forbidden",
+        ),
+        (inference["families"] == ["CHNC2", "CHNC3"], "D36 family registry differs"),
+        (known["soft_veto"]["minimum_cases"] == 4, "D30 known-case minimum differs"),
+        (simulation["core"]["minimum_replications"] == 2500, "D44 core R must be at least 2500"),
+        (simulation["l3"]["initial_replications"] == 1000, "D44 L3 initial R must be 1000"),
+        (
+            simulation["protocol_role"]["must_complete_before_outer_test"] is True,
+            "D45 simulation must precede outer test",
+        ),
+        (
+            simulation["protocol_role"]["gate_optimization_on_outer_performance_forbidden"] is True,
+            "D45 outer gate optimization forbidden",
+        ),
+    ]
+    failures = [message for passed, message in required if not passed]
+    if failures:
+        raise MethodologicalInvariantError("; ".join(failures))

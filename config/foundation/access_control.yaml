@@ -1,7 +1,19 @@
 access_control:
-  outer_outcomes_open_after: P12
-  known_cases_open_at: P15
-  known_cases_open_after: P15
-  known_case_access_steps: [P15, P16, P17]
-  post_outer_open_write_prohibited_steps: [P10, P11]
-  sealed_sensitivity_classes: [outer, known_case]
+  sealed_sensitivity_classes:
+  - outer
+  - known_case
+  outer_outcomes:
+    opening_step: P12
+    required_receipt: model_freeze_receipt
+    post_open_write_prohibited_steps:
+    - P10
+    - P11
+  known_cases:
+    opening_step: P15
+    required_receipts:
+    - known_cases_seal
+    - gate2_verdict
+    access_steps:
+    - P15
+    - P16
+    - P17

@@ -1,1 +1,19 @@
-inference: {chnc3_family_adjusted: true}
+inference:
+  families:
+  - CHNC2
+  - CHNC3
+  family_adjustment_methods:
+  - simultaneous_intervals
+  - max_T
+  - Holm
+  chnc3_family_adjusted: true
+  source_and_domain_results_role: secondary
+  bootstrap:
+    primary_unit: firm
+    stratify_by: outer_year
+    event_cluster_role: sensitivity
+    small_fold_t_interval_forbidden: true
+  interaction_library:
+    confirmatory_threshold_claims: 2
+    confirmatory_block: pressure_x_monitoring
+    remaining_interactions_role: exploratory
