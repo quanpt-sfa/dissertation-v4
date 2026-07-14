@@ -14,7 +14,11 @@ import pandas as pd
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.rng import generator
 from core.semantic_keys import CHANNEL_ID, FISCAL_YEAR, MATURE
-from labels.latent_class import fit_fixed_pi_latent_class
+from labels.latent_class import (
+    attach_l3_pilot_posterior,
+    finalize_l3_pilot_posteriors,
+    fit_fixed_pi_latent_class,
+)
 from measurement.service import build_measurement_inputs, summarize_fold_eligibility
 
 
@@ -211,6 +215,17 @@ def _execute_l3_pilot(
             eligible_rows.append(row)
     maximum_rows = int(operational["pilot_max_rows"])
     eligible_rows = eligible_rows[:maximum_rows]
+    if not eligible_rows:
+        capability.update(
+            {
+                "status": "UNAVAILABLE_BY_DESIGN",
+                "pilot_executed": False,
+                "reason_code": "NO_MATURE_DEVELOPMENT_ROWS_FOR_L3_PILOT",
+                "fit_scope": f"mature_development_years_before_{initial_outer_year}",
+                "outer_outcomes_accessed": False,
+            }
+        )
+        return
     mcmc = mapping(operational.get("mcmc"), "L3 MCMC controls")
     priors: dict[str, dict[str, float]] = {}
     for source_id, profile_id in source_profiles.items():
@@ -235,6 +250,11 @@ def _execute_l3_pilot(
             minimum_observations_per_source=int(mcmc["minimum_observations_per_source"]),
             rng=np.random.default_rng(int(rng.integers(0, np.iinfo(np.uint32).max)) + index),
         )
+        attach_l3_pilot_posterior(
+            rows=eligible_rows,
+            fixed_pi=fixed_pi,
+            posterior_mean=fit.posterior_mean,
+        )
         scenario_results.append(
             {
                 "fixed_pi": fixed_pi,
@@ -248,6 +268,18 @@ def _execute_l3_pilot(
                 },
             }
         )
+    eligible_fixed_pi: list[float] = []
+    for item in scenario_results:
+        if mapping(item["diagnostics"], "L3 diagnostics").get("eligible_for_gate1") is not True:
+            continue
+        raw_fixed_pi = item["fixed_pi"]
+        if not isinstance(raw_fixed_pi, (int, float)) or isinstance(raw_fixed_pi, bool):
+            raise ValueError("L3 fixed-pi scenario must be numeric")
+        eligible_fixed_pi.append(float(raw_fixed_pi))
+    finalize_l3_pilot_posteriors(
+        rows=eligible_rows,
+        eligible_fixed_pi=eligible_fixed_pi,
+    )
     eligible_count = sum(
         mapping(item["diagnostics"], "L3 diagnostics").get("eligible_for_gate1") is True
         for item in scenario_results

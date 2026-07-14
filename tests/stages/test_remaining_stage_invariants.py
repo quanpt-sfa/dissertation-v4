@@ -22,12 +22,13 @@ from core.semantic_keys import (
     PREDICTION,
     PREDICTION_TIME,
     SOURCE_ID,
+    TARGET_VALUE,
     WEIGHT,
 )
 from evaluation.service import evaluate_outer_fold
 from evidence.service import EvidenceRecord, build_evidence_ledger
 from features.service import build_feature_panel
-from gates.service import gate2_verdict, gate3_verdict
+from gates.service import breakpoint_stability_pass, gate2_verdict, gate3_verdict
 from labels.service import aggregate_l1, evidence_score_l2, posterior_l3_fixed_pi
 from risksets.service import build_risk_set
 from selection.service import select_measurement
@@ -53,6 +54,7 @@ def _columns() -> dict[str, str]:
         OUTER_FOLD: "fold_key",
         LEARNER_ID: "model_key",
         PREDICTION: "score",
+        TARGET_VALUE: "soft_target",
         WEIGHT: "analysis_weight",
     }
 
@@ -339,6 +341,120 @@ def test_p12_calibration_parameters_depend_only_on_development_oof() -> None:
     assert first["fit_scope"] == "pooled_cross_fitted_development_predictions"
 
 
+def test_p12_operational_utility_computes_costs_increment_and_uncertainty() -> None:
+    columns = _columns()
+    oof_rows: list[dict[str, object]] = []
+    for model_id in ("m:full", "m:observability_only"):
+        for index, (score, truth) in enumerate(
+            [(0.1, False), (0.2, False), (0.8, True), (0.9, True)]
+        ):
+            oof_rows.append(
+                {
+                    "firm_key": f"D{index}",
+                    "year_key": 2020,
+                    "model_key": model_id,
+                    "score": score,
+                    "binary_result": truth,
+                }
+            )
+    oof = pd.DataFrame(oof_rows).drop(columns=["binary_result"])
+    outer = pd.DataFrame(
+        [
+            {"firm_key": "O0", "year_key": 2021, "model_key": "m:full", "score": 0.9},
+            {"firm_key": "O1", "year_key": 2021, "model_key": "m:full", "score": 0.1},
+            {
+                "firm_key": "O0",
+                "year_key": 2021,
+                "model_key": "m:observability_only",
+                "score": 0.1,
+            },
+            {
+                "firm_key": "O1",
+                "year_key": 2021,
+                "model_key": "m:observability_only",
+                "score": 0.9,
+            },
+        ]
+    )
+    outcomes = pd.DataFrame(
+        [
+            *[
+                {
+                    "firm_key": f"D{index}",
+                    "year_key": 2020,
+                    "binary_result": truth,
+                }
+                for index, truth in enumerate([False, False, True, True])
+            ],
+            {"firm_key": "O0", "year_key": 2021, "binary_result": True},
+            {"firm_key": "O1", "year_key": 2021, "binary_result": False},
+        ]
+    )
+    result = evaluate_outer_fold(
+        oof_predictions=oof,
+        outer_predictions=outer,
+        outcomes=outcomes,
+        outer_year=2021,
+        review_fraction=0.5,
+        utility_scenarios=[
+            {
+                "scenario_id": "operational-1",
+                "true_positive_benefit": 10.0,
+                "review_cost": 1.0,
+                "additional_false_positive_cost": 2.0,
+                "false_negative_cost": 3.0,
+                "measurement_fixed_pi": 0.2,
+            }
+        ],
+        bootstrap_replications=20,
+        confidence_level=0.95,
+        columns=columns,
+        rng=np.random.default_rng(17),
+        latent_risk_scenarios={
+            "operational-1": [
+                {"O0": 0.75, "O1": 0.25},
+                {"O0": 0.85, "O1": 0.15},
+            ]
+        },
+    )
+    full = next(item for item in result.utility if item[LEARNER_ID] == "m:full")
+    assert full["status"] == "PASS"
+    assert full["reviewed_cases"] == 1
+    assert full["expected_true_positives"] == pytest.approx(0.8)
+    assert full["expected_false_positives"] == pytest.approx(0.2)
+    assert full["expected_false_negatives"] == pytest.approx(0.2)
+    assert full["net_utility"] == pytest.approx(6.0)
+    assert full["incremental_utility"] == pytest.approx(9.0)
+    uncertainty = cast(dict[str, object], full["utility_uncertainty"])
+    assert uncertainty["posterior_parameter_draw_count"] == 2
+    assert uncertainty["net_utility_interval"] is not None
+    assert uncertainty["incremental_utility_interval"] is not None
+    unavailable = evaluate_outer_fold(
+        oof_predictions=oof,
+        outer_predictions=outer,
+        outcomes=outcomes,
+        outer_year=2021,
+        review_fraction=0.5,
+        utility_scenarios=[
+            {
+                "scenario_id": "operational-1",
+                "measurement_fixed_pi": 0.2,
+                "true_positive_benefit": 10.0,
+                "review_cost": 1.0,
+                "additional_false_positive_cost": 2.0,
+                "false_negative_cost": 3.0,
+            }
+        ],
+        bootstrap_replications=2,
+        confidence_level=0.95,
+        columns=columns,
+        rng=np.random.default_rng(18),
+    )
+    assert unavailable.utility[0]["status"] == "INSUFFICIENT_EVIDENCE"
+    assert unavailable.utility[0]["reason_code"] == "LATENT_RISK_SCENARIO_UNAVAILABLE"
+    assert "net_utility" not in unavailable.utility[0]
+
+
 def test_gates_fail_closed_when_required_evidence_or_bindings_are_absent() -> None:
     gate2 = gate2_verdict(
         evaluations=[],
@@ -398,3 +514,8 @@ def test_gates_fail_closed_when_required_evidence_or_bindings_are_absent() -> No
     )
     assert threshold["reason_code"] == "TWO_THRESHOLD_BINDINGS_REQUIRED"
     assert gate3["verdict"] == "INSUFFICIENT_EVIDENCE"
+
+
+def test_gate3_breakpoint_stability_uses_dispersion_not_distance_from_zero() -> None:
+    assert breakpoint_stability_pass([1.49, 1.50, 1.51], 0.02)
+    assert not breakpoint_stability_pass([-0.4, 0.0, 0.4], 0.2)

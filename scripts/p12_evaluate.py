@@ -14,7 +14,7 @@ import pandas as pd
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.rng import generator
 from core.semantic_keys import OUTER_FOLD
-from evaluation.service import evaluate_outer_fold
+from evaluation.service import build_latent_risk_scenarios, evaluate_outer_fold
 
 
 def main() -> int:
@@ -65,6 +65,19 @@ def main() -> int:
         mapping(item, "utility scenario")
         for item in sequence(utility.get("operational_scenarios"), "utility.operational_scenarios")
     ]
+    source_matrices = mapping(
+        loaded.context.read("source_channel_matrices", {}), "source-channel matrices"
+    )
+    channel_selection = mapping(
+        loaded.context.read("channel_measurement_selection", coordinates),
+        "channel measurement selection",
+    )
+    latent_risk_scenarios = build_latent_risk_scenarios(
+        matrices=source_matrices,
+        channel_selection=channel_selection,
+        outer_year=int(args.outer_fold),
+        scenarios=scenarios,
+    )
     inference = mapping(loaded.registry.get("inference"), "inference")
     bootstrap = mapping(inference.get("bootstrap"), "inference.bootstrap")
     result = evaluate_outer_fold(
@@ -82,6 +95,7 @@ def main() -> int:
             mapping(item, "OOF training target")
             for item in sequence(models.get("oof_training_targets"), "OOF training targets")
         ],
+        latent_risk_scenarios=latent_risk_scenarios,
     )
     loaded.context.write("calibration_outputs", result.calibration, coordinates)
     loaded.context.write("evaluation_metrics", result.metrics, coordinates)

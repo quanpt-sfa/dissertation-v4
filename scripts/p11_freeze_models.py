@@ -14,7 +14,7 @@ import pandas as pd
 from core.pipeline import load_run, mapping, physical_columns, sequence, stable_hash
 from core.rng import derive_seed
 from core.semantic_keys import OUTER_FOLD
-from measurement.service import measurement_target_frame
+from measurement.service import fold_local_l3_target_frame, measurement_target_frame
 from modeling.service import ModelFitResult, fit_anchor_pu_fold, fit_fold_models
 
 
@@ -57,6 +57,10 @@ def main() -> int:
     selection = mapping(
         loaded.context.read("measurement_selection_registry", coordinates),
         "measurement selection",
+    )
+    channel_selection = mapping(
+        loaded.context.read("channel_measurement_selection", coordinates),
+        "channel measurement selection",
     )
     matrices = mapping(
         loaded.context.read("source_channel_matrices", {}), "source-channel matrices"
@@ -129,12 +133,19 @@ def main() -> int:
                 "selected Track B requires measurement.l2_missingness."
                 "minimum_observed_channels to be empirically locked"
             )
-        target_values = measurement_target_frame(
-            matrices=matrices,
-            measurement_id=selected_measurement,
-            minimum_observed_channels=minimum_channels,
-            columns=physical_columns(loaded.registry),
-        )
+        if selected_measurement == "L3_fixed_pi":
+            target_values = fold_local_l3_target_frame(
+                channel_selection=channel_selection,
+                outer_year=int(args.outer_fold),
+                columns=physical_columns(loaded.registry),
+            )
+        else:
+            target_values = measurement_target_frame(
+                matrices=matrices,
+                measurement_id=selected_measurement,
+                minimum_observed_channels=minimum_channels,
+                columns=physical_columns(loaded.registry),
+            )
         track_b_learners = [
             value for value in learner_ids if value in {"elastic_net_logistic", "main_boosting"}
         ]
@@ -235,6 +246,7 @@ def main() -> int:
         "protocol_hash": loaded.protocol_hash,
         "split_registry_hash": stable_hash(splits),
         "measurement_selection_hash": stable_hash(selection),
+        "channel_measurement_selection_hash": stable_hash(channel_selection),
         "feature_registry_hash": stable_hash(feature_registry),
         "preprocessing_hash": stable_hash(feature_config.get("preprocessing")),
         "model_settings_hash": stable_hash(settings),

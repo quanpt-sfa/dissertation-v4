@@ -16,6 +16,14 @@ baseline work-log values below.
 | missing | none currently known | Remaining gaps have substantive partial implementations but are not method-complete. |
 | inconsistent | none currently known | Earlier false-PASS/propagation inconsistencies were converted to fail-closed or partial paths; this does not promote the remaining partial methods to complete. |
 
+### Targeted closure evidence added after the baseline audit
+
+| Requirement | Current implementation evidence | Current status |
+| --- | --- | --- |
+| D07 scenario utility | P12 applies frozen development-only L3 fixed-pi posterior parameter draws after outer opening to derive `r_i(theta)`, then calculates reviewed cases, expected TP/FP/FN, all four benefit/cost components, net and incremental latent utility, and intervals combining posterior measurement uncertainty with firm bootstrap. Empty scenarios remain `SKIPPED`; production values are still empirical blockers. | implemented; awaiting empirical scenarios |
+| D12 breakpoint stability | Gate 3 now compares `std(breakpoints)` with `breakpoint_tolerance_training_sd`. Breakpoint location relative to zero is not used as a proxy for dispersion. | implemented and mutation-tested |
+| D05/D06/D14-D17/D32 L3 propagation | P05 attaches row-level pilot posterior evidence; P10 performs development-only fixed-pi MCMC refits for every held-out channel, derives the fold-local objective and full-source posterior; P11 consumes only the selected P10 target and hashes its provenance. Posterior-draw robustness and the full nested learner pipeline remain open. | substantive chain implemented; broader method partial |
+
 | Requirement | Config owner | Stage | Input → output artifact | Baseline implementation and protecting test | Baseline | Closure |
 |---|---|---|---|---|---|---|
 | D01 prediction time/as-of availability | `study.prediction_time` | P01–P03 | snapshot/raw audit/panel → `availability_registry`, `evidence_ledger` | Physical availability is audited, but period-link confidence and negative-lag decisions are incomplete; T001 checks config more than execution. | partial | open |

@@ -261,6 +261,9 @@ Mục tiêu:
   đã được khóa; nếu chưa khóa thì giữ `EMPIRICALLY_PENDING`, không dùng proxy;
 - chạy pilot fixed-π L3 bằng MCMC với Se/Sp theo source, random effect theo channel,
   R-hat, ESS và posterior-predictive diagnostics khi grid/prior đã được khóa;
+- ghi posterior mean theo từng fixed-π trở lại đúng row của source/channel matrix;
+  posterior tổng hợp này được đánh dấu `p05_feasibility_pilot_only`, không được
+  dùng thay cho fold-local target của P10;
 - đánh giá channel/anchor/L3 capability;
 - chỉ công bố positive count aggregate theo fold;
 - niêm phong row-level L1 outcomes.
@@ -415,6 +418,10 @@ Mục tiêu:
 - đánh giá L2 và L3 fixed-π chỉ khi target/capability substantive cho phép;
 - sử dụng development years trước outer fold;
 - thực hiện channel-within-time holdout;
+- với L3, refit MCMC chỉ trên development history của outer fold, loại toàn bộ
+  source thuộc held-out channel, tính soft cross-entropy theo channel giữ lại để
+  chọn fixed-π, sau đó refit full-source trên development history và ghi row-level
+  target vào `channel_measurement_selection`;
 - ghi lựa chọn theo fold và strict channel;
 - dùng giá trị `none` khi không ứng viên nào hợp lệ.
 
@@ -434,9 +441,10 @@ Hàng rào:
 - AP không tính trực tiếp trên L2/L3 soft targets;
 - hierarchical-π không thể được chọn.
 
-Giới hạn implementation hiện còn mở: strict channel score hiện chưa phải toàn bộ
-fitted nested learner/feature/tuning/calibration procedure và row-level fold-local L3
-posterior chưa được truyền vào P10. P10 phải giữ `none` khi các evidence này thiếu.
+Giới hạn implementation hiện còn mở: strict channel score chưa chạy lại toàn bộ
+learner/feature/tuning/calibration procedure cho từng `M*_{f,c}` và chưa truyền
+posterior-draw robustness qua toàn pipeline. Row-level fold-local L3 posterior đã
+được tạo tại P10; P10 vẫn phải giữ `none` nếu diagnostics/evidence không đạt.
 
 ## 16. P11 — Fit models và freeze
 
@@ -464,7 +472,8 @@ Writes:
 - `predictions/<outer_fold>.parquet`;
 - `freeze/<outer_fold>.json`.
 
-Freeze receipt khóa protocol, split, measurement selection, feature registry,
+Freeze receipt khóa protocol, split, measurement selection, channel measurement
+selection (bao gồm L3 target provenance), feature registry,
 preprocessing, learner settings, weight diagnostics, model, predictions, Git và
 environment hashes.
 
@@ -488,6 +497,14 @@ Mục tiêu:
 - tính registered discrimination/calibration/top-budget metrics;
 - chạy paired firm bootstrap;
 - đánh giá utility scenarios hoặc ghi explicit skip.
+- scenario utility không rỗng phải bind `measurement_fixed_pi`, áp dụng L3 đã fit
+  và đóng băng từ development history để tính `r_i(theta)` sau outer-open; không
+  thay `r_i(theta)` bằng outer outcome hoặc calibrated model risk;
+- từ latent risk đó phải tính reviewed cases, expected TP/FP/FN, review cost,
+  additional false-positive cost, false-negative cost, true-positive benefit,
+  net utility, incremental utility so với model observability-only tương ứng và
+  uncertainty kết hợp L3 posterior-parameter draws và firm bootstrap; không được
+  chỉ ghi `REGISTERED`;
 
 Reads: freeze receipt, OOF predictions, raw outer predictions và sealed outcomes.
 
@@ -592,6 +609,8 @@ Mục tiêu:
 - yêu cầu parent Gate 2 PASS;
 - resolve pressure, monitoring, domain và parent-model bindings;
 - kiểm tra breakpoint stability qua folds;
+- breakpoint stability dùng dispersion `std(breakpoints) <= tolerance`; vị trí
+  breakpoint so với zero chỉ thuộc một giả thuyết vị trí riêng nếu protocol khóa;
 - kiểm tra cross-domain difference và common support;
 - kiểm tra pressure × monitoring direction;
 - áp dụng known-case soft veto;
@@ -664,7 +683,7 @@ Pipeline cố ý fail-closed khi các giá trị sau chưa được người dù
 | fixed-π grid và accuracy priors theo profile | `config/methodology/measurement.yaml` | L3 pilot giữ `EMPIRICALLY_PENDING` |
 | `learners.tuning.search_spaces` | `config/execution/learners.yaml` | P11 dừng trước freeze |
 | `simulation.operational_scenarios` | `config/execution/simulation.yaml` | P08 SKIPPED |
-| `utility.operational_scenarios` | `config/methodology/utility.yaml` | utility SKIPPED, descriptive yield vẫn ghi |
+| `utility.operational_scenarios` với `measurement_fixed_pi`, benefit/cost và budget đã khóa | `config/methodology/utility.yaml` | utility SKIPPED, descriptive yield vẫn ghi |
 | Hai threshold feature, pressure/monitoring/domain/model bindings | `config/methodology/inference.yaml` | Gate 3 insufficient evidence |
 | `known_cases.csv` | `data/raw/known_cases/` | P15 SKIPPED; không soft veto |
 

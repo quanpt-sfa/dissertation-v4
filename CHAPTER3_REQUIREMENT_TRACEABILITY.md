@@ -22,4 +22,15 @@ This document is the human-readable companion to the machine-generated D01–D45
 - Provenance: every post-P00 artifact manifest must list the verified content hashes of artifacts read by its producer.
 - Firewalls: P12 requires a PASS freeze receipt and a PASS simulation/MCSE receipt before writing `outer_open_receipt`; outer data remain unread on either failure.
 - Fail-closed gates: missing/insufficient evidence yields `INSUFFICIENT_EVIDENCE` or `SKIPPED`, never PASS.
+- L3 chain: P05 pilot row posteriors are explicitly pilot-only; P10 must create the
+  development-only held-channel objective and selected fixed-pi posterior rows;
+  P11 must reject any L3 target not carried by that fold's selection artifact.
+- Utility evidence: a nonempty scenario must bind a frozen measurement fixed-pi,
+  derive `r_i(theta)` without substituting outer outcomes or calibrated model
+  risk, and produce expected counts, component costs, net/incremental latent
+  utility and uncertainty combining L3 posterior-parameter draws with firm
+  bootstrap; `REGISTERED` metadata is
+  not an analytical result.
+- Gate 3 stability: the breakpoint criterion is dispersion across folds, not the
+  absolute distance of breakpoint locations from zero.
 - Empirical blockers: null/empty operational inputs remain explicit and stop at the first stage that requires them; fixture-only overrides must never be silently copied into production config.

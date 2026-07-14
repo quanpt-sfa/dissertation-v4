@@ -456,9 +456,7 @@ def _threshold_claim(
     passed = bool(
         stability is not None
         and breakpoints
-        and all(
-            abs(value) <= float(gate["breakpoint_tolerance_training_sd"]) for value in breakpoints
-        )
+        and breakpoint_stability_pass(breakpoints, float(gate["breakpoint_tolerance_training_sd"]))
         and domain_difference is not None
         and domain_difference <= float(gate["cross_domain_breakpoint_difference_max_sd"])
         and support >= float(gate["common_support_min_fraction_each_domain"])
@@ -479,6 +477,13 @@ def _threshold_claim(
         "minimum_fraction_each_side": min(side_fractions) if side_fractions else None,
         "method_pass": passed,
     }
+
+
+def breakpoint_stability_pass(breakpoints: list[float], tolerance: float) -> bool:
+    """Check dispersion, not a breakpoint's location relative to zero."""
+    if not breakpoints or tolerance < 0:
+        return False
+    return float(np.std(breakpoints, ddof=0)) <= tolerance
 
 
 def _interaction_coefficient(frame: pd.DataFrame, monitoring: str, outcome: str) -> float:

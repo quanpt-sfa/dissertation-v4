@@ -1,6 +1,16 @@
 utility:
   operational_scenarios: []
   components:
+  - true_positive_benefit
   - review_cost
   - additional_false_positive_cost
+  - false_negative_cost
+  estimand: scenario_based_latent_utility
+  measurement_scenario_binding: measurement_fixed_pi
+  uncertainty:
+    resampling_unit: firm
+    sources:
+    - evaluation.bootstrap
+    - measurement.l3_model.posterior_parameter_draws
+  incremental_reference: matching_observability_only_model
   review_budget_source: evaluation.review_budget

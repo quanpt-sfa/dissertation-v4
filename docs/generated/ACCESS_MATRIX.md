@@ -307,6 +307,7 @@ Source: config/pipeline.yaml
     ],
     "reads": [
       "measurement_selection_registry",
+      "channel_measurement_selection",
       "source_channel_matrices",
       "anchor_capability",
       "temporal_split_registry",
@@ -348,7 +349,9 @@ Source: config/pipeline.yaml
       "model_artifacts",
       "development_oof_predictions",
       "raw_outer_predictions",
-      "sealed_outcome_store"
+      "sealed_outcome_store",
+      "source_channel_matrices",
+      "channel_measurement_selection"
     ],
     "required_receipts": [
       "model_freeze_receipt"

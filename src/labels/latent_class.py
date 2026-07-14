@@ -13,9 +13,118 @@ import numpy as np
 class LatentClassResult:
     posterior_mean: list[float]
     posterior_draws: list[list[int]]
+    parameter_draws: list[dict[str, Any]]
     source_accuracy: dict[str, dict[str, float]]
     channel_random_effect_sd: dict[str, float]
     diagnostics: dict[str, object]
+
+
+def attach_l3_pilot_posterior(
+    *,
+    rows: list[dict[str, Any]],
+    fixed_pi: float,
+    posterior_mean: list[float],
+) -> None:
+    """Attach an aligned fixed-pi posterior to P05 matrix rows."""
+    if len(rows) != len(posterior_mean):
+        raise ValueError("L3 row-level posterior length does not match matrix rows")
+    pi_key = format(fixed_pi, ".17g")
+    for row, value in zip(rows, posterior_mean, strict=True):
+        raw_by_pi = row.setdefault("l3_posterior_by_fixed_pi", {})
+        if not isinstance(raw_by_pi, dict):
+            raise ValueError("L3 posterior-by-pi matrix field must be an object")
+        by_pi = cast(dict[str, object], raw_by_pi)
+        by_pi[pi_key] = float(value)
+
+
+def finalize_l3_pilot_posteriors(
+    *,
+    rows: list[dict[str, Any]],
+    eligible_fixed_pi: list[float],
+) -> None:
+    """Expose the pilot-only mean without presenting it as a fold-local target."""
+    eligible_keys = {format(value, ".17g") for value in eligible_fixed_pi}
+    for row in rows:
+        raw_by_pi = row.get("l3_posterior_by_fixed_pi")
+        by_pi = cast(dict[str, object], raw_by_pi) if isinstance(raw_by_pi, dict) else {}
+        eligible_values: list[float] = []
+        for key, value in by_pi.items():
+            if key not in eligible_keys:
+                continue
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise ValueError("L3 row-level posterior must be numeric")
+            eligible_values.append(float(value))
+        row["l3_posterior_mean"] = float(np.mean(eligible_values)) if eligible_values else None
+        row["l3_posterior_scope"] = "p05_feasibility_pilot_only"
+        row["l3_posterior_aggregation"] = "mean_across_diagnostically_eligible_fixed_pi_grid"
+
+
+def predict_fixed_pi_latent_probability(
+    *,
+    rows: list[dict[str, Any]],
+    source_channels: dict[str, str],
+    source_accuracy: dict[str, dict[str, float]],
+    channel_random_effect_sd: dict[str, float],
+    fixed_pi: float,
+    quadrature_points: int = 20,
+) -> list[float]:
+    """Apply a frozen L3 scenario, integrating shared channel effects."""
+    if not 0 < fixed_pi < 1:
+        raise ValueError("fixed_pi must be in (0, 1)")
+    if quadrature_points < 3:
+        raise ValueError("L3 predictive quadrature requires at least three points")
+    if set(source_channels) != set(source_accuracy):
+        raise ValueError("L3 predictive accuracy must bind every source")
+    nodes, weights = np.polynomial.hermite.hermgauss(quadrature_points)
+    normalized_weights = weights / math.sqrt(math.pi)
+    result: list[float] = []
+    for row in rows:
+        raw_outcomes = row.get("source_outcomes")
+        if not isinstance(raw_outcomes, dict):
+            raise ValueError("L3 predictive row requires source_outcomes")
+        outcomes = cast(dict[str, object], raw_outcomes)
+        log_one = math.log(fixed_pi)
+        log_zero = math.log(1.0 - fixed_pi)
+        for channel in sorted(set(source_channels.values())):
+            sigma = channel_random_effect_sd.get(channel)
+            if sigma is None or sigma < 0:
+                raise ValueError(f"channel={channel}: frozen random-effect SD required")
+            channel_sources = [
+                source
+                for source, source_channel in source_channels.items()
+                if source_channel == channel and outcomes.get(source) is not None
+            ]
+            if not channel_sources:
+                continue
+            likelihood_one = 0.0
+            likelihood_zero = 0.0
+            for node, weight in zip(nodes, normalized_weights, strict=True):
+                random_effect = math.sqrt(2.0) * float(sigma) * float(node)
+                conditional_one = 1.0
+                conditional_zero = 1.0
+                for source in channel_sources:
+                    value = outcomes[source]
+                    if not isinstance(value, bool):
+                        raise ValueError("L3 source outcomes must be bool or missing")
+                    accuracy = source_accuracy[source]
+                    sensitivity = float(accuracy["sensitivity_mean"])
+                    false_positive = 1.0 - float(accuracy["specificity_mean"])
+                    sensitivity_logit = float(_logit(np.asarray([sensitivity]))[0])
+                    false_positive_logit = float(_logit(np.asarray([false_positive]))[0])
+                    probability_one = float(
+                        _expit(np.asarray([sensitivity_logit + random_effect]))[0]
+                    )
+                    probability_zero = float(
+                        _expit(np.asarray([false_positive_logit + random_effect]))[0]
+                    )
+                    conditional_one *= probability_one if value else 1.0 - probability_one
+                    conditional_zero *= probability_zero if value else 1.0 - probability_zero
+                likelihood_one += float(weight) * conditional_one
+                likelihood_zero += float(weight) * conditional_zero
+            log_one += math.log(max(likelihood_one, 1e-300))
+            log_zero += math.log(max(likelihood_zero, 1e-300))
+        result.append(float(_expit(np.asarray([log_one - log_zero]))[0]))
+    return result
 
 
 def fit_fixed_pi_latent_class(
@@ -83,7 +192,7 @@ def fit_fixed_pi_latent_class(
     chain_y: list[np.ndarray] = []
     chain_parameters: list[np.ndarray] = []
     for seed in seeds:
-        y_draws, parameter_draws = _run_chain(
+        y_draws, chain_parameter_draws = _run_chain(
             observed=observed,
             source_channel=source_channel,
             fixed_pi=fixed_pi,
@@ -96,7 +205,7 @@ def fit_fixed_pi_latent_class(
             rng=np.random.default_rng(int(seed)),
         )
         chain_y.append(y_draws)
-        chain_parameters.append(parameter_draws)
+        chain_parameters.append(chain_parameter_draws)
     y_array = np.stack(chain_y, axis=0)
     parameter_array = np.stack(chain_parameters, axis=0)
     flattened_y = y_array.reshape(chains * draws, len(rows))
@@ -151,12 +260,32 @@ def fit_fixed_pi_latent_class(
         "channel_random_effect_sampled": True,
         "missingness_modeled_separately_from_zero": True,
     }
-    retained_draws = flattened_y[
-        np.linspace(0, len(flattened_y) - 1, min(100, len(flattened_y)), dtype=int)
-    ]
+    retained_indices = np.linspace(0, len(flattened_y) - 1, min(100, len(flattened_y)), dtype=int)
+    retained_draws = flattened_y[retained_indices]
+    retained_parameters = flattened_parameters[retained_indices]
+    posterior_parameter_draws: list[dict[str, Any]] = []
+    for values in retained_parameters:
+        posterior_parameter_draws.append(
+            {
+                "source_accuracy": {
+                    source: {
+                        "sensitivity_mean": float(_expit(np.asarray([values[index]]))[0]),
+                        "specificity_mean": float(
+                            1.0 - _expit(np.asarray([values[source_count + index]]))[0]
+                        ),
+                    }
+                    for source, index in source_index.items()
+                },
+                "channel_random_effect_sd": {
+                    channel: float(math.exp(values[sigma_offset + index]))
+                    for channel, index in channel_index.items()
+                },
+            }
+        )
     return LatentClassResult(
         posterior_mean=np.mean(flattened_y, axis=0).astype(float).tolist(),
         posterior_draws=retained_draws.astype(int).tolist(),
+        parameter_draws=posterior_parameter_draws,
         source_accuracy=source_accuracy,
         channel_random_effect_sd=channel_sd,
         diagnostics=diagnostics,

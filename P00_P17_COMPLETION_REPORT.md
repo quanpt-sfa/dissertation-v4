@@ -49,6 +49,25 @@ are still incomplete. Consequently, no P00→P17 end-to-end PASS is claimed.
   `INSUFFICIENT_EVIDENCE` when required evidence is absent.
 - Gate 3 also requires the same non-`none` measurement selection in at least 3/4
   fully nested folds before aggregating threshold/shape evidence.
+- Gate 3 breakpoint stability now tests dispersion (`std(breakpoints)`) against
+  the locked tolerance. It no longer substitutes distance of each breakpoint
+  from zero for stability; any zero-location hypothesis must be a separate claim.
+- P12 utility scenarios now execute scenario-based latent utility from frozen
+  development-only L3 parameters. After the outer-open checkpoint, P12 integrates
+  the channel random effects, derives `r_i(theta)` for each outer firm and reports
+  reviewed cases, expected TP/FP/FN, review cost, additional false-positive cost,
+  false-negative cost, net utility, matched full-vs-observability incremental
+  utility and uncertainty combining L3 posterior-parameter draws with firm
+  bootstrap. It does not substitute the
+  observed endpoint or calibrated prediction for latent risk. An empty scenario
+  registry still yields an explicit `SKIPPED` result.
+- P05 writes aligned row-level fixed-pi posterior means into the source/channel
+  matrices as pilot-only evidence. P10 no longer reads a metadata-only L3
+  objective: it refits L3 within each outer-fold development history, removes the
+  held-out channel's sources, computes strict held-channel cross-entropy, selects
+  fixed-pi using development data and writes the selected fold-local posterior
+  targets. P11 reads those targets from `channel_measurement_selection`, rejects
+  outer/future rows and hashes that artifact into the freeze receipt.
 - Known-case handling preserves the asymmetric downgrade-only/soft-veto rule.
 - P17 remains report-only and does not import modeling, label, selection or
   simulation code.
@@ -67,7 +86,7 @@ are still incomplete. Consequently, no P00→P17 end-to-end PASS is claimed.
 | same | `measurement.l3_model.operational.accuracy_priors_by_profile`: complete beta-prior parameters for every evidence profile |
 | `config/execution/learners.yaml` | `learners.tuning.search_spaces`: nonempty approved space for every confirmatory learner, ≤50 combinations |
 | `config/execution/simulation.yaml` | `simulation.operational_scenarios`: locked D38–D45 scenario registry |
-| `config/methodology/utility.yaml` | `utility.operational_scenarios`: locked review/utility scenarios |
+| `config/methodology/utility.yaml` | `utility.operational_scenarios`: locked scenarios containing `scenario_id`, `measurement_fixed_pi`, `true_positive_benefit`, `review_cost`, `additional_false_positive_cost`, `false_negative_cost`, and optional review-budget override |
 | `config/methodology/inference.yaml` | two `threshold_feature_ids`, plus pressure, monitoring, parent-model and domain bindings |
 | `config/methodology/entity_resolution.yaml` | aliases needed by actual unresolved source identities, if any |
 | source catalog / actual data | empirically justified high-confirmation evidence anchor, if available; never infer it from known cases |
@@ -87,8 +106,9 @@ are still incomplete. Consequently, no P00→P17 end-to-end PASS is claimed.
 
 - P03 does not yet carry a complete empirical quality variable Q and period-link
   confidence decision for every evidence profile.
-- P05/P10 do not yet refit row-level fixed-π L3 within every nested time/channel
-  training unit or propagate posterior draws through Gate 1.
+- L3 row-level posterior means now follow P05 -> fold-local P10 -> P11 Track B,
+  but posterior-draw robustness is not yet propagated through the complete nested
+  learner/tuning/calibration procedure.
 - P08 does not yet execute the entire production learner/selection/gate procedure
   for every D38–D45 scenario. Several operating-characteristic metrics remain
   reduced models even though both synthetic tiers now execute.
@@ -109,14 +129,16 @@ are still incomplete. Consequently, no P00→P17 end-to-end PASS is claimed.
 
 ## Quality-gate evidence
 
-Results after the last analytical code change:
+Results after the last analytical code change. These are local results produced
+in this workspace; no GitHub workflow run or commit status independently confirms
+them yet.
 
 | Gate | Result |
 | --- | --- |
 | Ruff check | PASS |
 | Ruff format check | PASS — 107 files formatted |
 | Pyright strict | PASS — 0 errors, 0 warnings, 0 informations |
-| Pytest | PASS — 116 passed; 12 sklearn deprecation warnings |
+| Pytest | PASS — 122 passed; 12 sklearn deprecation warnings |
 | Bootstrap/config check | PASS |
 | Pre-commit | PASS — all 6 hooks |
 | `git diff --check` | PASS; only Git CRLF conversion notices were emitted |
@@ -146,8 +168,7 @@ git diff --check
 
 ## Patch inventory
 
-The patch changes configuration/contracts, P02/P04/P05/P08–P16 CLIs, runner and
-core provenance, measurement/modeling/evaluation/sensitivity/gate services,
-generated access/step catalogs, operational documentation and tests: 46 tracked
-files modified and 9 files added. Use `git status --short` as the authoritative
-complete file list for this uncommitted patch.
+This targeted corrective patch modifies 19 tracked files: methodology/config
+contracts, P05/P10/P11 orchestration, measurement/L3/selection/evaluation/gate
+services, generated access/step catalogs, operational documentation and tests.
+Use `git status --short` as the authoritative complete file list.

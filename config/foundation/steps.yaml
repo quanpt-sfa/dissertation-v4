@@ -354,6 +354,7 @@ steps:
     - outer_fold
     reads:
     - measurement_selection_registry
+    - channel_measurement_selection
     - source_channel_matrices
     - anchor_capability
     - temporal_split_registry
@@ -402,6 +403,8 @@ steps:
     - development_oof_predictions
     - raw_outer_predictions
     - sealed_outcome_store
+    - source_channel_matrices
+    - channel_measurement_selection
     optional_reads: []
     writes:
     - outer_open_receipt

@@ -116,7 +116,7 @@ Required receipts: []
 
 Learner fitting and freeze
 
-Reads: ['measurement_selection_registry', 'source_channel_matrices', 'anchor_capability', 'temporal_split_registry', 'feature_panel', 'feature_registry', 'l0_l1_inputs', 'fold_aware_weights', 'weight_diagnostics', 'source_config_manifest', 'environment_observation']
+Reads: ['measurement_selection_registry', 'channel_measurement_selection', 'source_channel_matrices', 'anchor_capability', 'temporal_split_registry', 'feature_panel', 'feature_registry', 'l0_l1_inputs', 'fold_aware_weights', 'weight_diagnostics', 'source_config_manifest', 'environment_observation']
 
 Writes: ['model_artifacts', 'development_oof_predictions', 'raw_outer_predictions', 'model_freeze_receipt']
 
@@ -126,7 +126,7 @@ Required receipts: []
 
 Outer opening and evaluation
 
-Reads: ['mcse_report', 'model_freeze_receipt', 'model_artifacts', 'development_oof_predictions', 'raw_outer_predictions', 'sealed_outcome_store']
+Reads: ['mcse_report', 'model_freeze_receipt', 'model_artifacts', 'development_oof_predictions', 'raw_outer_predictions', 'sealed_outcome_store', 'source_channel_matrices', 'channel_measurement_selection']
 
 Writes: ['outer_open_receipt', 'calibration_outputs', 'evaluation_metrics', 'bootstrap_batches', 'utility_scenarios']
 

@@ -405,3 +405,43 @@ def measurement_target_frame(
     if not observed.empty and ((observed < 0).any() or (observed > 1).any()):
         raise ValueError(f"measurement={measurement_id}: target values must be in [0, 1]")
     return frame
+
+
+def fold_local_l3_target_frame(
+    *,
+    channel_selection: dict[str, Any],
+    outer_year: int,
+    columns: dict[str, str],
+) -> pd.DataFrame:
+    """Materialize only the development-only L3 posterior selected by P10."""
+    if channel_selection.get("l3_fit_scope") != "development_history_only":
+        raise ValueError("L3 Track B target requires a development-history-only P10 refit")
+    if channel_selection.get("outer_outcomes_accessed") is not False:
+        raise ValueError("L3 Track B target refuses selection with outer outcome access")
+    if channel_selection.get("l3_selected_fixed_pi") is None:
+        raise ValueError("L3 Track B target requires a selected fixed-pi scenario")
+    raw_rows = channel_selection.get("l3_target_rows")
+    if not isinstance(raw_rows, list) or not raw_rows:
+        raise ValueError("L3 Track B target requires nonempty fold-local posterior rows")
+    firm = columns[FIRM_ID]
+    year = columns[FISCAL_YEAR]
+    value = columns[TARGET_VALUE]
+    output: list[dict[str, object]] = []
+    for raw in cast(list[object], raw_rows):
+        if not isinstance(raw, dict):
+            raise ValueError("L3 target row must be an object")
+        row = cast(dict[str, Any], raw)
+        row_year = int(row[FISCAL_YEAR])
+        target = float(row[TARGET_VALUE])
+        if row_year >= outer_year:
+            raise ValueError("L3 Track B target contains an outer-or-future row")
+        if not 0 <= target <= 1:
+            raise ValueError("L3 Track B posterior target must be in [0, 1]")
+        output.append({firm: str(row[FIRM_ID]), year: row_year, value: target})
+    frame = pd.DataFrame(output, columns=[firm, year, value])
+    if frame.duplicated([firm, year]).any():
+        raise ValueError("L3 Track B target contains duplicate firm-year rows")
+    frame[firm] = frame[firm].astype("string")
+    frame[year] = frame[year].astype("int16")
+    frame[value] = frame[value].astype("float64")
+    return frame

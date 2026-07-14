@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from core.pipeline import load_run, mapping, sequence
-from core.semantic_keys import OUTER_FOLD
-from selection.service import select_measurement
+from core.rng import generator
+from core.semantic_keys import CHANNEL_ID, OUTER_FOLD
+from selection.service import fit_l3_fold_candidate, select_measurement
 
 
 def main() -> int:
@@ -53,11 +55,52 @@ def main() -> int:
         not isinstance(minimum_channels, int) or minimum_channels < 1
     ):
         raise ValueError("measurement.l2_missingness.minimum_observed_channels must be positive")
+    l3_fold_result: dict[str, Any] | None = None
+    if (
+        "L3_fixed_pi" in candidates
+        and capability.get("status") == "AVAILABLE"
+        and capability.get("pilot_executed") is True
+        and isinstance(minimum_channels, int)
+    ):
+        l3_model = mapping(measurement.get("l3_model"), "measurement.l3_model")
+        operational = mapping(l3_model.get("operational"), "measurement.l3_model.operational")
+        fixed_pi_grid = [
+            float(value) for value in sequence(operational.get("fixed_pi_grid"), "L3 fixed-pi grid")
+        ]
+        source_channels, accuracy_priors = _l3_bindings(
+            registry=loaded.registry,
+            priors_by_profile=mapping(
+                operational.get("accuracy_priors_by_profile"),
+                "measurement.l3_model.operational.accuracy_priors_by_profile",
+            ),
+        )
+        l3_fold_result = fit_l3_fold_candidate(
+            matrices=matrices,
+            outer_year=int(args.outer_fold),
+            source_channels=source_channels,
+            accuracy_priors=accuracy_priors,
+            fixed_pi_grid=fixed_pi_grid,
+            mcmc=mapping(operational.get("mcmc"), "L3 MCMC controls"),
+            minimum_observed_channels=minimum_channels,
+            robust_fraction=float(
+                mapping(
+                    mapping(loaded.registry.get("evaluation"), "evaluation").get("gate_common"),
+                    "evaluation.gate_common",
+                )["robust_scenario_fraction_min"]
+            ),
+            rng=generator(
+                loaded.protocol_hash,
+                "P10",
+                coordinates,
+                "l3_fold_local_channel_selection",
+            ),
+        )
     result = select_measurement(
         matrices=matrices,
         outer_year=int(args.outer_fold),
         candidates=candidates,
         l3_capability=capability,
+        l3_fold_result=l3_fold_result,
         minimum_observed_channels=minimum_channels,
     )
     loaded.context.write("measurement_candidate_results", result.candidates, coordinates)
@@ -67,6 +110,38 @@ def main() -> int:
         f"P10 status=PASS fold={args.outer_fold} selected={result.selection['selected_measurement']}"
     )
     return 0
+
+
+def _l3_bindings(
+    *,
+    registry: dict[str, object],
+    priors_by_profile: dict[str, Any],
+) -> tuple[dict[str, str], dict[str, dict[str, float]]]:
+    data_sources = mapping(registry.get("data_sources"), "data_sources")
+    source_registry = mapping(data_sources.get("source_registry"), "source_registry")
+    sources = mapping(source_registry.get("sources"), "source_registry.sources")
+    source_channels: dict[str, str] = {}
+    accuracy_priors: dict[str, dict[str, float]] = {}
+    for source_id, raw_source in sources.items():
+        source = mapping(raw_source, f"source={source_id}")
+        if source.get("role") != "evidence" or source.get("enabled") is not True:
+            continue
+        channel = source.get(CHANNEL_ID)
+        profile_id = source.get("profile_id")
+        if not isinstance(channel, str) or not isinstance(profile_id, str):
+            raise ValueError(f"source={source_id}: L3 channel and profile bindings required")
+        raw_prior: object = priors_by_profile.get(profile_id)
+        prior = mapping(raw_prior, f"L3 accuracy prior profile={profile_id}")
+        source_channels[source_id] = channel
+        parsed_prior: dict[str, float] = {}
+        for key, value in prior.items():
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise ValueError(f"profile={profile_id}: L3 prior values must be numeric")
+            parsed_prior[str(key)] = float(value)
+        accuracy_priors[source_id] = parsed_prior
+    if not source_channels:
+        raise ValueError("P10 L3 selection requires registered evidence sources")
+    return source_channels, accuracy_priors
 
 
 if __name__ == "__main__":
