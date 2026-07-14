@@ -2,7 +2,30 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+htmlcov/
 *.egg-info/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.ipynb_checkpoints/
+build/
+dist/
+*.log
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Runtime analysis products are local and reproducible from code + locked inputs.
+artifacts/
+outputs/
+logs/
 
 # Empirical inputs stay in this repo but never enter Git history.
 data/raw/**
