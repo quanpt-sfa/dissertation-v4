@@ -1,0 +1,12 @@
+basis,channel_pattern,eligible_count,mature_count,prospective_count
+observed_channel_count_distribution,0,6914,6719,195
+observed_channel_count_distribution,1,16445,14932,1513
+observed_channel_count_distribution,2,52,52,0
+observed_opportunity,NONE,5838,5717,121
+observed_opportunity,S1,1084,1010,74
+observed_opportunity,S1∩S2,11498,10398,1100
+observed_opportunity,S2,4991,4578,413
+observed_outcome,NONE,6914,6719,195
+observed_outcome,S2,16437,14924,1513
+observed_outcome,S2∩S3,52,52,0
+observed_outcome,S3,8,8,0
