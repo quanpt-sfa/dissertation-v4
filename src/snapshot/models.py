@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Literal, cast
@@ -12,7 +13,9 @@ AvailabilityDateRule = Literal["physical_column", "fiscal_year_plus_one_month_da
 RowAggregation = Literal["one_row_per_firm_year", "firm_year_presence"]
 EvidenceOutcomeMode = Literal["direct_outcome", "positive_indicator"]
 EvidenceAbsencePolicy = Literal["unknown"]
-DuplicateRepresentativeRule = Literal["identical_signature_then_source_event_id"]
+EvidenceProcessor = Literal["delayed_event", "audit_adjustment", "audit_opinion"]
+TemporalRole = Literal["annual_measurement_at_anchor", "delayed_verification"]
+EvidenceAvailabilityRule = Literal["common_annual_anchor", "actual_publish_date"]
 
 
 def _mapping(value: object, context: str) -> dict[str, Any]:
@@ -137,20 +140,43 @@ class PanelProfile:
 
 @dataclass(frozen=True)
 class EvidenceProfile:
-    outcome_mode: EvidenceOutcomeMode
+    processor: EvidenceProcessor
+    temporal_role: TemporalRole
+    availability_rule: EvidenceAvailabilityRule
+    explicit_negative_allowed: bool
+    outcome_mode: EvidenceOutcomeMode | None
     row_inclusion_semantic: str | None
     positive_semantic: str | None
     false_indicator_policy: EvidenceAbsencePolicy
     absence_policy: EvidenceAbsencePolicy
     opportunity_semantic: str | None
-    duplicate_representative_rule: DuplicateRepresentativeRule
+    duplicate_representative_rule: str
+    logical_sources: tuple[dict[str, object], ...]
+    raw_mapping: dict[str, object]
 
     @classmethod
     def from_mapping(cls, value: object, context: str) -> EvidenceProfile:
         raw = _mapping(value, context)
+        processor = raw.get("processor")
+        if processor not in {"delayed_event", "audit_adjustment", "audit_opinion"}:
+            raise ValueError(f"{context}.processor: unsupported {processor}")
+        temporal_role = raw.get("temporal_role")
+        if temporal_role not in {"annual_measurement_at_anchor", "delayed_verification"}:
+            raise ValueError(f"{context}.temporal_role: unsupported {temporal_role}")
+        availability_rule = raw.get("availability_rule")
+        if availability_rule not in {"common_annual_anchor", "actual_publish_date"}:
+            raise ValueError(f"{context}.availability_rule: unsupported {availability_rule}")
+        explicit_negative_allowed = raw.get("explicit_negative_allowed")
+        if not isinstance(explicit_negative_allowed, bool):
+            raise ValueError(f"{context}.explicit_negative_allowed: boolean required")
         outcome_mode = raw.get("outcome_mode")
-        if outcome_mode not in {"direct_outcome", "positive_indicator"}:
+        if processor == "delayed_event" and outcome_mode not in {
+            "direct_outcome",
+            "positive_indicator",
+        }:
             raise ValueError(f"{context}.outcome_mode: unsupported {outcome_mode}")
+        if processor != "delayed_event" and outcome_mode is not None:
+            raise ValueError(f"{context}.outcome_mode: only valid for delayed_event")
         row_inclusion = raw.get("row_inclusion_semantic")
         if row_inclusion is not None:
             row_inclusion = _string(row_inclusion, f"{context}.row_inclusion_semantic")
@@ -166,17 +192,115 @@ class EvidenceProfile:
         opportunity = raw.get("opportunity_semantic")
         if opportunity is not None:
             opportunity = _string(opportunity, f"{context}.opportunity_semantic")
-        duplicate_rule = raw.get("duplicate_representative_rule")
-        if duplicate_rule != "identical_signature_then_source_event_id":
+        duplicate_rule = _string(
+            raw.get("duplicate_representative_rule"),
+            f"{context}.duplicate_representative_rule",
+        )
+        expected_duplicate_rules = {
+            "delayed_event": "identical_signature_then_source_event_id",
+            "audit_adjustment": "fail_on_duplicate_status_record",
+            "audit_opinion": "identical_normalized_opinion_or_fail",
+        }
+        if duplicate_rule != expected_duplicate_rules[str(processor)]:
             raise ValueError(f"{context}.duplicate_representative_rule: unsupported rule")
+        logical_raw = raw.get("logical_sources")
+        if not isinstance(logical_raw, list) or not logical_raw:
+            raise ValueError(f"{context}.logical_sources: non-empty list required")
+        logical_sources: list[dict[str, object]] = []
+        seen: set[str] = set()
+        for index, value_raw in enumerate(cast(list[object], logical_raw)):
+            logical = _mapping(value_raw, f"{context}.logical_sources[{index}]")
+            source_id = _string(
+                logical.get("source_id"), f"{context}.logical_sources[{index}].source_id"
+            )
+            _string(
+                logical.get("endpoint_id"),
+                f"{context}.logical_sources[{index}].endpoint_id",
+            )
+            if source_id in seen:
+                raise ValueError(f"{context}.logical_sources: duplicate source_id={source_id}")
+            seen.add(source_id)
+            logical_sources.append(deepcopy(cast(dict[str, object], logical)))
+        if processor == "delayed_event":
+            if temporal_role != "delayed_verification":
+                raise ValueError(f"{context}: delayed_event requires delayed_verification")
+            if availability_rule != "actual_publish_date":
+                raise ValueError(f"{context}: delayed_event requires actual_publish_date")
+            if explicit_negative_allowed is not False:
+                raise ValueError(f"{context}: delayed positive-indicator source cannot allow false")
+        else:
+            if temporal_role != "annual_measurement_at_anchor":
+                raise ValueError(f"{context}: annual processor requires annual temporal role")
+            if availability_rule != "common_annual_anchor":
+                raise ValueError(f"{context}: annual processor requires common annual anchor")
+            if explicit_negative_allowed is not True:
+                raise ValueError(f"{context}: annual source must allow source-specific false")
+        if processor == "audit_adjustment":
+            adjustment = _mapping(raw.get("audit_adjustment"), f"{context}.audit_adjustment")
+            for name in ("unaudited_status", "audited_status", "expected_unit", "expected_scope"):
+                _string(adjustment.get(name), f"{context}.audit_adjustment.{name}")
+            if adjustment.get("denominator") != "absolute_post_audit_value":
+                raise ValueError(f"{context}.audit_adjustment.denominator: unsupported")
+            floor = adjustment.get("minimum_absolute_denominator")
+            if floor is not None and (
+                not isinstance(floor, (int, float)) or isinstance(floor, bool) or float(floor) <= 0
+            ):
+                raise ValueError(
+                    f"{context}.audit_adjustment.minimum_absolute_denominator: positive or null"
+                )
+            for index, logical in enumerate(logical_sources):
+                for name in ("canonical_item", "statement_family"):
+                    _string(logical.get(name), f"{context}.logical_sources[{index}].{name}")
+                threshold = logical.get("materiality_threshold")
+                if threshold is not None and (
+                    not isinstance(threshold, (int, float))
+                    or isinstance(threshold, bool)
+                    or not 0 <= float(threshold)
+                ):
+                    raise ValueError(
+                        f"{context}.logical_sources[{index}].materiality_threshold: "
+                        "nonnegative or null"
+                    )
+        if processor == "audit_opinion":
+            opinion = _mapping(raw.get("audit_opinion"), f"{context}.audit_opinion")
+            for name in ("indicator_value", "period_type", "statement_scope", "audited_status"):
+                _string(opinion.get(name), f"{context}.audit_opinion.{name}")
+            raw_taxonomy = _mapping(
+                opinion.get("raw_to_normalized"), f"{context}.audit_opinion.raw_to_normalized"
+            )
+            if not raw_taxonomy or not all(
+                key.strip() and isinstance(item, str) and item.strip()
+                for key, item in raw_taxonomy.items()
+            ):
+                raise ValueError(f"{context}.audit_opinion.raw_to_normalized: strings required")
+            positive = set(
+                _string_list(
+                    opinion.get("positive_categories"),
+                    f"{context}.audit_opinion.positive_categories",
+                )
+            )
+            negative = set(
+                _string_list(
+                    opinion.get("explicit_negative_categories"),
+                    f"{context}.audit_opinion.explicit_negative_categories",
+                )
+            )
+            if positive & negative:
+                raise ValueError(f"{context}.audit_opinion: positive and negative overlap")
         return cls(
-            outcome_mode=cast(EvidenceOutcomeMode, outcome_mode),
+            processor=cast(EvidenceProcessor, processor),
+            temporal_role=temporal_role,
+            availability_rule=availability_rule,
+            explicit_negative_allowed=explicit_negative_allowed,
+            outcome_mode=cast(EvidenceOutcomeMode | None, outcome_mode),
             row_inclusion_semantic=row_inclusion,
             positive_semantic=positive_semantic,
             false_indicator_policy="unknown",
             absence_policy="unknown",
             opportunity_semantic=opportunity,
-            duplicate_representative_rule="identical_signature_then_source_event_id",
+            duplicate_representative_rule=duplicate_rule,
+            logical_sources=tuple(logical_sources),
+            raw_mapping=deepcopy(cast(dict[str, object], raw)),
         )
 
 
@@ -250,7 +374,8 @@ class SourceProfile:
             ):
                 raise ValueError(f"profile={profile_id}: row inclusion semantic is not registered")
             if (
-                evidence_mapping.opportunity_semantic is not None
+                evidence_mapping.processor == "delayed_event"
+                and evidence_mapping.opportunity_semantic is not None
                 and evidence_mapping.opportunity_semantic not in semantics
             ):
                 raise ValueError(f"profile={profile_id}: opportunity semantic is not registered")

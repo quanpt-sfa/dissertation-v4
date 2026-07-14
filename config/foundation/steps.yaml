@@ -91,6 +91,7 @@ steps:
     - evidence_ledger
     - availability_registry
     - lag_decomposition
+    - annual_evidence_audit
     outer_access: sealed
     known_case_access: none
     checkpoint_role: none

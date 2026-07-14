@@ -6,12 +6,26 @@ import math
 from collections.abc import Mapping
 
 
-def aggregate_l1(source_outcomes: Mapping[str, bool | None]) -> bool | None:
-    """Union sources while preserving unknown coverage rather than coding it as zero."""
+def aggregate_l1(
+    source_outcomes: Mapping[str, bool | None],
+    source_opportunities: Mapping[str, bool | None] | None = None,
+) -> bool | None:
+    """Union sources; a negative requires observed opportunity for every source."""
     values = list(source_outcomes.values())
     if any(value is True for value in values):
         return True
-    if values and all(value is False for value in values):
+    if source_opportunities is None:
+        if values and all(value is False for value in values):
+            return False
+        return None
+    if set(source_opportunities) != set(source_outcomes):
+        raise ValueError("L1 opportunities must be registered for every source")
+    opportunities = list(source_opportunities.values())
+    if (
+        values
+        and all(value is False for value in values)
+        and all(value is True for value in opportunities)
+    ):
         return False
     return None
 

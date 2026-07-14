@@ -44,6 +44,16 @@ def main() -> int:
         risk_sets=risk_sets,
         feature_definitions=cast(list[dict[str, object]], definitions),
         columns=physical_columns(loaded.registry),
+        blocked_label_semantics=[
+            str(value)
+            for value in sequence(
+                mapping(
+                    features.get("label_derived_feature_firewall"),
+                    "features.label_derived_feature_firewall",
+                ).get("same_firm_year_blocked_semantics"),
+                "features.label_derived_feature_firewall.same_firm_year_blocked_semantics",
+            )
+        ],
     )
     if args.validate_only:
         return 0

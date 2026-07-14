@@ -117,9 +117,26 @@ def test_nullable_evidence_outcome_matches_dataframe_contract(tmp_path: Path) ->
             "firm_master_id": pd.Series(["A", "B"], dtype="string"),
             "fiscal_year": pd.Series([2021, 2021], dtype="int16"),
             "source_id": pd.Series(["sanction", "sanction"], dtype="string"),
+            "source_profile_id": pd.Series(["sanction", "sanction"], dtype="string"),
             "channel_id": pd.Series(["S3", "S3"], dtype="string"),
+            "evidence_record_id": pd.Series(["event-a", "event-b"], dtype="string"),
+            "evidence_record_kind": pd.Series(["delayed_event", "delayed_event"], dtype="string"),
             "event_id": pd.Series(["event-a", "event-b"], dtype="string"),
             "event_cluster_id": pd.Series(["cluster-a", "cluster-b"], dtype="string"),
+            "temporal_role": pd.Series(
+                ["delayed_verification", "delayed_verification"], dtype="string"
+            ),
+            "availability_basis": pd.Series(
+                ["actual_publish_date", "actual_publish_date"], dtype="string"
+            ),
+            "source_opportunity": pd.Series([pd.NA, pd.NA], dtype="boolean"),
+            "opportunity_basis": pd.Series(
+                ["unknown_no_opportunity_indicator", "unknown_no_opportunity_indicator"],
+                dtype="string",
+            ),
+            "evidence_value": pd.Series([float("nan"), float("nan")], dtype="float64"),
+            "evidence_category": pd.Series([pd.NA, pd.NA], dtype="string"),
+            "source_record_refs": pd.Series([pd.NA, pd.NA], dtype="string"),
             "period_link_source": pd.Series(["affected_year", pd.NA], dtype="string"),
             "period_link_confidence": pd.Series(["high", pd.NA], dtype="string"),
             "outcome_basis": pd.Series(

@@ -48,11 +48,12 @@ def build_observability_registry(
                 "opportunity_semantic": opportunity_semantic,
                 "source_opportunity_coverage_rate": None,
                 "source_opportunity_coverage_status": (
-                    "UNAVAILABLE_NOT_MATERIALIZED"
+                    "AVAILABLE_MATERIALIZED"
                     if isinstance(opportunity_semantic, str)
                     else "UNKNOWN_NO_OPPORTUNITY_INDICATOR"
                 ),
                 "source_opportunity_observed_count": 0,
+                "source_opportunity_not_observed_count": 0,
                 "source_opportunity_unknown_count": eligible_count,
             }
         )
@@ -89,16 +90,39 @@ def build_observability_registry(
             for source_id, value in cast(dict[str, Any], source_outcomes).items():
                 if source_id in sources:
                     _count_outcome(sources[source_id], value, mature=is_mature)
+        source_opportunities = row.get("source_opportunities")
+        if isinstance(source_opportunities, dict):
+            for source_id, value in cast(dict[str, Any], source_opportunities).items():
+                if source_id in sources:
+                    _count_opportunity(sources[source_id], value)
         channel_outcomes = row.get("channel_outcomes")
         if isinstance(channel_outcomes, dict):
             for channel_id, value in cast(dict[str, Any], channel_outcomes).items():
                 if channel_id in channels:
                     _count_outcome(channels[channel_id], value, mature=is_mature)
+        channel_opportunities = row.get("channel_opportunities")
+        if isinstance(channel_opportunities, dict):
+            for channel_id, value in cast(dict[str, Any], channel_opportunities).items():
+                if channel_id in channels:
+                    _count_opportunity(channels[channel_id], value)
     for entry in [*sources.values(), *channels.values()]:
         _finalize_entry(entry)
-        entry["source_opportunity_coverage_rate"] = None
-        entry["coverage_rate"] = None
-        entry["coverage_status"] = "NOT_ESTIMABLE_FROM_EVENT_ABSENCE"
+        configured = (
+            isinstance(entry.get("opportunity_semantic"), str)
+            or int(entry.get("source_opportunity_observed_count", 0))
+            + int(entry.get("source_opportunity_not_observed_count", 0))
+            > 0
+        )
+        eligible = int(entry["eligible_count"])
+        if configured:
+            observed = int(entry["source_opportunity_observed_count"])
+            entry["source_opportunity_coverage_rate"] = observed / eligible if eligible else None
+            entry["coverage_rate"] = entry["source_opportunity_coverage_rate"]
+            entry["coverage_status"] = "AVAILABLE_MATERIALIZED"
+        else:
+            entry["source_opportunity_coverage_rate"] = None
+            entry["coverage_rate"] = None
+            entry["coverage_status"] = "NOT_ESTIMABLE_FROM_EVENT_ABSENCE"
     for entry in channels.values():
         source_ids = cast(list[str], entry["source_ids"])
         configured = any(
@@ -106,10 +130,9 @@ def build_observability_registry(
             for source_id in source_ids
         )
         entry["source_opportunity_coverage_status"] = (
-            "UNAVAILABLE_NOT_MATERIALIZED" if configured else "UNKNOWN_NO_OPPORTUNITY_INDICATOR"
+            "AVAILABLE_MATERIALIZED" if configured else "UNKNOWN_NO_OPPORTUNITY_INDICATOR"
         )
-        entry["source_opportunity_observed_count"] = 0
-        entry["source_opportunity_unknown_count"] = eligible_count
+    overlaps = _channel_overlap(rows, sorted(channels))
     return {
         "sources": sources,
         "channels": channels,
@@ -119,6 +142,7 @@ def build_observability_registry(
         "fit_scope": "descriptive_full_sample",
         "analytical_use": "prohibited",
         "analytical_weights_created": False,
+        "channel_overlap": overlaps,
     }
 
 
@@ -135,6 +159,9 @@ def _empty_observability_entry(
         "eligible_count": eligible_count,
         "mature_count": mature_count,
         "prospective_count": prospective_count,
+        "source_opportunity_observed_count": 0,
+        "source_opportunity_not_observed_count": 0,
+        "source_opportunity_unknown_count": eligible_count,
     }
 
 
@@ -150,6 +177,23 @@ def _count_outcome(entry: dict[str, Any], value: object, *, mature: bool) -> Non
     entry[count_key] = int(entry[count_key]) + 1
 
 
+def _count_opportunity(entry: dict[str, Any], value: object) -> None:
+    if value is True:
+        entry["source_opportunity_observed_count"] = (
+            int(entry["source_opportunity_observed_count"]) + 1
+        )
+    elif value is False:
+        entry["source_opportunity_not_observed_count"] = (
+            int(entry["source_opportunity_not_observed_count"]) + 1
+        )
+    else:
+        return
+    eligible = int(entry["eligible_count"])
+    observed = int(entry["source_opportunity_observed_count"])
+    not_observed = int(entry["source_opportunity_not_observed_count"])
+    entry["source_opportunity_unknown_count"] = eligible - observed - not_observed
+
+
 def _finalize_entry(entry: dict[str, Any]) -> None:
     eligible = int(entry["eligible_count"])
     mature = int(entry["mature_count"])
@@ -157,16 +201,54 @@ def _finalize_entry(entry: dict[str, Any]) -> None:
     mature_observed = int(entry["mature_observed_count"])
     entry["unknown_count"] = eligible - observed
     entry["mature_unknown_count"] = mature - mature_observed
-    entry["event_incidence_fraction"] = (
+    entry["positive_incidence_fraction"] = (
         int(entry["positive_count"]) / eligible if eligible else None
     )
+    entry["event_incidence_fraction"] = entry["positive_incidence_fraction"]
     entry["observed_outcome_fraction"] = observed / eligible if eligible else None
     entry["mature_cohort_observed_fraction"] = mature_observed / mature if mature else None
+
+
+def _channel_overlap(rows: list[dict[str, Any]], channel_ids: list[str]) -> list[dict[str, object]]:
+    counts: dict[tuple[str, str], dict[str, int]] = {}
+    for row in rows:
+        if row.get(ELIGIBLE, True) is not True:
+            continue
+        outcomes_raw = row.get("channel_outcomes")
+        opportunities_raw = row.get("channel_opportunities")
+        outcomes = cast(dict[str, Any], outcomes_raw) if isinstance(outcomes_raw, dict) else {}
+        opportunities = (
+            cast(dict[str, Any], opportunities_raw) if isinstance(opportunities_raw, dict) else {}
+        )
+        for basis, observed_channels in (
+            (
+                "observed_outcome",
+                tuple(channel for channel in channel_ids if outcomes.get(channel) is not None),
+            ),
+            (
+                "observed_opportunity",
+                tuple(channel for channel in channel_ids if opportunities.get(channel) is True),
+            ),
+        ):
+            pattern = "∩".join(observed_channels) if observed_channels else "NONE"
+            entry = counts.setdefault(
+                (basis, pattern),
+                {"eligible_count": 0, "mature_count": 0, "prospective_count": 0},
+            )
+            entry["eligible_count"] += 1
+            if row.get(MATURE, True) is True:
+                entry["mature_count"] += 1
+            else:
+                entry["prospective_count"] += 1
+    return [
+        {"basis": basis, "channel_pattern": pattern, **counts[(basis, pattern)]}
+        for basis, pattern in sorted(counts)
+    ]
 
 
 def _verification_classification(status: str) -> str:
     if status in {"observed_verification", "high_confirmation"}:
         return "observed_verification"
-    if status in {"observed", "derived_from_audited_filings"}:
+    if status in {"observed", "derived_from_audited_filings", "observed_opportunity_only"}:
         return "observed_opportunity_only"
     return "unknown"

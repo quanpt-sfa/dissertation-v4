@@ -15,6 +15,46 @@ columns:
     physical_name: availability_date
     dtype: datetime64[ns]
     semantic_role: availability_time
+  evidence_record_id:
+    physical_name: evidence_record_id
+    dtype: string
+    semantic_role: evidence_record_key
+  evidence_record_kind:
+    physical_name: evidence_record_kind
+    dtype: string
+    semantic_role: evidence_record_granularity
+  source_profile_id:
+    physical_name: source_profile_id
+    dtype: string
+    semantic_role: physical_source_profile_key
+  temporal_role:
+    physical_name: temporal_role
+    dtype: string
+    semantic_role: evidence_timing_semantics
+  availability_basis:
+    physical_name: availability_basis
+    dtype: string
+    semantic_role: evidence_availability_rule
+  source_opportunity:
+    physical_name: source_opportunity
+    dtype: bool
+    semantic_role: source_opportunity_indicator
+  opportunity_basis:
+    physical_name: opportunity_basis
+    dtype: string
+    semantic_role: source_opportunity_provenance
+  evidence_value:
+    physical_name: evidence_value
+    dtype: float64
+    semantic_role: source_measurement_value
+  evidence_category:
+    physical_name: evidence_category
+    dtype: string
+    semantic_role: normalized_source_category
+  source_record_refs:
+    physical_name: source_record_refs
+    dtype: string
+    semantic_role: raw_source_record_provenance
   event_id:
     physical_name: event_id
     dtype: string

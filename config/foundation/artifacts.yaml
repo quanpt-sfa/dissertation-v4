@@ -220,6 +220,16 @@ artifacts:
     immutability: immutable
     aggregation_behavior: singleton
     checkpoint_role: none
+  annual_evidence_audit:
+    producer_step: P03
+    path_template: P03/annual_evidence_audit.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
   risk_sets:
     producer_step: P04
     path_template: P04/risk_sets.parquet

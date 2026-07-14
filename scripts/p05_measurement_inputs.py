@@ -11,9 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
+from core.evidence_registry import logical_evidence_sources
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.rng import generator
-from core.semantic_keys import CHANNEL_ID, FISCAL_YEAR, MATURE
+from core.semantic_keys import FISCAL_YEAR, MATURE
 from labels.latent_class import (
     attach_l3_pilot_posterior,
     finalize_l3_pilot_posteriors,
@@ -46,7 +47,13 @@ def main() -> int:
     evidence = loaded.context.read("evidence_ledger", {})
     if not isinstance(risk_sets, pd.DataFrame) or not isinstance(evidence, pd.DataFrame):
         raise ValueError("P05 input artifacts must be DataFrames")
-    expected_sources, anchor_sources, source_profiles = _evidence_sources(loaded.registry)
+    (
+        expected_sources,
+        anchor_sources,
+        source_profiles,
+        source_temporal_roles,
+        explicit_negative_allowed,
+    ) = _evidence_sources(loaded.registry)
     study = mapping(loaded.registry.get("study"), "study")
     horizons = mapping(study.get("horizons_months"), "study.horizons_months")
     horizon = horizons.get("primary")
@@ -70,6 +77,8 @@ def main() -> int:
         insufficient_channels_reason="INSUFFICIENT_CHANNELS",
         anchor_source_ids=anchor_sources,
         source_profiles=source_profiles,
+        source_temporal_roles=source_temporal_roles,
+        explicit_negative_allowed=explicit_negative_allowed,
         l2_scoring=mapping(
             mapping(loaded.registry.get("measurement"), "measurement").get("l2_scoring"),
             "measurement.l2_scoring",
@@ -139,29 +148,23 @@ def main() -> int:
 
 def _evidence_sources(
     registry: dict[str, object],
-) -> tuple[dict[str, str], list[str], dict[str, str]]:
-    data_sources = mapping(registry.get("data_sources"), "data_sources")
-    source_registry = mapping(data_sources.get("source_registry"), "source_registry")
-    sources = mapping(source_registry.get("sources"), "source_registry.sources")
+) -> tuple[dict[str, str], list[str], dict[str, str], dict[str, str], dict[str, bool]]:
+    sources = logical_evidence_sources(registry)
     result: dict[str, str] = {}
     anchors: list[str] = []
     profiles: dict[str, str] = {}
-    for source_id, raw in sources.items():
-        source = mapping(raw, f"source={source_id}")
-        if source.get("role") == "evidence" and source.get("enabled") is True:
-            channel = source.get(CHANNEL_ID)
-            if not isinstance(channel, str):
-                raise ValueError(f"source={source_id}: channel_id required")
-            result[source_id] = channel
-            profile_id = source.get("profile_id")
-            if not isinstance(profile_id, str):
-                raise ValueError(f"source={source_id}: profile_id required for L3 prior binding")
-            profiles[source_id] = profile_id
-            if source.get("verification_status") == "high_confirmation":
-                anchors.append(source_id)
+    temporal_roles: dict[str, str] = {}
+    negative_policy: dict[str, bool] = {}
+    for source_id, source in sources.items():
+        result[source_id] = source.channel_id
+        profiles[source_id] = source.profile_id
+        temporal_roles[source_id] = source.temporal_role
+        negative_policy[source_id] = source.explicit_negative_allowed
+        if source.verification_status == "high_confirmation":
+            anchors.append(source_id)
     if not result:
         raise ValueError("P05 requires registered evidence sources")
-    return result, anchors, profiles
+    return result, anchors, profiles, temporal_roles, negative_policy
 
 
 def _execute_l3_pilot(

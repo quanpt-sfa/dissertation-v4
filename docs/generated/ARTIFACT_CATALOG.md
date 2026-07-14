@@ -7,6 +7,7 @@ Source: config/pipeline.yaml
 | ablation_results | P13 | json_array | `P13/ablations.json` |
 | access_matrix | P00 | access_matrix_schema | `P00/access_matrix.json` |
 | anchor_capability | P05 | json_object | `P05/anchor_capability.json` |
+| annual_evidence_audit | P03 | json_object | `P03/annual_evidence_audit.json` |
 | artifact_catalog | P00 | artifact_catalog_schema | `P00/artifact_catalog.json` |
 | availability_registry | P03 | json_array | `P03/availability_registry.json` |
 | bootstrap_batches | P12 | json_array | `P12/bootstrap/{outer_fold}.json` |

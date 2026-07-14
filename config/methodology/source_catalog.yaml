@@ -102,6 +102,10 @@ source_catalog:
       key_semantics: [event_id]
       date_semantics: [availability_date]
       evidence_mapping:
+        processor: delayed_event
+        temporal_role: delayed_verification
+        availability_rule: actual_publish_date
+        explicit_negative_allowed: false
         outcome_mode: positive_indicator
         row_inclusion_semantic: row_inclusion
         positive_semantic: hard_positive
@@ -109,6 +113,9 @@ source_catalog:
         absence_policy: unknown
         opportunity_semantic: null
         duplicate_representative_rule: identical_signature_then_source_event_id
+        logical_sources:
+        - source_id: S3_sanction_evidence
+          endpoint_id: sanction_evidence
       panel_mapping:
         enabled: false
 
@@ -128,8 +135,8 @@ source_catalog:
       source_type: financial_statement_core_long
       source_agency: normalized_bctc_exports
       original_unit: firm-year-audit-status-item
-      role: predictor
-      verification_status: observed_pre_and_post_audit
+      role: evidence
+      verification_status: observed_opportunity_only
       coverage_dimensions: [fiscal_year, audit_status, statement_family, canonical_item]
       data_risks: [duplicate_item, scope_conflict, schema_drift, missing_pair]
       semantic_fields:
@@ -140,9 +147,38 @@ source_catalog:
         statement_scope: [scope]
         item_id: [canonical_item]
         value: [value_numeric]
+        unit: [unit]
+        source_file: [source_file]
+        source_row: [source_row]
       required_semantic_fields: [firm_id, fiscal_year, availability_date]
       key_semantics: []
       date_semantics: []
+      evidence_mapping:
+        processor: audit_adjustment
+        temporal_role: annual_measurement_at_anchor
+        availability_rule: common_annual_anchor
+        explicit_negative_allowed: true
+        absence_policy: unknown
+        opportunity_semantic: derived_matched_pair
+        duplicate_representative_rule: fail_on_duplicate_status_record
+        audit_adjustment:
+          unaudited_status: unaudited
+          audited_status: audited
+          expected_unit: VND
+          expected_scope: consolidated
+          denominator: absolute_post_audit_value
+          minimum_absolute_denominator: null
+        logical_sources:
+        - source_id: S1_profit_adjustment
+          endpoint_id: profit_adjustment
+          canonical_item: profit_after_tax
+          statement_family: income_statement
+          materiality_threshold: null
+        - source_id: S1_revenue_adjustment
+          endpoint_id: revenue_adjustment
+          canonical_item: net_revenue
+          statement_family: income_statement
+          materiality_threshold: null
       panel_mapping:
         enabled: true
         core_predictor: true
@@ -167,8 +203,8 @@ source_catalog:
       source_type: audit_opinion_and_firm
       source_agency: normalized_bctc_audit_exports
       original_unit: firm-year-audit-indicator
-      role: auxiliary
-      verification_status: observed_with_missingness
+      role: evidence
+      verification_status: observed_opportunity_only
       coverage_dimensions: [year, audit_indicator, statement_scope]
       data_risks: [missing_audit_firm, duplicate_indicator, opinion_normalization]
       semantic_fields:
@@ -177,9 +213,38 @@ source_catalog:
         audit_indicator: [audit_indicator]
         audit_opinion: [audit_opinion_raw]
         audit_firm: [audit_firm_raw]
+        period_type: [period_type]
+        statement_scope: [statement_scope]
+        audit_status: [audit_status]
+        source_file: [source_file]
+        source_column: [source_column]
       required_semantic_fields: [firm_id, fiscal_year, audit_indicator]
       key_semantics: []
       date_semantics: []
+      evidence_mapping:
+        processor: audit_opinion
+        temporal_role: annual_measurement_at_anchor
+        availability_rule: common_annual_anchor
+        explicit_negative_allowed: true
+        absence_policy: unknown
+        opportunity_semantic: derived_valid_audit_report
+        duplicate_representative_rule: identical_normalized_opinion_or_fail
+        audit_opinion:
+          indicator_value: audit_opinion
+          period_type: annual
+          statement_scope: Hợp nhất
+          audited_status: audited
+          raw_to_normalized:
+            Chấp nhận toàn phần: clean
+            Ý kiến ngoại trừ: qualified
+            Từ chối ra ý kiến: disclaimer
+            Ý kiến trái ngược: adverse
+          positive_categories: [qualified, disclaimer, adverse]
+          explicit_negative_categories: [clean]
+          pending_categories: [warning, emphasis_of_matter, other_matter]
+        logical_sources:
+        - source_id: S2_audit_opinion
+          endpoint_id: non_clean_audit_opinion
       panel_mapping:
         enabled: false
 

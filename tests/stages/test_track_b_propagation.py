@@ -130,6 +130,7 @@ def test_l2_quality_delay_formula_is_operational_and_unlocked_formula_is_pending
             columns["channel_id"]: pd.Series(["c1", "c2"], dtype="string"),
             columns["availability_date"]: pd.to_datetime(["2021-04-15", "2021-04-30"]),
             columns["outcome"]: pd.Series([True, False], dtype="boolean"),
+            columns["source_opportunity"]: pd.Series([True, True], dtype="boolean"),
         }
     )
 

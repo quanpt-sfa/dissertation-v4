@@ -97,7 +97,8 @@ Source: config/pipeline.yaml
     "writes": [
       "evidence_ledger",
       "availability_registry",
-      "lag_decomposition"
+      "lag_decomposition",
+      "annual_evidence_audit"
     ]
   },
   "P04": {

@@ -19,8 +19,10 @@ from core.semantic_keys import (
     OUTER_FOLD,
     PREDICTION_TIME,
     SOURCE_ID,
+    SOURCE_OPPORTUNITY,
     TARGET_ID,
     TARGET_VALUE,
+    TEMPORAL_ROLE,
 )
 from labels.service import aggregate_l1, evidence_score_l2
 
@@ -65,6 +67,8 @@ def build_measurement_inputs(
     insufficient_channels_reason: str,
     anchor_source_ids: list[str],
     source_profiles: dict[str, str] | None = None,
+    source_temporal_roles: dict[str, str] | None = None,
+    explicit_negative_allowed: dict[str, bool] | None = None,
     l2_scoring: dict[str, Any] | None = None,
 ) -> MeasurementResult:
     firm = columns[FIRM_ID]
@@ -76,6 +80,8 @@ def build_measurement_inputs(
     channel = columns[CHANNEL_ID]
     availability = columns[AVAILABILITY_DATE]
     outcome = columns[OUTCOME]
+    temporal = columns.get(TEMPORAL_ROLE, TEMPORAL_ROLE)
+    opportunity = columns.get(SOURCE_OPPORTUNITY, SOURCE_OPPORTUNITY)
     required_risk = {firm, year, prediction, mature, eligible}
     required_evidence = {firm, year, source, channel, availability, outcome}
     if not required_risk.issubset(risk_sets.columns):
@@ -92,6 +98,16 @@ def build_measurement_inputs(
     matrix_rows: list[dict[str, object]] = []
     expected_source_ids = sorted(expected_sources)
     expected_channels = sorted(set(expected_sources.values()))
+    temporal_roles = source_temporal_roles or {
+        source_id: "delayed_verification" for source_id in expected_source_ids
+    }
+    negative_policy = explicit_negative_allowed or {
+        source_id: True for source_id in expected_source_ids
+    }
+    if set(temporal_roles) != set(expected_source_ids):
+        raise ValueError("P05 temporal roles must cover every logical source")
+    if set(negative_policy) != set(expected_source_ids):
+        raise ValueError("P05 explicit-negative policy must cover every logical source")
     l2_configuration = _l2_configuration(
         expected_source_ids=expected_source_ids,
         source_profiles=source_profiles or {},
@@ -105,21 +121,55 @@ def build_measurement_inputs(
         source_events: dict[str, list[tuple[bool | None, int]]] = {
             item: [] for item in expected_source_ids
         }
+        source_opportunity_values: dict[str, list[bool | None]] = {
+            item: [] for item in expected_source_ids
+        }
         observed: dict[str, bool | None] = {item: None for item in expected_source_ids}
+        observed_opportunities: dict[str, bool | None] = {
+            item: None for item in expected_source_ids
+        }
         observed_lag_days: dict[str, int | None] = {item: None for item in expected_source_ids}
         for event in evidence_by_key.get(key, []):
             source_id = str(event[source])
             if source_id not in source_events:
                 raise ValueError(f"P05 evidence source is not registered: {source_id}")
             event_time = pd.Timestamp(cast(Any, event[availability]))
-            if event_time <= prediction_time or event_time > horizon_end:
-                continue
+            row_temporal_role = str(event.get(temporal, temporal_roles[source_id]))
+            if row_temporal_role != temporal_roles[source_id]:
+                raise ValueError(f"source={source_id}: evidence temporal role drift")
+            if row_temporal_role == "annual_measurement_at_anchor":
+                if event_time != prediction_time:
+                    raise ValueError(
+                        f"source={source_id}: annual evidence must be available at anchor"
+                    )
+                lag_days = 0
+            elif row_temporal_role == "delayed_verification":
+                if event_time <= prediction_time or event_time > horizon_end:
+                    continue
+                lag_days = int((event_time - prediction_time).days)
+            else:
+                raise ValueError(f"source={source_id}: unsupported temporal role")
             value = event[outcome]
             parsed = None if pd.isna(cast(Any, value)) else bool(value)
-            source_events[source_id].append((parsed, int((event_time - prediction_time).days)))
+            if parsed is False and negative_policy[source_id] is not True:
+                raise ValueError(f"source={source_id}: explicit negative is not allowed")
+            source_events[source_id].append((parsed, lag_days))
+            raw_opportunity = event.get(opportunity)
+            source_opportunity_values[source_id].append(
+                None
+                if raw_opportunity is None or pd.isna(cast(Any, raw_opportunity))
+                else bool(raw_opportunity)
+            )
         for source_id, events in source_events.items():
             values = {str(index): value for index, (value, _) in enumerate(events)}
-            aggregate = aggregate_l1(values)
+            opportunity_values = source_opportunity_values[source_id]
+            observed_opportunities[source_id] = _aggregate_opportunity(opportunity_values)
+            aggregate = aggregate_l1(
+                values,
+                {str(index): opportunity_values[index] for index in range(len(opportunity_values))}
+                if opportunity_values
+                else None,
+            )
             observed[source_id] = aggregate
             if aggregate is not None:
                 observed_lag_days[source_id] = min(
@@ -131,20 +181,32 @@ def build_measurement_inputs(
                     firm: key[0],
                     year: key[1],
                     columns[TARGET_ID]: f"L0:{source_id}",
-                    outcome: observed[source_id] if bool(risk[mature]) else None,
+                    outcome: observed[source_id]
+                    if temporal_roles[source_id] == "annual_measurement_at_anchor"
+                    or bool(risk[mature])
+                    else None,
                 }
             )
-        l1 = aggregate_l1(observed) if bool(risk[mature]) and bool(risk[eligible]) else None
+        l1 = (
+            aggregate_l1(observed, observed_opportunities)
+            if bool(risk[mature]) and bool(risk[eligible])
+            else None
+        )
         input_rows.append({firm: key[0], year: key[1], columns[TARGET_ID]: "L1", outcome: l1})
         channel_values: dict[str, bool | None] = {item: None for item in expected_channels}
+        channel_opportunities: dict[str, bool | None] = {item: None for item in expected_channels}
         for channel_id in expected_channels:
-            values = [
-                value
-                for source_id, value in observed.items()
+            channel_source_ids = [
+                source_id
+                for source_id in expected_source_ids
                 if expected_sources[source_id] == channel_id
             ]
+            values = [observed[source_id] for source_id in channel_source_ids]
+            opportunities = [observed_opportunities[source_id] for source_id in channel_source_ids]
+            channel_opportunities[channel_id] = _aggregate_opportunity(opportunities)
             channel_values[channel_id] = aggregate_l1(
-                {str(index): value for index, value in enumerate(values)}
+                {str(index): value for index, value in enumerate(values)},
+                {str(index): value for index, value in enumerate(opportunities)},
             )
         channel_scores = _l2_channel_scores(
             source_outcomes=observed,
@@ -160,11 +222,27 @@ def build_measurement_inputs(
                 ELIGIBLE: bool(risk[eligible]),
                 MATURE: bool(risk[mature]),
                 "source_outcomes": observed,
+                "source_opportunities": observed_opportunities,
                 "channel_outcomes": channel_values,
+                "channel_opportunities": channel_opportunities,
                 "channel_evidence_scores": channel_scores,
                 "observed_source_count": sum(value is not None for value in observed.values()),
                 "observed_channel_count": sum(
                     value is not None for value in channel_values.values()
+                ),
+                "positive_source_count": sum(value is True for value in observed.values()),
+                "explicit_negative_source_count": sum(
+                    value is False for value in observed.values()
+                ),
+                "unknown_source_count": sum(value is None for value in observed.values()),
+                "source_opportunity_count": sum(
+                    value is True for value in observed_opportunities.values()
+                ),
+                "source_opportunity_not_observed_count": sum(
+                    value is False for value in observed_opportunities.values()
+                ),
+                "source_opportunity_unknown_count": sum(
+                    value is None for value in observed_opportunities.values()
                 ),
                 "l1": l1,
                 "l2_score": evidence_score_l2(channel_scores)
@@ -187,7 +265,15 @@ def build_measurement_inputs(
         sealed[firm] = sealed[firm].astype("string")
         sealed[year] = sealed[year].astype("int16")
         sealed[outcome] = sealed[outcome].astype(bool)
-    channel_count = len(expected_channels)
+    valid_channels = sorted(
+        {
+            channel_id
+            for row in matrix_rows
+            for channel_id, value in cast(dict[str, bool | None], row["channel_outcomes"]).items()
+            if value is not None
+        }
+    )
+    channel_count = len(valid_channels)
     capability: dict[str, Any] = {
         "status": pending_status if channel_count >= 2 else unavailable_status,
         "pilot_executed": False,
@@ -195,11 +281,15 @@ def build_measurement_inputs(
         "reason": None if channel_count >= 2 else insufficient_channels_reason,
         "gate1_candidate": "L3_fixed_pi" if channel_count >= 2 else None,
         "hierarchical_pi_role": "sensitivity_only",
+        "configured_channels": expected_channels,
+        "valid_channels": valid_channels,
     }
     variables: list[dict[str, object]] = [
         {
             SOURCE_ID: source_id,
             CHANNEL_ID: expected_sources[source_id],
+            TEMPORAL_ROLE: temporal_roles[source_id],
+            "explicit_negative_allowed": negative_policy[source_id],
             "variable_id": f"L0:{source_id}",
             "role": "single_source_benchmark",
             "missing_source_encoded_as_zero": False,
@@ -228,6 +318,7 @@ def build_measurement_inputs(
         matrices={
             "expected_sources": expected_sources,
             "expected_channels": expected_channels,
+            "valid_channels": valid_channels,
             "rows": matrix_rows,
             "missing_source_encoded_as_zero": False,
             "l2_scoring": l2_configuration,
@@ -239,6 +330,8 @@ def build_measurement_inputs(
         channel_capability={
             "status": "AVAILABLE" if channel_count >= 2 else unavailable_status,
             "channel_count": channel_count,
+            "configured_channel_count": len(expected_channels),
+            "valid_channels": valid_channels,
             "strict_holdout_possible": channel_count >= 2,
             "reason_code": None if channel_count >= 2 else insufficient_channels_reason,
         },
@@ -307,6 +400,15 @@ def _l2_configuration(
         "delay_half_life_days": float(half_life),
         "missing_source_encoded_as_zero": False,
     }
+
+
+def _aggregate_opportunity(values: list[bool | None]) -> bool | None:
+    """Summarize source opportunity without turning absence into observed coverage."""
+    if any(value is True for value in values):
+        return True
+    if values and all(value is False for value in values):
+        return False
+    return None
 
 
 def _l2_channel_scores(

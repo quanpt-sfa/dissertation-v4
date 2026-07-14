@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -211,17 +212,7 @@ def _build_entry(
         },
     }
     if profile.evidence_mapping is not None:
-        source["evidence_mapping"] = {
-            "outcome_mode": profile.evidence_mapping.outcome_mode,
-            "row_inclusion_semantic": profile.evidence_mapping.row_inclusion_semantic,
-            "positive_semantic": profile.evidence_mapping.positive_semantic,
-            "false_indicator_policy": profile.evidence_mapping.false_indicator_policy,
-            "absence_policy": profile.evidence_mapping.absence_policy,
-            "opportunity_semantic": profile.evidence_mapping.opportunity_semantic,
-            "duplicate_representative_rule": (
-                profile.evidence_mapping.duplicate_representative_rule
-            ),
-        }
+        source["evidence_mapping"] = deepcopy(profile.evidence_mapping.raw_mapping)
     if profile.panel_mapping.enabled:
         source["panel_mapping"] = {
             "enabled": True,

@@ -14,20 +14,40 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
+from core.evidence_registry import LogicalEvidenceSource, logical_evidence_sources
 from core.pipeline import load_run, mapping, physical_columns
 from core.runtime import RunContext
 from core.semantic_keys import (
+    AUDIT_INDICATOR,
+    AUDIT_OPINION,
+    AUDIT_STATUS,
     AVAILABILITY_DATE,
-    CHANNEL_ID,
     EVENT_CLUSTER_ID,
     EVENT_ID,
     FIRM_ID,
     FISCAL_YEAR,
     HARD_POSITIVE,
+    ITEM_ID,
     OUTCOME,
     PERIOD_LINK_CONFIDENCE,
     PERIOD_LINK_SOURCE,
+    PERIOD_TYPE,
+    PREDICTION_TIME,
+    SOURCE_COLUMN,
+    SOURCE_FILE,
     SOURCE_ID,
+    SOURCE_ROW,
+    STATEMENT_FAMILY,
+    STATEMENT_SCOPE,
+    UNIT,
+    VALUE,
+)
+from evidence.annual import (
+    AdjustmentRow,
+    AnnualEvidenceBuild,
+    OpinionRow,
+    build_audit_adjustment_records,
+    build_audit_opinion_records,
 )
 from evidence.service import EvidenceRecord, build_evidence_ledger, map_evidence_outcome
 from p01.readers import iter_rows
@@ -55,7 +75,13 @@ def main() -> int:
     panel = loaded.context.read("firm_year_panel", {})
     if not isinstance(panel, pd.DataFrame):
         raise ValueError("firm_year_panel must be a DataFrame")
-    records = _records(loaded.registry, loaded.context)
+    columns = physical_columns(loaded.registry)
+    panel_anchors = _panel_anchors(panel, columns)
+    records, annual_builds = _records(
+        loaded.registry,
+        loaded.context,
+        panel_anchors=panel_anchors,
+    )
     entity = EntityResolutionSpec.from_mapping(loaded.registry.get("entity_resolution"))
     evidence = mapping(loaded.registry.get("evidence"), "evidence")
     tolerance = evidence.get("lag_identity_tolerance_days")
@@ -64,7 +90,7 @@ def main() -> int:
     result = build_evidence_ledger(
         panel=panel,
         records=records,
-        columns=physical_columns(loaded.registry),
+        columns=columns,
         fiscal_year_end_month_day=entity.reporting_calendar.default_fiscal_year_end_month_day,
         lag_tolerance_days=tolerance,
     )
@@ -73,20 +99,55 @@ def main() -> int:
     loaded.context.write("evidence_ledger", result.ledger, {})
     loaded.context.write("availability_registry", result.availability_registry, {})
     loaded.context.write("lag_decomposition", result.lag_decomposition, {})
+    loaded.context.write(
+        "annual_evidence_audit",
+        {
+            "sources": [build.audit for build in annual_builds],
+            "s1_pair_failures": [
+                failure
+                for build in annual_builds
+                if build.audit.get("processor") == "audit_adjustment"
+                for failure in build.failures
+            ],
+            "s2_normalization_exceptions": [
+                failure
+                for build in annual_builds
+                if build.audit.get("processor") == "audit_opinion"
+                for failure in build.failures
+            ],
+            "annual_measurement_records_are_events": False,
+            "annual_anchor_equals_prediction_time": True,
+            "missing_is_negative": False,
+        },
+        {},
+    )
     print(f"P03 status=PASS evidence_rows={len(result.ledger)}")
     return 0
 
 
-def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceRecord]:
+def _records(
+    registry: dict[str, Any],
+    context: RunContext,
+    *,
+    panel_anchors: dict[tuple[str, int], datetime],
+) -> tuple[list[EvidenceRecord], list[AnnualEvidenceBuild]]:
     data_sources = mapping(registry.get("data_sources"), "data_sources")
     source_registry = mapping(data_sources.get("source_registry"), "source_registry")
     sources = mapping(source_registry.get("sources"), "source_registry.sources")
     entity = EntityResolutionSpec.from_mapping(registry.get("entity_resolution"))
+    logical_sources = logical_evidence_sources(registry)
+    logical_by_physical: dict[str, list[LogicalEvidenceSource]] = {}
+    for logical in logical_sources.values():
+        logical_by_physical.setdefault(logical.physical_source_id, []).append(logical)
     result: list[EvidenceRecord] = []
+    annual_builds: list[AnnualEvidenceBuild] = []
     for source_id, raw in sorted(sources.items()):
         source = mapping(raw, f"source={source_id}")
         if source.get("role") != "evidence" or source.get("enabled") is not True:
             continue
+        logical = sorted(logical_by_physical.get(source_id, []), key=lambda item: item.source_id)
+        if not logical:
+            raise ValueError(f"source={source_id}: logical evidence sources required")
         audit = mapping(context.read("raw_audit", {SOURCE_ID: source_id}), "raw_audit")
         if mapping(audit.get("decision"), "audit.decision").get("pipeline_may_advance") is not True:
             raise ValueError(f"source={source_id}: passing P01 audit required")
@@ -95,6 +156,43 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
         evidence_mapping = mapping(
             source.get("evidence_mapping"), f"source={source_id}.evidence_mapping"
         )
+        processor = evidence_mapping.get("processor")
+        if processor == "audit_adjustment":
+            build = build_audit_adjustment_records(
+                panel_anchors=panel_anchors,
+                rows=_adjustment_rows(
+                    source_id=source_id,
+                    path=path,
+                    spec=spec,
+                    semantics=semantics,
+                    entity=entity,
+                    logical_sources=logical,
+                ),
+                sources=logical,
+            )
+            result.extend(build.records)
+            annual_builds.append(build)
+            continue
+        if processor == "audit_opinion":
+            if len(logical) != 1:
+                raise ValueError(f"source={source_id}: audit opinion requires one logical source")
+            build = build_audit_opinion_records(
+                panel_anchors=panel_anchors,
+                rows=_opinion_rows(
+                    source_id=source_id,
+                    path=path,
+                    spec=spec,
+                    semantics=semantics,
+                    entity=entity,
+                ),
+                source=logical[0],
+            )
+            result.extend(build.records)
+            annual_builds.append(build)
+            continue
+        if processor != "delayed_event" or len(logical) != 1:
+            raise ValueError(f"source={source_id}: unsupported evidence processor")
+        logical_source = logical[0]
         outcome_mode = evidence_mapping.get("outcome_mode")
         row_inclusion_semantic = evidence_mapping.get("row_inclusion_semantic")
         positive_semantic = evidence_mapping.get("positive_semantic")
@@ -154,8 +252,9 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
             cluster = _optional_text(row, semantics, EVENT_CLUSTER_ID) or event_id
             result.append(
                 EvidenceRecord(
-                    source_id=source_id,
-                    channel_id=str(source[CHANNEL_ID]),
+                    source_id=logical_source.source_id,
+                    source_profile_id=source_id,
+                    channel_id=logical_source.channel_id,
                     firm_id=canonical,
                     fiscal_year=fiscal_year,
                     availability_date=availability,
@@ -166,11 +265,129 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
                     period_link_confidence=_optional_text(row, semantics, PERIOD_LINK_CONFIDENCE),
                     outcome_basis=outcome_basis,
                     row_included=row_included,
+                    evidence_record_kind="delayed_event",
+                    temporal_role=logical_source.temporal_role,
+                    availability_basis=logical_source.availability_rule,
+                    source_opportunity=None,
+                    opportunity_basis="unknown_no_opportunity_indicator",
+                    source_record_refs=event_id,
                     duplicate_representative_rule=str(duplicate_rule),
                 )
             )
     if not result:
         raise ValueError("P03 requires at least one registered evidence record")
+    return result, annual_builds
+
+
+def _panel_anchors(panel: pd.DataFrame, columns: dict[str, str]) -> dict[tuple[str, int], datetime]:
+    firm = columns[FIRM_ID]
+    year = columns[FISCAL_YEAR]
+    prediction = columns[PREDICTION_TIME]
+    anchors: dict[tuple[str, int], datetime] = {}
+    for row in panel.loc[:, [firm, year, prediction]].to_dict(orient="records"):
+        key = (str(row[firm]), int(row[year]))
+        if key in anchors:
+            raise ValueError(f"P03 duplicate panel anchor={key}")
+        anchors[key] = _datetime(row[prediction])
+    return anchors
+
+
+def _adjustment_rows(
+    *,
+    source_id: str,
+    path: Path,
+    spec: object,
+    semantics: dict[str, Any],
+    entity: EntityResolutionSpec,
+    logical_sources: list[LogicalEvidenceSource],
+) -> list[AdjustmentRow]:
+    from p01.models import SourceSpec
+
+    if not isinstance(spec, SourceSpec):
+        raise TypeError("locked source specification required")
+    required = {
+        FIRM_ID,
+        FISCAL_YEAR,
+        AUDIT_STATUS,
+        ITEM_ID,
+        VALUE,
+        UNIT,
+        STATEMENT_SCOPE,
+        STATEMENT_FAMILY,
+    }
+    if not required.issubset(semantics):
+        raise ValueError(
+            f"source={source_id}: unresolved S1 semantics {sorted(required - set(semantics))}"
+        )
+    endpoint_items = {str(source.logical_config["canonical_item"]) for source in logical_sources}
+    result: list[AdjustmentRow] = []
+    for row in iter_rows(path, spec):
+        item = str(row.get(str(semantics[ITEM_ID]), "")).strip()
+        if item not in endpoint_items:
+            continue
+        firm_raw = _required(row.get(str(semantics[FIRM_ID])), FIRM_ID)
+        normalized = normalize_entity_field(str(firm_raw), entity)
+        canonical, _ = resolve_entity_link(source_id, str(firm_raw), normalized, entity)
+        result.append(
+            AdjustmentRow(
+                firm_id=canonical,
+                fiscal_year=int(str(_required(row.get(str(semantics[FISCAL_YEAR])), FISCAL_YEAR))),
+                audit_status=str(
+                    _required(row.get(str(semantics[AUDIT_STATUS])), AUDIT_STATUS)
+                ).strip(),
+                canonical_item=item,
+                value=_float_or_none(row.get(str(semantics[VALUE]))),
+                unit=_text_or_none(row.get(str(semantics[UNIT]))),
+                statement_scope=_text_or_none(row.get(str(semantics[STATEMENT_SCOPE]))),
+                statement_family=_text_or_none(row.get(str(semantics[STATEMENT_FAMILY]))),
+                source_ref=_source_ref(row, semantics, SOURCE_FILE, SOURCE_ROW),
+            )
+        )
+    return result
+
+
+def _opinion_rows(
+    *,
+    source_id: str,
+    path: Path,
+    spec: object,
+    semantics: dict[str, Any],
+    entity: EntityResolutionSpec,
+) -> list[OpinionRow]:
+    from p01.models import SourceSpec
+
+    if not isinstance(spec, SourceSpec):
+        raise TypeError("locked source specification required")
+    required = {
+        FIRM_ID,
+        FISCAL_YEAR,
+        AUDIT_INDICATOR,
+        AUDIT_OPINION,
+        PERIOD_TYPE,
+        STATEMENT_SCOPE,
+        AUDIT_STATUS,
+    }
+    if not required.issubset(semantics):
+        raise ValueError(
+            f"source={source_id}: unresolved S2 semantics {sorted(required - set(semantics))}"
+        )
+    result: list[OpinionRow] = []
+    for row in iter_rows(path, spec):
+        firm_raw = _required(row.get(str(semantics[FIRM_ID])), FIRM_ID)
+        normalized = normalize_entity_field(str(firm_raw), entity)
+        canonical, _ = resolve_entity_link(source_id, str(firm_raw), normalized, entity)
+        result.append(
+            OpinionRow(
+                firm_id=canonical,
+                fiscal_year=int(str(_required(row.get(str(semantics[FISCAL_YEAR])), FISCAL_YEAR))),
+                opinion_raw=_text_or_none(row.get(str(semantics[AUDIT_OPINION]))),
+                audit_indicator=_text_or_none(row.get(str(semantics[AUDIT_INDICATOR]))),
+                period_type=_text_or_none(row.get(str(semantics[PERIOD_TYPE]))),
+                statement_scope=_text_or_none(row.get(str(semantics[STATEMENT_SCOPE]))),
+                audit_status=_text_or_none(row.get(str(semantics[AUDIT_STATUS]))),
+                source_ref=_source_ref(row, semantics, SOURCE_FILE, SOURCE_COLUMN),
+            )
+        )
     return result
 
 
@@ -202,6 +419,32 @@ def _boolean(value: object) -> bool | None:
     if normalized in {"false", "no", "n", "0"}:
         return False
     raise ValueError(f"evidence outcome is not a registered binary representation: {value}")
+
+
+def _float_or_none(value: object) -> float | None:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    parsed = float(str(value))
+    if not pd.notna(parsed):
+        return None
+    return parsed
+
+
+def _text_or_none(value: object) -> str | None:
+    if value is None or not str(value).strip():
+        return None
+    return str(value).strip()
+
+
+def _source_ref(
+    row: dict[str, object],
+    semantics: dict[str, Any],
+    file_semantic: str,
+    row_semantic: str,
+) -> str:
+    file_value = _optional_text(row, semantics, file_semantic) or "registered_source"
+    row_value = _optional_text(row, semantics, row_semantic) or "unavailable"
+    return f"{file_value}#{row_value}"
 
 
 def _optional_text(row: dict[str, object], semantics: dict[str, Any], name: str) -> str | None:

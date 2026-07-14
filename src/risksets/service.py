@@ -8,6 +8,7 @@ from datetime import datetime
 import pandas as pd
 
 from core.semantic_keys import (
+    AVAILABILITY_BASIS,
     AVAILABILITY_DATE,
     CHANNEL_ID,
     ELIGIBLE,
@@ -16,6 +17,8 @@ from core.semantic_keys import (
     MATURE,
     PREDICTION_TIME,
     SOURCE_ID,
+    SOURCE_OPPORTUNITY,
+    TEMPORAL_ROLE,
 )
 
 
@@ -85,6 +88,11 @@ def build_risk_set(
         data_cutoff=data_cutoff,
         columns=columns,
     )
+    annual_availability = _annual_measurement_availability(
+        panel=panel,
+        evidence=evidence,
+        columns=columns,
+    )
     return RiskSetResult(
         risk_sets=result,
         prospective_set=prospective,
@@ -100,6 +108,8 @@ def build_risk_set(
             "exit_or_code_change_assigned_negative_count": 0,
             "mature_count_by_horizon_months": maturity_counts,
             "source_maturity_curves": source_curves,
+            "delayed_verification_maturity_curves": source_curves,
+            "annual_measurement_availability": annual_availability,
             "source_maturity_curves_executed": evidence is not None,
         },
     )
@@ -124,7 +134,12 @@ def _source_maturity_curves(
     required = {firm, year, availability, source, channel}
     if not required.issubset(evidence.columns):
         raise ValueError("evidence ledger is incomplete for source maturity curves")
-    linked = evidence.merge(
+    temporal = columns.get(TEMPORAL_ROLE, TEMPORAL_ROLE)
+    if temporal in evidence.columns:
+        delayed = evidence.loc[evidence[temporal].eq("delayed_verification")].copy()
+    else:
+        delayed = evidence
+    linked = delayed.merge(
         panel.loc[:, [firm, year, prediction]],
         on=[firm, year],
         how="inner",
@@ -169,6 +184,58 @@ def _source_maturity_curves(
                 "linked_event_in_horizon_fraction_by_months": in_horizon_fractions,
                 "metric_scope": "observed_linked_events_only",
                 "source_opportunity_coverage_rate": None,
+            }
+        )
+    return rows
+
+
+def _annual_measurement_availability(
+    *,
+    panel: pd.DataFrame,
+    evidence: pd.DataFrame | None,
+    columns: dict[str, str],
+) -> list[dict[str, object]]:
+    if evidence is None:
+        return []
+    temporal = columns.get(TEMPORAL_ROLE, TEMPORAL_ROLE)
+    if temporal not in evidence.columns:
+        return []
+    firm = columns[FIRM_ID]
+    year = columns[FISCAL_YEAR]
+    prediction = columns[PREDICTION_TIME]
+    availability = columns[AVAILABILITY_DATE]
+    source = columns[SOURCE_ID]
+    channel = columns[CHANNEL_ID]
+    opportunity = columns.get(SOURCE_OPPORTUNITY, SOURCE_OPPORTUNITY)
+    availability_basis = columns.get(AVAILABILITY_BASIS, AVAILABILITY_BASIS)
+    required = {firm, year, availability, source, channel, opportunity, availability_basis}
+    if not required.issubset(evidence.columns):
+        raise ValueError("annual evidence ledger is incomplete for availability audit")
+    annual = evidence.loc[evidence[temporal].eq("annual_measurement_at_anchor")].copy()
+    linked = annual.merge(
+        panel.loc[:, [firm, year, prediction]],
+        on=[firm, year],
+        how="inner",
+        validate="many_to_one",
+    )
+    rows: list[dict[str, object]] = []
+    for (source_id, channel_id), frame in linked.groupby([source, channel], sort=True):
+        opportunity_values = frame[opportunity].astype("boolean")
+        anchor_match = pd.to_datetime(frame[availability]).eq(pd.to_datetime(frame[prediction]))
+        rows.append(
+            {
+                SOURCE_ID: str(source_id),
+                CHANNEL_ID: str(channel_id),
+                "annual_measurement_record_count": len(frame),
+                "available_at_common_anchor_count": int(anchor_match.sum()),
+                "annual_anchor_mismatch_count": int((~anchor_match).sum()),
+                "source_opportunity_observed_count": int(opportunity_values.eq(True).sum()),
+                "source_opportunity_not_observed_count": int(opportunity_values.eq(False).sum()),
+                "source_opportunity_unknown_count": int(opportunity_values.isna().sum()),
+                AVAILABILITY_BASIS: sorted(
+                    str(value) for value in frame[availability_basis].dropna().unique()
+                ),
+                "included_in_delayed_maturity_curve": False,
             }
         )
     return rows

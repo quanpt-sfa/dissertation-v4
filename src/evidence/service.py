@@ -9,18 +9,28 @@ from typing import Any, cast
 import pandas as pd
 
 from core.semantic_keys import (
+    AVAILABILITY_BASIS,
     AVAILABILITY_DATE,
     CHANNEL_ID,
     EVENT_CLUSTER_ID,
     EVENT_ID,
+    EVIDENCE_CATEGORY,
+    EVIDENCE_RECORD_ID,
+    EVIDENCE_RECORD_KIND,
+    EVIDENCE_VALUE,
     FIRM_ID,
     FISCAL_YEAR,
+    OPPORTUNITY_BASIS,
     OUTCOME,
     OUTCOME_BASIS,
     PERIOD_LINK_CONFIDENCE,
     PERIOD_LINK_SOURCE,
     PREDICTION_TIME,
     SOURCE_ID,
+    SOURCE_OPPORTUNITY,
+    SOURCE_PROFILE_ID,
+    SOURCE_RECORD_REFS,
+    TEMPORAL_ROLE,
 )
 
 
@@ -32,8 +42,18 @@ class EvidenceRecord:
     fiscal_year: int
     availability_date: datetime
     outcome: bool | None
-    event_id: str
-    event_cluster_id: str
+    event_id: str | None
+    event_cluster_id: str | None
+    evidence_record_id: str | None = None
+    evidence_record_kind: str = "delayed_event"
+    source_profile_id: str | None = None
+    temporal_role: str = "delayed_verification"
+    availability_basis: str = "actual_publish_date"
+    source_opportunity: bool | None = None
+    opportunity_basis: str = "unknown_no_opportunity_indicator"
+    evidence_value: float | None = None
+    evidence_category: str | None = None
+    source_record_refs: str | None = None
     period_link_source: str | None = None
     period_link_confidence: str | None = None
     outcome_basis: str = "direct_source_outcome"
@@ -98,12 +118,13 @@ def build_evidence_ledger(
         key=lambda item: (
             item.firm_id,
             item.fiscal_year,
-            item.event_cluster_id,
+            item.event_cluster_id or "",
             item.source_id,
-            item.event_id,
+            item.evidence_record_id or item.event_id or "",
         ),
     )
     linked_groups: dict[tuple[str, int, str], list[EvidenceRecord]] = {}
+    annual_records: dict[tuple[str, str], EvidenceRecord] = {}
     for record in ordered_records:
         if not record.row_included:
             availability_rows.append(_availability_row(record, "EXCLUDED_BY_SOURCE_RULE"))
@@ -112,6 +133,46 @@ def build_evidence_ledger(
         if key not in panel_times:
             availability_rows.append(_availability_row(record, "UNLINKED_FIRM_YEAR"))
             continue
+        if record.evidence_record_kind == "annual_source_result":
+            if record.temporal_role != "annual_measurement_at_anchor":
+                raise ValueError(
+                    f"source={record.source_id}: annual record requires annual temporal role"
+                )
+            if record.availability_basis != "common_annual_anchor":
+                raise ValueError(
+                    f"source={record.source_id}: annual record requires common annual anchor"
+                )
+            if record.event_id is not None or record.event_cluster_id is not None:
+                raise ValueError("annual source result must not manufacture event identifiers")
+            if not record.evidence_record_id:
+                raise ValueError("annual source result requires evidence_record_id")
+            if record.availability_date != panel_times[key]:
+                availability_rows.append(_availability_row(record, "ANNUAL_ANCHOR_MISMATCH"))
+                raise ValueError(
+                    f"source={record.source_id}: annual availability must equal prediction anchor"
+                )
+            annual_key = (record.source_id, record.evidence_record_id)
+            previous = annual_records.get(annual_key)
+            if previous is not None:
+                availability_rows.append(
+                    _availability_row(record, "DUPLICATE_ANNUAL_SOURCE_RESULT")
+                )
+                raise ValueError(f"duplicate annual source result={annual_key}")
+            annual_records[annual_key] = record
+            availability_rows.append(_availability_row(record, "ACCEPTED_ANNUAL_MEASUREMENT"))
+            accepted.append((record, panel_times[key]))
+            continue
+        if record.evidence_record_kind != "delayed_event":
+            raise ValueError(
+                f"source={record.source_id}: unsupported evidence record kind "
+                f"{record.evidence_record_kind}"
+            )
+        if record.temporal_role != "delayed_verification":
+            raise ValueError(f"source={record.source_id}: delayed event temporal role required")
+        if record.availability_basis != "actual_publish_date":
+            raise ValueError(f"source={record.source_id}: actual publish date required")
+        if not record.event_id or not record.event_cluster_id:
+            raise ValueError("delayed event requires event_id and event_cluster_id")
         cluster_key = (record.firm_id, record.fiscal_year, record.event_cluster_id)
         linked_groups.setdefault(cluster_key, []).append(record)
 
@@ -159,14 +220,27 @@ def build_evidence_ledger(
 
     ledger_rows: list[dict[str, Any]] = []
     for record, _ in accepted:
+        evidence_record_id = record.evidence_record_id or record.event_id
+        if evidence_record_id is None:
+            raise ValueError("evidence record ID is required")
         ledger_rows.append(
             {
                 columns[FIRM_ID]: record.firm_id,
                 columns[FISCAL_YEAR]: record.fiscal_year,
                 columns[SOURCE_ID]: record.source_id,
+                columns[SOURCE_PROFILE_ID]: record.source_profile_id or record.source_id,
                 columns[CHANNEL_ID]: record.channel_id,
+                columns[EVIDENCE_RECORD_ID]: evidence_record_id,
+                columns[EVIDENCE_RECORD_KIND]: record.evidence_record_kind,
                 columns[EVENT_ID]: record.event_id,
                 columns[EVENT_CLUSTER_ID]: record.event_cluster_id,
+                columns[TEMPORAL_ROLE]: record.temporal_role,
+                columns[AVAILABILITY_BASIS]: record.availability_basis,
+                columns[SOURCE_OPPORTUNITY]: record.source_opportunity,
+                columns[OPPORTUNITY_BASIS]: record.opportunity_basis,
+                columns[EVIDENCE_VALUE]: record.evidence_value,
+                columns[EVIDENCE_CATEGORY]: record.evidence_category,
+                columns[SOURCE_RECORD_REFS]: record.source_record_refs,
                 columns[PERIOD_LINK_SOURCE]: record.period_link_source,
                 columns[PERIOD_LINK_CONFIDENCE]: record.period_link_confidence,
                 columns[OUTCOME_BASIS]: record.outcome_basis,
@@ -180,9 +254,19 @@ def build_evidence_ledger(
             columns[FIRM_ID],
             columns[FISCAL_YEAR],
             columns[SOURCE_ID],
+            columns[SOURCE_PROFILE_ID],
             columns[CHANNEL_ID],
+            columns[EVIDENCE_RECORD_ID],
+            columns[EVIDENCE_RECORD_KIND],
             columns[EVENT_ID],
             columns[EVENT_CLUSTER_ID],
+            columns[TEMPORAL_ROLE],
+            columns[AVAILABILITY_BASIS],
+            columns[SOURCE_OPPORTUNITY],
+            columns[OPPORTUNITY_BASIS],
+            columns[EVIDENCE_VALUE],
+            columns[EVIDENCE_CATEGORY],
+            columns[SOURCE_RECORD_REFS],
             columns[PERIOD_LINK_SOURCE],
             columns[PERIOD_LINK_CONFIDENCE],
             columns[OUTCOME_BASIS],
@@ -194,9 +278,21 @@ def build_evidence_ledger(
         ledger[columns[FIRM_ID]] = ledger[columns[FIRM_ID]].astype("string")
         ledger[columns[FISCAL_YEAR]] = ledger[columns[FISCAL_YEAR]].astype("int16")
         ledger[columns[SOURCE_ID]] = ledger[columns[SOURCE_ID]].astype("string")
+        ledger[columns[SOURCE_PROFILE_ID]] = ledger[columns[SOURCE_PROFILE_ID]].astype("string")
         ledger[columns[CHANNEL_ID]] = ledger[columns[CHANNEL_ID]].astype("string")
+        ledger[columns[EVIDENCE_RECORD_ID]] = ledger[columns[EVIDENCE_RECORD_ID]].astype("string")
+        ledger[columns[EVIDENCE_RECORD_KIND]] = ledger[columns[EVIDENCE_RECORD_KIND]].astype(
+            "string"
+        )
         ledger[columns[EVENT_ID]] = ledger[columns[EVENT_ID]].astype("string")
         ledger[columns[EVENT_CLUSTER_ID]] = ledger[columns[EVENT_CLUSTER_ID]].astype("string")
+        ledger[columns[TEMPORAL_ROLE]] = ledger[columns[TEMPORAL_ROLE]].astype("string")
+        ledger[columns[AVAILABILITY_BASIS]] = ledger[columns[AVAILABILITY_BASIS]].astype("string")
+        ledger[columns[SOURCE_OPPORTUNITY]] = ledger[columns[SOURCE_OPPORTUNITY]].astype("boolean")
+        ledger[columns[OPPORTUNITY_BASIS]] = ledger[columns[OPPORTUNITY_BASIS]].astype("string")
+        ledger[columns[EVIDENCE_VALUE]] = ledger[columns[EVIDENCE_VALUE]].astype("float64")
+        ledger[columns[EVIDENCE_CATEGORY]] = ledger[columns[EVIDENCE_CATEGORY]].astype("string")
+        ledger[columns[SOURCE_RECORD_REFS]] = ledger[columns[SOURCE_RECORD_REFS]].astype("string")
         ledger[columns[PERIOD_LINK_SOURCE]] = ledger[columns[PERIOD_LINK_SOURCE]].astype("string")
         ledger[columns[PERIOD_LINK_CONFIDENCE]] = ledger[columns[PERIOD_LINK_CONFIDENCE]].astype(
             "string"
@@ -212,6 +308,8 @@ def build_evidence_ledger(
         lag_decomposition={
             "records": lag_rows,
             "accepted_event_count": len(lag_rows),
+            "accepted_delayed_event_count": len(lag_rows),
+            "accepted_annual_measurement_count": len(annual_records),
             "deduplicated_event_count": sum(
                 row["status"] == "DUPLICATE_UPSTREAM_EVENT" for row in availability_rows
             ),
@@ -229,12 +327,22 @@ def build_evidence_ledger(
 
 def _availability_row(record: EvidenceRecord, status: str) -> dict[str, object]:
     return {
+        EVIDENCE_RECORD_ID: record.evidence_record_id or record.event_id,
+        EVIDENCE_RECORD_KIND: record.evidence_record_kind,
         EVENT_ID: record.event_id,
         EVENT_CLUSTER_ID: record.event_cluster_id,
         FIRM_ID: record.firm_id,
         FISCAL_YEAR: record.fiscal_year,
         SOURCE_ID: record.source_id,
+        SOURCE_PROFILE_ID: record.source_profile_id or record.source_id,
         CHANNEL_ID: record.channel_id,
+        TEMPORAL_ROLE: record.temporal_role,
+        AVAILABILITY_BASIS: record.availability_basis,
+        SOURCE_OPPORTUNITY: record.source_opportunity,
+        OPPORTUNITY_BASIS: record.opportunity_basis,
+        EVIDENCE_VALUE: record.evidence_value,
+        EVIDENCE_CATEGORY: record.evidence_category,
+        SOURCE_RECORD_REFS: record.source_record_refs,
         AVAILABILITY_DATE: record.availability_date.isoformat(),
         OUTCOME: record.outcome,
         OUTCOME_BASIS: record.outcome_basis,
@@ -254,6 +362,8 @@ def _record_signature(record: EvidenceRecord) -> tuple[object, ...]:
         record.outcome_basis,
         record.period_link_source,
         record.period_link_confidence,
+        record.temporal_role,
+        record.availability_basis,
     )
 
 

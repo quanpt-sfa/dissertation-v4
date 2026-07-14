@@ -38,7 +38,7 @@ Evidence ledger
 
 Reads: ['firm_year_panel', 'raw_audit']
 
-Writes: ['evidence_ledger', 'availability_registry', 'lag_decomposition']
+Writes: ['evidence_ledger', 'availability_registry', 'lag_decomposition', 'annual_evidence_audit']
 
 Required receipts: []
 

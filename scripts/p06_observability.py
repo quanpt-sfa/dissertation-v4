@@ -8,7 +8,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from core.evidence_registry import logical_evidence_sources
 from core.pipeline import load_run, mapping
+from core.semantic_keys import CHANNEL_ID, TEMPORAL_ROLE
 from observability.service import build_observability_registry
 
 
@@ -30,17 +32,17 @@ def main() -> int:
         return 0
     matrices = mapping(loaded.context.read("source_channel_matrices", {}), "source matrices")
     loaded.context.read("l3_pilot_capability", {})
-    sources = mapping(
-        mapping(
-            mapping(loaded.registry.get("data_sources"), "data_sources").get("source_registry"),
-            "source_registry",
-        ).get("sources"),
-        "source_registry.sources",
-    )
+    sources = logical_evidence_sources(loaded.registry)
     metadata = {
-        source_id: mapping(value, f"source={source_id}")
+        source_id: {
+            CHANNEL_ID: value.channel_id,
+            "verification_status": value.verification_status,
+            TEMPORAL_ROLE: value.temporal_role,
+            "availability_rule": value.availability_rule,
+            "explicit_negative_allowed": value.explicit_negative_allowed,
+            "evidence_mapping": {"opportunity_semantic": value.opportunity_semantic},
+        }
         for source_id, value in sources.items()
-        if mapping(value, f"source={source_id}").get("role") == "evidence"
     }
     result = build_observability_registry(matrices, metadata)
     if args.validate_only:

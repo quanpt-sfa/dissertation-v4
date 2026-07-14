@@ -7,6 +7,15 @@ features:
   - Q
   - Z_M
   registry: []
+  label_derived_feature_firewall:
+    same_firm_year_blocked_semantics:
+    - audit_opinion
+    - audit_adjustment_ratio
+    - pre_audit_profit_after_tax
+    - post_audit_profit_after_tax
+    - pre_audit_net_revenue
+    - post_audit_net_revenue
+    enforcement: reject_feature_registration
   source_processing:
     excluded_market_predictors:
     - stock_price
