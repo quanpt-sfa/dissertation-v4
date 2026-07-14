@@ -227,7 +227,7 @@ schemas:
     compatibility_policy: strict
   evidence_ledger_frame:
     contract_type: dataframe
-    version: 1
+    version: 2
     columns:
     - column: firm_id
       dtype: string
@@ -245,7 +245,7 @@ schemas:
       dtype: datetime64[ns]
       nullable: false
     - column: outcome
-      dtype: bool
+      dtype: boolean
       nullable: true
     primary_key:
     - firm_id
@@ -292,7 +292,7 @@ schemas:
     compatibility_policy: strict
   l0_l1_inputs_frame:
     contract_type: dataframe
-    version: 1
+    version: 2
     columns:
     - column: firm_id
       dtype: string
@@ -304,7 +304,7 @@ schemas:
       dtype: string
       nullable: false
     - column: outcome
-      dtype: bool
+      dtype: boolean
       nullable: true
     primary_key:
     - firm_id

@@ -32,7 +32,7 @@ Version: 1
 
 ## evidence_ledger_frame
 
-Version: 1
+Version: 2
 
 ## feature_panel_frame
 
@@ -68,7 +68,7 @@ Version: 1
 
 ## l0_l1_inputs_frame
 
-Version: 1
+Version: 2
 
 ## markdown_document
 

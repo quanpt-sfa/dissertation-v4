@@ -108,3 +108,21 @@ def test_probability_outside_unit_interval_fails(
             {"outer_fold": "2021"},
             "P11",
         )
+
+
+def test_nullable_evidence_outcome_matches_dataframe_contract(tmp_path: Path) -> None:
+    artifact_store = store(tmp_path)
+    frame = pd.DataFrame(
+        {
+            "firm_master_id": pd.Series(["A", "B"], dtype="string"),
+            "fiscal_year": pd.Series([2021, 2021], dtype="int16"),
+            "source_id": pd.Series(["sanction", "sanction"], dtype="string"),
+            "channel_id": pd.Series(["S3", "S3"], dtype="string"),
+            "availability_date": pd.Series(
+                [pd.Timestamp("2022-03-31"), pd.Timestamp("2022-04-01")],
+                dtype="datetime64[ns]",
+            ),
+            "outcome": pd.Series([True, pd.NA], dtype="boolean"),
+        }
+    )
+    artifact_store.contracts.validate("evidence_ledger", frame)

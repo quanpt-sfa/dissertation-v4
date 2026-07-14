@@ -173,6 +173,7 @@ def _pandera_dtype(dtype: str) -> object:
         "int64": PA.Int64,
         "float64": PA.Float64,
         "bool": PA.Bool,
+        "boolean": pd.BooleanDtype(),
         "datetime64[ns]": PA.DateTime,
     }
     return mapping.get(dtype, dtype)
