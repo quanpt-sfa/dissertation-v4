@@ -1,0 +1,7 @@
+outer_fold,configured_role,mature_rows,p05_reported_mature_rows,positive_current_artifact,positive_after_event_ledger_fix,explicit_negative,mature_unknown_current_artifact,mature_unknown_after_event_ledger_fix,both_classes_observed,current_assigned_role,current_reason_code,correct_fail_closed_reason
+2020,initial,2002,7,7,7,0,1995,1995,false,initial_separate,,initial fold retained separately; binary supervised evaluation unavailable
+2021,fully_nested,1965,10,10,10,0,1955,1955,false,prospective_or_descriptive,INSUFFICIENT_POSITIVES,CAPABILITY_UNAVAILABLE: no explicit negative and positive count below 15
+2022,fully_nested,1952,3,3,3,0,1949,1949,false,prospective_or_descriptive,INSUFFICIENT_POSITIVES,CAPABILITY_UNAVAILABLE: no explicit negative and positive count below 15
+2023,fully_nested,1899,9,9,9,0,1890,1890,false,prospective_or_descriptive,INSUFFICIENT_POSITIVES,CAPABILITY_UNAVAILABLE: no explicit negative and positive count below 15
+2024,fully_nested,1870,7,7,10,0,1863,1860,false,prospective_or_descriptive,INSUFFICIENT_POSITIVES,CAPABILITY_UNAVAILABLE: no explicit negative and positive count below 15
+2026,prospective,0,0,0,0,0,0,0,false,prospective_separate,,no panel rows and no mature follow-up

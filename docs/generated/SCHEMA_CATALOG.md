@@ -32,7 +32,7 @@ Version: 1
 
 ## evidence_ledger_frame
 
-Version: 2
+Version: 4
 
 ## feature_panel_frame
 

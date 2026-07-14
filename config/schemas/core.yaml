@@ -227,7 +227,7 @@ schemas:
     compatibility_policy: strict
   evidence_ledger_frame:
     contract_type: dataframe
-    version: 2
+    version: 4
     columns:
     - column: firm_id
       dtype: string
@@ -241,6 +241,21 @@ schemas:
     - column: channel_id
       dtype: string
       nullable: false
+    - column: event_id
+      dtype: string
+      nullable: false
+    - column: event_cluster_id
+      dtype: string
+      nullable: false
+    - column: period_link_source
+      dtype: string
+      nullable: true
+    - column: period_link_confidence
+      dtype: string
+      nullable: true
+    - column: outcome_basis
+      dtype: string
+      nullable: false
     - column: availability_date
       dtype: datetime64[ns]
       nullable: false
@@ -248,13 +263,11 @@ schemas:
       dtype: boolean
       nullable: true
     primary_key:
-    - firm_id
-    - fiscal_year
     - source_id
+    - event_id
     uniqueness_constraints:
-    - - firm_id
-      - fiscal_year
-      - source_id
+    - - source_id
+      - event_id
     row_checks: []
     cross_column_checks: []
     strict_columns: true

@@ -86,12 +86,25 @@ source_catalog:
         firm_id: [issuer_ticker]
         fiscal_year: [label_year]
         availability_date: [publish_date]
-        outcome: [train_include_flag]
+        row_inclusion: [train_include_flag]
         event_id: [firm_event_id]
         event_cluster_id: [bundle_id]
-      required_semantic_fields: [firm_id, fiscal_year, availability_date, outcome, event_id]
+        period_link_source: [label_year_source]
+        period_link_confidence: [label_confidence]
+      required_semantic_fields:
+      - firm_id
+      - fiscal_year
+      - availability_date
+      - row_inclusion
+      - event_id
       key_semantics: [event_id]
       date_semantics: [availability_date]
+      evidence_mapping:
+        outcome_mode: included_event_positive
+        row_inclusion_semantic: row_inclusion
+        absence_policy: unknown
+        opportunity_semantic: null
+        duplicate_representative_rule: identical_signature_then_source_event_id
       panel_mapping:
         enabled: false
 

@@ -19,7 +19,11 @@ from labels.latent_class import (
     finalize_l3_pilot_posteriors,
     fit_fixed_pi_latent_class,
 )
-from measurement.service import build_measurement_inputs, summarize_fold_eligibility
+from measurement.service import (
+    build_measurement_inputs,
+    l3_channel_capability_allows_pilot,
+    summarize_fold_eligibility,
+)
 
 
 def main() -> int:
@@ -113,6 +117,7 @@ def main() -> int:
         raise ValueError("sensitivity positive-count range requires two values")
     fold_eligibility = summarize_fold_eligibility(
         sealed_outcomes=result.sealed_outcomes,
+        risk_sets=risk_sets,
         initial_outer_year=int(folds["initial_outer_year"]),
         confirmatory_years=nested,
         prospective_year=int(folds["prospective_year"]),
@@ -174,6 +179,8 @@ def _execute_l3_pilot(
 
     if not isinstance(rng, np.random.Generator):
         raise TypeError("L3 pilot RNG must be a numpy Generator")
+    if not l3_channel_capability_allows_pilot(capability):
+        return
     model = mapping(measurement.get("l3_model"), "measurement.l3_model")
     operational = mapping(model.get("operational"), "measurement.l3_model.operational")
     grid = sequence(operational.get("fixed_pi_grid"), "l3 fixed_pi_grid")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -18,9 +19,13 @@ from core.runtime import RunContext
 from core.semantic_keys import (
     AVAILABILITY_DATE,
     CHANNEL_ID,
+    EVENT_CLUSTER_ID,
+    EVENT_ID,
     FIRM_ID,
     FISCAL_YEAR,
     OUTCOME,
+    PERIOD_LINK_CONFIDENCE,
+    PERIOD_LINK_SOURCE,
     SOURCE_ID,
 )
 from evidence.service import EvidenceRecord, build_evidence_ledger
@@ -86,12 +91,28 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
             raise ValueError(f"source={source_id}: passing P01 audit required")
         spec, path = resolve_source(registry, source_id)
         semantics = mapping(source.get("resolved_semantics"), f"source={source_id}.semantics")
-        required = {FIRM_ID, FISCAL_YEAR, AVAILABILITY_DATE, OUTCOME}
+        evidence_mapping = mapping(
+            source.get("evidence_mapping"), f"source={source_id}.evidence_mapping"
+        )
+        outcome_mode = evidence_mapping.get("outcome_mode")
+        row_inclusion_semantic = evidence_mapping.get("row_inclusion_semantic")
+        duplicate_rule = evidence_mapping.get("duplicate_representative_rule")
+        if evidence_mapping.get("absence_policy") != "unknown":
+            raise ValueError(f"source={source_id}: evidence absence must remain unknown")
+        if duplicate_rule != "identical_signature_then_source_event_id":
+            raise ValueError(f"source={source_id}: unsupported duplicate representative rule")
+        required = {FIRM_ID, FISCAL_YEAR, AVAILABILITY_DATE, EVENT_ID}
+        if isinstance(row_inclusion_semantic, str):
+            required.add(row_inclusion_semantic)
+        if outcome_mode == "direct_outcome":
+            required.add(OUTCOME)
+        elif outcome_mode != "included_event_positive":
+            raise ValueError(f"source={source_id}: unsupported evidence outcome mode")
         if not required.issubset(semantics):
             raise ValueError(
                 f"source={source_id}: unresolved evidence semantics {sorted(required - set(semantics))}"
             )
-        for row_number, row in enumerate(iter_rows(path, spec), start=1):
+        for row in iter_rows(path, spec):
             firm_raw = _required(row.get(str(semantics[FIRM_ID])), FIRM_ID)
             normalized = normalize_entity_field(str(firm_raw), entity)
             canonical, _ = resolve_entity_link(source_id, str(firm_raw), normalized, entity)
@@ -99,11 +120,23 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
             availability = _datetime(
                 _required(row.get(str(semantics[AVAILABILITY_DATE])), AVAILABILITY_DATE)
             )
-            outcome = _boolean(row.get(str(semantics[OUTCOME])))
-            event_id = _optional_text(row, semantics, "event_id") or _derived_event_id(
-                source_id, canonical, fiscal_year, availability, row_number
+            row_included = True
+            if isinstance(row_inclusion_semantic, str):
+                parsed_inclusion = _boolean(row.get(str(semantics[row_inclusion_semantic])))
+                if parsed_inclusion is None:
+                    raise ValueError(f"source={source_id}: row inclusion cannot be missing")
+                row_included = parsed_inclusion
+            outcome = (
+                True
+                if outcome_mode == "included_event_positive" and row_included
+                else None
+                if outcome_mode == "included_event_positive"
+                else _boolean(row.get(str(semantics[OUTCOME])))
             )
-            cluster = _optional_text(row, semantics, "event_cluster_id") or event_id
+            event_id = _optional_text(row, semantics, EVENT_ID) or _derived_event_id(
+                source_id, canonical, fiscal_year, availability, row
+            )
+            cluster = _optional_text(row, semantics, EVENT_CLUSTER_ID) or event_id
             result.append(
                 EvidenceRecord(
                     source_id=source_id,
@@ -114,6 +147,15 @@ def _records(registry: dict[str, Any], context: RunContext) -> list[EvidenceReco
                     outcome=outcome,
                     event_id=event_id,
                     event_cluster_id=cluster,
+                    period_link_source=_optional_text(row, semantics, PERIOD_LINK_SOURCE),
+                    period_link_confidence=_optional_text(row, semantics, PERIOD_LINK_CONFIDENCE),
+                    outcome_basis=(
+                        "included_event_positive"
+                        if outcome_mode == "included_event_positive"
+                        else "direct_source_outcome"
+                    ),
+                    row_included=row_included,
+                    duplicate_representative_rule=str(duplicate_rule),
                 )
             )
     if not result:
@@ -162,9 +204,14 @@ def _optional_text(row: dict[str, object], semantics: dict[str, Any], name: str)
 
 
 def _derived_event_id(
-    source_id: str, firm_id: str, fiscal_year: int, availability: datetime, row_number: int
+    source_id: str,
+    firm_id: str,
+    fiscal_year: int,
+    availability: datetime,
+    row: dict[str, object],
 ) -> str:
-    value = f"{source_id}|{firm_id}|{fiscal_year}|{availability.isoformat()}|{row_number}"
+    canonical_row = json.dumps(row, ensure_ascii=False, sort_keys=True, default=str)
+    value = f"{source_id}|{firm_id}|{fiscal_year}|{availability.isoformat()}|{canonical_row}"
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 

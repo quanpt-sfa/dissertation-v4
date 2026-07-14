@@ -82,6 +82,7 @@ def build_risk_set(
         panel=panel,
         evidence=evidence,
         horizons_months=sorted(set(horizons)),
+        data_cutoff=data_cutoff,
         columns=columns,
     )
     return RiskSetResult(
@@ -109,6 +110,7 @@ def _source_maturity_curves(
     panel: pd.DataFrame,
     evidence: pd.DataFrame | None,
     horizons_months: list[int],
+    data_cutoff: datetime,
     columns: dict[str, str],
 ) -> list[dict[str, object]]:
     if evidence is None:
@@ -134,17 +136,39 @@ def _source_maturity_curves(
     rows: list[dict[str, object]] = []
     for (source_id, channel_id), frame in linked.groupby([source, channel], sort=True):
         lags = frame["_detection_lag_days"].to_numpy(dtype=float)
+        prediction_dates = pd.to_datetime(frame[prediction])
+        availability_dates = pd.to_datetime(frame[availability])
+        cutoff = pd.Timestamp(data_cutoff)
+        pre_prediction = availability_dates < prediction_dates
+        same_day = availability_dates == prediction_dates
+        after_prediction = availability_dates > prediction_dates
+        after_cutoff = availability_dates > cutoff
+        in_horizon_counts: dict[str, int] = {}
+        post_horizon_counts: dict[str, int] = {}
+        in_horizon_fractions: dict[str, float] = {}
+        for horizon in horizons_months:
+            horizon_end = prediction_dates + pd.DateOffset(months=horizon)
+            in_horizon = after_prediction & (availability_dates <= horizon_end) & ~after_cutoff
+            post_horizon = (availability_dates > horizon_end) & ~after_cutoff
+            in_horizon_counts[str(horizon)] = int(in_horizon.sum())
+            post_horizon_counts[str(horizon)] = int(post_horizon.sum())
+            in_horizon_fractions[str(horizon)] = float(in_horizon.mean()) if len(frame) else 0.0
         rows.append(
             {
                 SOURCE_ID: str(source_id),
                 CHANNEL_ID: str(channel_id),
                 "observed_event_count": len(lags),
+                "pre_prediction_event_count": int(pre_prediction.sum()),
                 "negative_detection_lag_count": int((lags < 0).sum()),
+                "same_day_detection_count": int(same_day.sum()),
+                "future_detection_event_count": int(after_prediction.sum()),
+                "post_data_cutoff_event_count": int(after_cutoff.sum()),
                 "median_detection_lag_days": float(pd.Series(lags).median()) if len(lags) else None,
-                "availability_fraction_by_horizon": {
-                    str(horizon): float((lags <= horizon * 365.25 / 12.0).mean())
-                    for horizon in horizons_months
-                },
+                "in_horizon_event_count_by_months": in_horizon_counts,
+                "post_horizon_event_count_by_months": post_horizon_counts,
+                "linked_event_in_horizon_fraction_by_months": in_horizon_fractions,
+                "metric_scope": "observed_linked_events_only",
+                "source_opportunity_coverage_rate": None,
             }
         )
     return rows

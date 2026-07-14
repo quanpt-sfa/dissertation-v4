@@ -36,6 +36,23 @@ class MeasurementResult:
     anchor_capability: dict[str, object]
 
 
+def l3_channel_capability_allows_pilot(capability: dict[str, object]) -> bool:
+    """Keep structural channel failure ahead of missing empirical parameters."""
+    channel_count = capability.get("channel_count")
+    if not isinstance(channel_count, int) or isinstance(channel_count, bool):
+        raise ValueError("L3 capability requires an integer channel_count")
+    if channel_count >= 2:
+        return True
+    capability.update(
+        {
+            "status": "UNAVAILABLE_BY_DESIGN",
+            "pilot_executed": False,
+            "reason_code": "INSUFFICIENT_CHANNELS",
+        }
+    )
+    return False
+
+
 def build_measurement_inputs(
     *,
     risk_sets: pd.DataFrame,
@@ -85,17 +102,29 @@ def build_measurement_inputs(
         key = (str(risk[firm]), int(risk[year]))
         prediction_time = pd.Timestamp(risk[prediction])
         horizon_end = prediction_time + pd.DateOffset(months=horizon_months)
+        source_events: dict[str, list[tuple[bool | None, int]]] = {
+            item: [] for item in expected_source_ids
+        }
         observed: dict[str, bool | None] = {item: None for item in expected_source_ids}
         observed_lag_days: dict[str, int | None] = {item: None for item in expected_source_ids}
         for event in evidence_by_key.get(key, []):
             source_id = str(event[source])
+            if source_id not in source_events:
+                raise ValueError(f"P05 evidence source is not registered: {source_id}")
             event_time = pd.Timestamp(cast(Any, event[availability]))
             if event_time <= prediction_time or event_time > horizon_end:
                 continue
             value = event[outcome]
             parsed = None if pd.isna(cast(Any, value)) else bool(value)
-            observed[source_id] = parsed
-            observed_lag_days[source_id] = int((event_time - prediction_time).days)
+            source_events[source_id].append((parsed, int((event_time - prediction_time).days)))
+        for source_id, events in source_events.items():
+            values = {str(index): value for index, (value, _) in enumerate(events)}
+            aggregate = aggregate_l1(values)
+            observed[source_id] = aggregate
+            if aggregate is not None:
+                observed_lag_days[source_id] = min(
+                    lag for value, lag in events if value is aggregate
+                )
         for source_id in expected_source_ids:
             input_rows.append(
                 {
@@ -128,6 +157,7 @@ def build_measurement_inputs(
             {
                 FIRM_ID: key[0],
                 FISCAL_YEAR: key[1],
+                ELIGIBLE: bool(risk[eligible]),
                 MATURE: bool(risk[mature]),
                 "source_outcomes": observed,
                 "channel_outcomes": channel_values,
@@ -312,6 +342,7 @@ def _l2_channel_scores(
 def summarize_fold_eligibility(
     *,
     sealed_outcomes: pd.DataFrame,
+    risk_sets: pd.DataFrame,
     initial_outer_year: int,
     confirmatory_years: list[int],
     prospective_year: int,
@@ -322,18 +353,49 @@ def summarize_fold_eligibility(
     """Assign only aggregate fold roles; row-level outer outcomes never leave P05."""
     year = columns[FISCAL_YEAR]
     outcome = columns[OUTCOME]
+    mature = columns[MATURE]
+    eligible = columns[ELIGIBLE]
+    required_risk = {year, mature, eligible}
+    if not required_risk.issubset(risk_sets.columns):
+        raise ValueError("P05 fold eligibility requires mature risk-set rows")
     counts = (
         sealed_outcomes.groupby(year, sort=True)[outcome].agg(["count", "sum"])
         if not sealed_outcomes.empty
         else pd.DataFrame()
     )
+    mature_counts = (
+        risk_sets.loc[risk_sets[mature].astype(bool) & risk_sets[eligible].astype(bool)]
+        .groupby(year, sort=True)
+        .size()
+    )
+    eligible_counts = (
+        risk_sets.loc[risk_sets[eligible].astype(bool)].groupby(year, sort=True).size()
+    )
 
     def row_for(fold_year: int, configured_role: str) -> dict[str, object]:
-        row_count = int(str(counts.loc[fold_year, "count"])) if fold_year in counts.index else 0
+        labeled_count = int(str(counts.loc[fold_year, "count"])) if fold_year in counts.index else 0
         positive_count = int(str(counts.loc[fold_year, "sum"])) if fold_year in counts.index else 0
+        mature_count = int(mature_counts.get(fold_year, 0))
+        eligible_count = int(eligible_counts.get(fold_year, 0))
+        explicit_negative_count = labeled_count - positive_count
+        unknown_count = mature_count - labeled_count
+        if unknown_count < 0:
+            raise ValueError(f"fold={fold_year}: labeled outcomes exceed mature risk-set rows")
+        observed_class_count = int(positive_count > 0) + int(explicit_negative_count > 0)
+        if observed_class_count == 2:
+            binary_reason = None
+        elif positive_count == 0 and explicit_negative_count == 0:
+            binary_reason = "NO_OBSERVED_BINARY_CLASSES"
+        elif positive_count == 0:
+            binary_reason = "POSITIVE_CLASS_MISSING"
+        else:
+            binary_reason = "EXPLICIT_NEGATIVE_CLASS_MISSING"
         if configured_role in {"initial", "prospective"}:
             role = f"{configured_role}_separate"
-            reason = None
+            reason = binary_reason or "NONCONFIRMATORY_FOLD_ROLE"
+        elif observed_class_count < 2:
+            role = "prospective_or_descriptive"
+            reason = binary_reason
         elif positive_count >= confirmatory_positive_minimum:
             role = "confirmatory"
             reason = None
@@ -347,8 +409,16 @@ def summarize_fold_eligibility(
             OUTER_FOLD: str(fold_year),
             "configured_role": configured_role,
             "assigned_role": role,
-            "mature_row_count": row_count,
+            "eligible_row_count": eligible_count,
+            "mature_row_count": mature_count,
+            "labeled_row_count": labeled_count,
+            "observed_label_row_count": labeled_count,
             "positive_count": positive_count,
+            "explicit_negative_count": explicit_negative_count,
+            "unknown_count": unknown_count,
+            "observed_binary_class_count": observed_class_count,
+            "both_binary_classes_observed": positive_count > 0 and explicit_negative_count > 0,
+            "binary_class_reason_code": binary_reason,
             "reason_code": reason,
             "aggregate_only": True,
             "row_level_outer_labels_exposed": False,

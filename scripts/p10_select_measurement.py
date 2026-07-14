@@ -9,6 +9,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from core.fold_control import production_path_blockers
 from core.pipeline import load_run, mapping, sequence
 from core.rng import generator
 from core.semantic_keys import CHANNEL_ID, OUTER_FOLD
@@ -41,9 +42,18 @@ def main() -> int:
     if diagnostics.get("fit_scope") != "development_history":
         raise ValueError("P10 requires development-history weight diagnostics")
     mcse = mapping(loaded.context.read("mcse_report", {}), "MCSE report")
-    if mcse.get("status") != "PASS" or mcse.get("precision_target_met") is not True:
-        raise RuntimeError("P10 requires a PASS P08 simulation/MCSE report")
-    loaded.context.read("fold_eligibility", {})
+    fold_eligibility = loaded.context.read("fold_eligibility", {})
+    feature_registry = loaded.context.read("feature_registry", {})
+    blockers = production_path_blockers(
+        fold_eligibility=fold_eligibility,
+        outer_fold=args.outer_fold,
+        feature_registry=feature_registry,
+        mcse_report=mcse,
+    )
+    if blockers:
+        raise RuntimeError(
+            f"P10_PRODUCTION_PATH_BLOCKED: fold={args.outer_fold} blockers={','.join(blockers)}"
+        )
     measurement = mapping(loaded.registry.get("measurement"), "measurement")
     raw_candidates = sequence(
         measurement.get("selection_candidates"), "measurement.selection_candidates"

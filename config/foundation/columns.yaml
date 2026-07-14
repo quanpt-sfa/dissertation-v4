@@ -15,6 +15,26 @@ columns:
     physical_name: availability_date
     dtype: datetime64[ns]
     semantic_role: availability_time
+  event_id:
+    physical_name: event_id
+    dtype: string
+    semantic_role: source_event_key
+  event_cluster_id:
+    physical_name: event_cluster_id
+    dtype: string
+    semantic_role: upstream_event_cluster_key
+  period_link_source:
+    physical_name: period_link_source
+    dtype: string
+    semantic_role: event_period_link_method
+  period_link_confidence:
+    physical_name: period_link_confidence
+    dtype: string
+    semantic_role: event_period_link_quality
+  outcome_basis:
+    physical_name: outcome_basis
+    dtype: string
+    semantic_role: source_outcome_semantics
   source_id:
     physical_name: source_id
     dtype: string

@@ -282,7 +282,8 @@ Source: config/pipeline.yaml
       "l0_l1_inputs",
       "l3_pilot_capability",
       "fold_eligibility",
-      "mcse_report"
+      "mcse_report",
+      "feature_registry"
     ],
     "required_receipts": [],
     "writes": [
@@ -317,7 +318,8 @@ Source: config/pipeline.yaml
       "fold_aware_weights",
       "weight_diagnostics",
       "source_config_manifest",
-      "environment_observation"
+      "environment_observation",
+      "fold_eligibility"
     ],
     "required_receipts": [],
     "writes": [

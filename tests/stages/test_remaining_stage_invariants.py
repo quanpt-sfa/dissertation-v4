@@ -9,19 +9,26 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from core.fold_control import production_path_blockers, require_confirmatory_fold
 from core.semantic_keys import (
     AVAILABILITY_DATE,
     CHANNEL_ID,
     ELIGIBLE,
+    EVENT_CLUSTER_ID,
+    EVENT_ID,
     FIRM_ID,
     FISCAL_YEAR,
     LEARNER_ID,
     MATURE,
     OUTCOME,
+    OUTCOME_BASIS,
     OUTER_FOLD,
+    PERIOD_LINK_CONFIDENCE,
+    PERIOD_LINK_SOURCE,
     PREDICTION,
     PREDICTION_TIME,
     SOURCE_ID,
+    TARGET_ID,
     TARGET_VALUE,
     WEIGHT,
 )
@@ -30,6 +37,12 @@ from evidence.service import EvidenceRecord, build_evidence_ledger
 from features.service import build_feature_panel
 from gates.service import breakpoint_stability_pass, gate2_verdict, gate3_verdict
 from labels.service import aggregate_l1, evidence_score_l2, posterior_l3_fixed_pi
+from measurement.service import (
+    build_measurement_inputs,
+    l3_channel_capability_allows_pilot,
+    summarize_fold_eligibility,
+)
+from observability.service import build_observability_registry
 from risksets.service import build_risk_set
 from selection.service import select_measurement
 from simulation.service import (
@@ -46,6 +59,11 @@ def _columns() -> dict[str, str]:
         FISCAL_YEAR: "year_key",
         PREDICTION_TIME: "as_of",
         AVAILABILITY_DATE: "available_at",
+        EVENT_ID: "event_key",
+        EVENT_CLUSTER_ID: "cluster_key",
+        PERIOD_LINK_SOURCE: "period_link_method",
+        PERIOD_LINK_CONFIDENCE: "period_link_quality",
+        OUTCOME_BASIS: "outcome_semantics",
         SOURCE_ID: "source_key",
         CHANNEL_ID: "channel_key",
         OUTCOME: "binary_result",
@@ -54,6 +72,7 @@ def _columns() -> dict[str, str]:
         OUTER_FOLD: "fold_key",
         LEARNER_ID: "model_key",
         PREDICTION: "score",
+        TARGET_ID: "target_key",
         TARGET_VALUE: "soft_target",
         WEIGHT: "analysis_weight",
     }
@@ -83,10 +102,10 @@ def test_p03_deduplicates_upstream_events_and_enforces_lag_identity() -> None:
         ),
         EvidenceRecord(
             source_id="secondary",
-            channel_id="news",
+            channel_id="audit",
             firm_id="F1",
             fiscal_year=2020,
-            availability_date=datetime(2021, 4, 16),
+            availability_date=datetime(2021, 4, 15),
             outcome=True,
             event_id="event-b",
             event_cluster_id="cluster-1",
@@ -100,12 +119,314 @@ def test_p03_deduplicates_upstream_events_and_enforces_lag_identity() -> None:
         lag_tolerance_days=0,
     )
     assert len(result.ledger) == 1
+    assert result.ledger["event_key"].tolist() == ["event-a"]
+    assert result.ledger["cluster_key"].tolist() == ["cluster-1"]
+    accepted = cast(dict[str, Any], result.availability_registry[0])
+    assert accepted[FIRM_ID] == "F1"
+    assert accepted[FISCAL_YEAR] == 2020
     assert result.lag_decomposition["accepted_event_count"] == 1
     assert result.lag_decomposition["deduplicated_event_count"] == 1
     records_raw = result.lag_decomposition["records"]
     assert isinstance(records_raw, list)
     lag = cast(dict[str, Any], cast(list[Any], records_raw)[0])
     assert lag["total_lag_days"] == lag["report_lag_days"] + lag["detection_lag_days"]
+
+
+def test_p03_duplicate_representative_is_independent_of_row_and_source_order() -> None:
+    columns = _columns()
+    panel = pd.DataFrame([{"firm_key": "F1", "year_key": 2020, "as_of": "2021-03-31"}])
+    records = [
+        EvidenceRecord(
+            source_id="z-source",
+            channel_id="official",
+            firm_id="F1",
+            fiscal_year=2020,
+            availability_date=datetime(2021, 4, 15),
+            outcome=True,
+            event_id="z-event",
+            event_cluster_id="cluster-1",
+        ),
+        EvidenceRecord(
+            source_id="a-source",
+            channel_id="official",
+            firm_id="F1",
+            fiscal_year=2020,
+            availability_date=datetime(2021, 4, 15),
+            outcome=True,
+            event_id="a-event",
+            event_cluster_id="cluster-1",
+        ),
+    ]
+    first = build_evidence_ledger(
+        panel=panel,
+        records=records,
+        columns=columns,
+        fiscal_year_end_month_day="12-31",
+        lag_tolerance_days=0,
+    )
+    second = build_evidence_ledger(
+        panel=panel,
+        records=list(reversed(records)),
+        columns=columns,
+        fiscal_year_end_month_day="12-31",
+        lag_tolerance_days=0,
+    )
+    pd.testing.assert_frame_equal(first.ledger, second.ledger)
+    assert first.ledger["source_key"].tolist() == ["a-source"]
+
+
+def test_p03_conflicting_duplicate_timing_fails_closed() -> None:
+    panel = pd.DataFrame([{"firm_key": "F1", "year_key": 2020, "as_of": "2021-03-31"}])
+    records = [
+        EvidenceRecord(
+            source_id="a",
+            channel_id="official",
+            firm_id="F1",
+            fiscal_year=2020,
+            availability_date=datetime(2021, 4, 15),
+            outcome=True,
+            event_id="a",
+            event_cluster_id="cluster-1",
+        ),
+        EvidenceRecord(
+            source_id="b",
+            channel_id="official",
+            firm_id="F1",
+            fiscal_year=2020,
+            availability_date=datetime(2022, 4, 1),
+            outcome=True,
+            event_id="b",
+            event_cluster_id="cluster-1",
+        ),
+    ]
+    with pytest.raises(ValueError, match="disagree on timing or outcome semantics"):
+        build_evidence_ledger(
+            panel=panel,
+            records=records,
+            columns=_columns(),
+            fiscal_year_end_month_day="12-31",
+            lag_tolerance_days=0,
+        )
+
+
+def test_p03_row_inclusion_exclusion_does_not_create_negative_outcome() -> None:
+    result = build_evidence_ledger(
+        panel=pd.DataFrame([{"firm_key": "F1", "year_key": 2020, "as_of": "2021-03-31"}]),
+        records=[
+            EvidenceRecord(
+                source_id="sanction",
+                channel_id="official",
+                firm_id="F1",
+                fiscal_year=2020,
+                availability_date=datetime(2021, 5, 1),
+                outcome=None,
+                event_id="excluded-event",
+                event_cluster_id="excluded-cluster",
+                outcome_basis="included_event_positive",
+                row_included=False,
+            )
+        ],
+        columns=_columns(),
+        fiscal_year_end_month_day="12-31",
+        lag_tolerance_days=0,
+    )
+    assert result.ledger.empty
+    assert result.availability_registry[0]["status"] == "EXCLUDED_BY_SOURCE_RULE"
+    assert result.availability_registry[0][OUTCOME] is None
+
+
+def test_p03_keeps_distinct_events_and_p05_applies_horizon_before_aggregation() -> None:
+    columns = _columns()
+    panel = pd.DataFrame([{"firm_key": "F1", "year_key": 2020, "as_of": "2021-03-31"}])
+    result = build_evidence_ledger(
+        panel=panel,
+        records=[
+            EvidenceRecord(
+                source_id="sanction",
+                channel_id="official",
+                firm_id="F1",
+                fiscal_year=2020,
+                availability_date=datetime(2021, 3, 1),
+                outcome=True,
+                event_id="pre-prediction",
+                event_cluster_id="pre-cluster",
+            ),
+            EvidenceRecord(
+                source_id="sanction",
+                channel_id="official",
+                firm_id="F1",
+                fiscal_year=2020,
+                availability_date=datetime(2021, 4, 15),
+                outcome=True,
+                event_id="future-event",
+                event_cluster_id="future-cluster",
+            ),
+        ],
+        columns=columns,
+        fiscal_year_end_month_day="12-31",
+        lag_tolerance_days=0,
+    )
+    assert len(result.ledger) == 2
+    measurement = build_measurement_inputs(
+        risk_sets=pd.DataFrame(
+            [
+                {
+                    "firm_key": "F1",
+                    "year_key": 2020,
+                    "as_of": pd.Timestamp("2021-03-31"),
+                    "is_mature": True,
+                    "is_eligible": True,
+                }
+            ]
+        ),
+        evidence=result.ledger,
+        expected_sources={"sanction": "official"},
+        horizon_months=12,
+        columns=columns,
+        pending_status="EMPIRICALLY_PENDING",
+        unavailable_status="UNAVAILABLE_BY_DESIGN",
+        insufficient_channels_reason="INSUFFICIENT_CHANNELS",
+        anchor_source_ids=["sanction"],
+    )
+    assert measurement.sealed_outcomes["binary_result"].tolist() == [True]
+    assert cast(dict[str, Any], measurement.matrices["rows"][0])["l1"] is True
+
+
+def _single_row_measurement(event_dates: list[tuple[datetime, bool | None]]) -> object:
+    columns = _columns()
+    evidence = pd.DataFrame(
+        [
+            {
+                "firm_key": "F1",
+                "year_key": 2020,
+                "source_key": "sanction",
+                "channel_key": "official",
+                "available_at": available,
+                "binary_result": outcome,
+            }
+            for available, outcome in event_dates
+        ],
+        columns=[
+            "firm_key",
+            "year_key",
+            "source_key",
+            "channel_key",
+            "available_at",
+            "binary_result",
+        ],
+    )
+    return build_measurement_inputs(
+        risk_sets=pd.DataFrame(
+            [
+                {
+                    "firm_key": "F1",
+                    "year_key": 2020,
+                    "as_of": pd.Timestamp("2021-03-31"),
+                    "is_mature": True,
+                    "is_eligible": True,
+                }
+            ]
+        ),
+        evidence=evidence,
+        expected_sources={"sanction": "official"},
+        horizon_months=12,
+        columns=columns,
+        pending_status="EMPIRICALLY_PENDING",
+        unavailable_status="UNAVAILABLE_BY_DESIGN",
+        insufficient_channels_reason="INSUFFICIENT_CHANNELS",
+        anchor_source_ids=["sanction"],
+    )
+
+
+def test_p05_horizon_boundary_is_calendar_exact_and_post_horizon_is_excluded() -> None:
+    at_boundary = cast(Any, _single_row_measurement([(datetime(2022, 3, 31), True)]))
+    one_day_after = cast(Any, _single_row_measurement([(datetime(2022, 4, 1), True)]))
+    assert at_boundary.sealed_outcomes["binary_result"].tolist() == [True]
+    assert one_day_after.sealed_outcomes.empty
+
+
+def test_p05_pre_prediction_event_does_not_backdate_post_horizon_positive() -> None:
+    result = cast(
+        Any,
+        _single_row_measurement([(datetime(2021, 3, 1), True), (datetime(2022, 4, 1), True)]),
+    )
+    assert result.sealed_outcomes.empty
+    assert cast(dict[str, Any], result.matrices["rows"][0])["l1"] is None
+
+
+def test_p05_multiple_source_events_are_order_independent() -> None:
+    events: list[tuple[datetime, bool | None]] = [
+        (datetime(2021, 5, 1), False),
+        (datetime(2021, 6, 1), True),
+    ]
+    first = cast(Any, _single_row_measurement(events))
+    second = cast(Any, _single_row_measurement(list(reversed(events))))
+    assert cast(dict[str, Any], first.matrices["rows"][0])["l1"] is True
+    assert first.matrices == second.matrices
+
+
+def test_p05_absence_of_sanction_remains_unknown() -> None:
+    result = cast(Any, _single_row_measurement([]))
+    row = cast(dict[str, Any], result.matrices["rows"][0])
+    assert row["source_outcomes"] == {"sanction": None}
+    assert row["l1"] is None
+    assert result.sealed_outcomes.empty
+
+
+def test_p05_fold_counts_use_mature_risk_set_and_fail_closed_on_one_class() -> None:
+    columns = _columns()
+    risk_sets = pd.DataFrame(
+        [
+            {"year_key": 2021, "is_mature": True, "is_eligible": True},
+            {"year_key": 2021, "is_mature": True, "is_eligible": True},
+            {"year_key": 2021, "is_mature": True, "is_eligible": True},
+        ]
+    )
+    sealed = pd.DataFrame([{"year_key": 2021, "binary_result": True}])
+    summary = summarize_fold_eligibility(
+        sealed_outcomes=sealed,
+        risk_sets=risk_sets,
+        initial_outer_year=2020,
+        confirmatory_years=[2021],
+        prospective_year=2026,
+        confirmatory_positive_minimum=1,
+        sensitivity_positive_range=(1, 1),
+        columns=columns,
+    )
+    fold = cast(dict[str, Any], summary[1])
+    assert fold["mature_row_count"] == 3
+    assert fold["eligible_row_count"] == 3
+    assert fold["labeled_row_count"] == 1
+    assert fold["positive_count"] == 1
+    assert fold["explicit_negative_count"] == 0
+    assert fold["unknown_count"] == 2
+    assert fold["both_binary_classes_observed"] is False
+    assert fold["observed_binary_class_count"] == 1
+    assert fold["binary_class_reason_code"] == "EXPLICIT_NEGATIVE_CLASS_MISSING"
+    assert fold["assigned_role"] == "prospective_or_descriptive"
+    assert fold["reason_code"] == "EXPLICIT_NEGATIVE_CLASS_MISSING"
+
+
+def test_p05_positive_only_fold_never_becomes_confirmatory_above_threshold() -> None:
+    columns = _columns()
+    risk_sets = pd.DataFrame(
+        [{"year_key": 2021, "is_mature": True, "is_eligible": True} for _ in range(30)]
+    )
+    sealed = pd.DataFrame([{"year_key": 2021, "binary_result": True} for _ in range(25)])
+    summary = summarize_fold_eligibility(
+        sealed_outcomes=sealed,
+        risk_sets=risk_sets,
+        initial_outer_year=2020,
+        confirmatory_years=[2021],
+        prospective_year=2026,
+        confirmatory_positive_minimum=15,
+        sensitivity_positive_range=(5, 14),
+        columns=columns,
+    )
+    fold = cast(dict[str, Any], summary[1])
+    assert fold["assigned_role"] == "prospective_or_descriptive"
+    assert fold["explicit_negative_count"] == 0
+    assert fold["reason_code"] == "EXPLICIT_NEGATIVE_CLASS_MISSING"
 
 
 def test_p04_marks_prospective_rows_immature_without_assigning_outcome() -> None:
@@ -123,6 +444,112 @@ def test_p04_marks_prospective_rows_immature_without_assigning_outcome() -> None
     assert result.risk_sets["is_mature"].tolist() == [True, False]
     assert OUTCOME not in result.risk_sets.columns
     assert result.maturity_audit["immature_assigned_negative_count"] == 0
+
+
+def test_p04_source_maturity_excludes_pre_prediction_events_from_horizon_fraction() -> None:
+    columns = _columns()
+    panel = pd.DataFrame([{"firm_key": "F1", "year_key": 2020, "as_of": "2021-03-31"}])
+    evidence = pd.DataFrame(
+        [
+            {
+                "firm_key": "F1",
+                "year_key": 2020,
+                "source_key": "sanction",
+                "channel_key": "official",
+                "available_at": "2021-03-01",
+            },
+            {
+                "firm_key": "F1",
+                "year_key": 2020,
+                "source_key": "sanction",
+                "channel_key": "official",
+                "available_at": "2021-04-15",
+            },
+        ]
+    )
+    result = build_risk_set(
+        panel=panel,
+        data_cutoff=datetime(2022, 6, 30),
+        horizon_months=12,
+        columns=columns,
+        evidence=evidence,
+    )
+    curves = cast(list[dict[str, Any]], result.maturity_audit["source_maturity_curves"])
+    curve = curves[0]
+    assert curve["negative_detection_lag_count"] == 1
+    assert curve["future_detection_event_count"] == 1
+    assert cast(dict[str, float], curve["linked_event_in_horizon_fraction_by_months"])["12"] == 0.5
+    assert cast(dict[str, int], curve["in_horizon_event_count_by_months"])["12"] == 1
+    assert curve["pre_prediction_event_count"] == 1
+    assert curve["source_opportunity_coverage_rate"] is None
+
+
+def test_p04_event_after_cutoff_is_not_counted_inside_horizon() -> None:
+    columns = _columns()
+    result = build_risk_set(
+        panel=pd.DataFrame([{"firm_key": "F1", "year_key": 2020, "as_of": "2021-03-31"}]),
+        data_cutoff=datetime(2022, 3, 31),
+        horizon_months=24,
+        columns=columns,
+        evidence=pd.DataFrame(
+            [
+                {
+                    "firm_key": "F1",
+                    "year_key": 2020,
+                    "source_key": "sanction",
+                    "channel_key": "official",
+                    "available_at": "2022-04-01",
+                }
+            ]
+        ),
+    )
+    curve = cast(list[dict[str, Any]], result.maturity_audit["source_maturity_curves"])[0]
+    assert curve["post_data_cutoff_event_count"] == 1
+    assert cast(dict[str, int], curve["in_horizon_event_count_by_months"])["24"] == 0
+
+
+def test_p06_does_not_mislabel_event_incidence_as_source_coverage() -> None:
+    result = build_observability_registry(
+        {
+            "rows": [
+                {
+                    ELIGIBLE: True,
+                    MATURE: True,
+                    "source_outcomes": {"sanction": True},
+                    "channel_outcomes": {"official": True},
+                },
+                {
+                    ELIGIBLE: True,
+                    MATURE: False,
+                    "source_outcomes": {"sanction": None},
+                    "channel_outcomes": {"official": None},
+                },
+            ]
+        },
+        {"sanction": {CHANNEL_ID: "official", "verification_status": "high_confirmation"}},
+    )
+    channel = cast(dict[str, Any], cast(dict[str, Any], result["channels"])["official"])
+    assert channel["positive_count"] == 1
+    assert channel["explicit_negative_count"] == 0
+    assert channel["unknown_count"] == 1
+    assert channel["observed_outcome_fraction"] == 0.5
+    assert channel["coverage_rate"] is None
+    assert channel["mature_cohort_observed_fraction"] == 1.0
+    assert channel["prospective_count"] == 1
+    assert channel["coverage_status"] == "NOT_ESTIMABLE_FROM_EVENT_ABSENCE"
+    assert channel["source_opportunity_coverage_status"] == ("UNKNOWN_NO_OPPORTUNITY_INDICATOR")
+
+
+def test_p05_l3_structural_channel_failure_precedes_unlocked_parameter_status() -> None:
+    capability: dict[str, object] = {
+        "status": "UNAVAILABLE_BY_DESIGN",
+        "channel_count": 1,
+        "reason": "INSUFFICIENT_CHANNELS",
+    }
+    assert l3_channel_capability_allows_pilot(capability) is False
+    assert capability["status"] == "UNAVAILABLE_BY_DESIGN"
+    assert capability["pilot_executed"] is False
+    assert capability["reason_code"] == "INSUFFICIENT_CHANNELS"
 
 
 def test_p07_rejects_content_predictor_from_label_model() -> None:
@@ -144,6 +571,45 @@ def test_p07_rejects_content_predictor_from_label_model() -> None:
             ],
             columns=_columns(),
         )
+
+
+def test_p10_production_path_blocks_empty_features_and_nonconfirmatory_fold() -> None:
+    blockers = production_path_blockers(
+        fold_eligibility=[
+            {
+                OUTER_FOLD: "2021",
+                "assigned_role": "prospective_or_descriptive",
+                "positive_count": 10,
+                "explicit_negative_count": 0,
+                "observed_binary_class_count": 1,
+                "both_binary_classes_observed": False,
+            }
+        ],
+        outer_fold="2021",
+        feature_registry=[],
+        mcse_report={"status": "SKIPPED", "precision_target_met": False},
+    )
+    assert "FEATURE_REGISTRY_EMPTY" in blockers
+    assert "P08_MCSE_NOT_PASS" in blockers
+    assert "EXPLICIT_NEGATIVE_CLASS_MISSING" in blockers
+
+
+@pytest.mark.parametrize(
+    "role", ["prospective_or_descriptive", "prospective_separate", "initial_separate"]
+)
+def test_p10_p11_reject_descriptive_and_prospective_fold_roles(role: str) -> None:
+    eligibility = [
+        {
+            OUTER_FOLD: "2024",
+            "assigned_role": role,
+            "positive_count": 1,
+            "explicit_negative_count": 1,
+            "observed_binary_class_count": 2,
+            "both_binary_classes_observed": True,
+        }
+    ]
+    with pytest.raises(RuntimeError, match="FOLD_NOT_CONFIRMATORY"):
+        require_confirmatory_fold(eligibility, "2024", "P11")
 
 
 def test_p08_batch_is_deterministic_for_same_registered_rng_seed() -> None:

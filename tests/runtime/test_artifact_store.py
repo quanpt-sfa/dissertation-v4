@@ -118,6 +118,13 @@ def test_nullable_evidence_outcome_matches_dataframe_contract(tmp_path: Path) ->
             "fiscal_year": pd.Series([2021, 2021], dtype="int16"),
             "source_id": pd.Series(["sanction", "sanction"], dtype="string"),
             "channel_id": pd.Series(["S3", "S3"], dtype="string"),
+            "event_id": pd.Series(["event-a", "event-b"], dtype="string"),
+            "event_cluster_id": pd.Series(["cluster-a", "cluster-b"], dtype="string"),
+            "period_link_source": pd.Series(["affected_year", pd.NA], dtype="string"),
+            "period_link_confidence": pd.Series(["high", pd.NA], dtype="string"),
+            "outcome_basis": pd.Series(
+                ["included_event_positive", "direct_source_outcome"], dtype="string"
+            ),
             "availability_date": pd.Series(
                 [pd.Timestamp("2022-03-31"), pd.Timestamp("2022-04-01")],
                 dtype="datetime64[ns]",

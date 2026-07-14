@@ -210,6 +210,16 @@ def _build_entry(
             "row_count_min": 1,
         },
     }
+    if profile.evidence_mapping is not None:
+        source["evidence_mapping"] = {
+            "outcome_mode": profile.evidence_mapping.outcome_mode,
+            "row_inclusion_semantic": profile.evidence_mapping.row_inclusion_semantic,
+            "absence_policy": profile.evidence_mapping.absence_policy,
+            "opportunity_semantic": profile.evidence_mapping.opportunity_semantic,
+            "duplicate_representative_rule": (
+                profile.evidence_mapping.duplicate_representative_rule
+            ),
+        }
     if profile.panel_mapping.enabled:
         source["panel_mapping"] = {
             "enabled": True,

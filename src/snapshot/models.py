@@ -10,6 +10,9 @@ Cardinality = Literal["one", "one_or_none", "many"]
 SourceFormat = Literal["csv", "tsv", "parquet", "json", "jsonl", "xlsx"]
 AvailabilityDateRule = Literal["physical_column", "fiscal_year_plus_one_month_day"]
 RowAggregation = Literal["one_row_per_firm_year", "firm_year_presence"]
+EvidenceOutcomeMode = Literal["direct_outcome", "included_event_positive"]
+EvidenceAbsencePolicy = Literal["unknown"]
+DuplicateRepresentativeRule = Literal["identical_signature_then_source_event_id"]
 
 
 def _mapping(value: object, context: str) -> dict[str, Any]:
@@ -132,6 +135,41 @@ class PanelProfile:
         )
 
 
+@dataclass(frozen=True)
+class EvidenceProfile:
+    outcome_mode: EvidenceOutcomeMode
+    row_inclusion_semantic: str | None
+    absence_policy: EvidenceAbsencePolicy
+    opportunity_semantic: str | None
+    duplicate_representative_rule: DuplicateRepresentativeRule
+
+    @classmethod
+    def from_mapping(cls, value: object, context: str) -> EvidenceProfile:
+        raw = _mapping(value, context)
+        outcome_mode = raw.get("outcome_mode")
+        if outcome_mode not in {"direct_outcome", "included_event_positive"}:
+            raise ValueError(f"{context}.outcome_mode: unsupported {outcome_mode}")
+        row_inclusion = raw.get("row_inclusion_semantic")
+        if row_inclusion is not None:
+            row_inclusion = _string(row_inclusion, f"{context}.row_inclusion_semantic")
+        absence_policy = raw.get("absence_policy")
+        if absence_policy != "unknown":
+            raise ValueError(f"{context}.absence_policy must be unknown")
+        opportunity = raw.get("opportunity_semantic")
+        if opportunity is not None:
+            opportunity = _string(opportunity, f"{context}.opportunity_semantic")
+        duplicate_rule = raw.get("duplicate_representative_rule")
+        if duplicate_rule != "identical_signature_then_source_event_id":
+            raise ValueError(f"{context}.duplicate_representative_rule: unsupported rule")
+        return cls(
+            outcome_mode=cast(EvidenceOutcomeMode, outcome_mode),
+            row_inclusion_semantic=row_inclusion,
+            absence_policy="unknown",
+            opportunity_semantic=opportunity,
+            duplicate_representative_rule="identical_signature_then_source_event_id",
+        )
+
+
 def _validate_month_day(value: str, context: str) -> None:
     parts = value.split("-")
     if len(parts) != 2:
@@ -163,6 +201,7 @@ class SourceProfile:
     required_semantic_fields: tuple[str, ...]
     key_semantics: tuple[str, ...]
     date_semantics: tuple[str, ...]
+    evidence_mapping: EvidenceProfile | None
     panel_mapping: PanelProfile
 
     @classmethod
@@ -184,6 +223,29 @@ class SourceProfile:
             )
             for semantic, candidates in semantics_raw.items()
         }
+        role = _string(raw.get("role"), f"profile={profile_id}.role")
+        evidence_mapping = (
+            EvidenceProfile.from_mapping(
+                raw.get("evidence_mapping"), f"profile={profile_id}.evidence_mapping"
+            )
+            if role == "evidence"
+            else None
+        )
+        if role != "evidence" and raw.get("evidence_mapping") is not None:
+            raise ValueError(f"profile={profile_id}: evidence_mapping is only valid for evidence")
+        if evidence_mapping is not None:
+            if (
+                evidence_mapping.row_inclusion_semantic is not None
+                and evidence_mapping.row_inclusion_semantic not in semantics
+            ):
+                raise ValueError(f"profile={profile_id}: row inclusion semantic is not registered")
+            if (
+                evidence_mapping.opportunity_semantic is not None
+                and evidence_mapping.opportunity_semantic not in semantics
+            ):
+                raise ValueError(f"profile={profile_id}: opportunity semantic is not registered")
+            if evidence_mapping.outcome_mode == "direct_outcome" and "outcome" not in semantics:
+                raise ValueError(f"profile={profile_id}: direct outcome semantic is required")
         return cls(
             profile_id=profile_id,
             enabled=enabled,
@@ -197,7 +259,7 @@ class SourceProfile:
             source_type=_string(raw.get("source_type"), f"profile={profile_id}.source_type"),
             source_agency=_string(raw.get("source_agency"), f"profile={profile_id}.source_agency"),
             original_unit=_string(raw.get("original_unit"), f"profile={profile_id}.original_unit"),
-            role=_string(raw.get("role"), f"profile={profile_id}.role"),
+            role=role,
             verification_status=_string(
                 raw.get("verification_status"), f"profile={profile_id}.verification_status"
             ),
@@ -222,6 +284,7 @@ class SourceProfile:
             date_semantics=tuple(
                 _string_list(raw.get("date_semantics", []), f"profile={profile_id}.date_semantics")
             ),
+            evidence_mapping=evidence_mapping,
             panel_mapping=PanelProfile.from_mapping(
                 raw.get("panel_mapping", {}), f"profile={profile_id}.panel_mapping"
             ),

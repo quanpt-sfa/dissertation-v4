@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
+from core.fold_control import require_confirmatory_fold
 from core.pipeline import load_run, mapping, physical_columns, sequence, stable_hash
 from core.rng import derive_seed
 from core.semantic_keys import OUTER_FOLD
@@ -69,6 +70,10 @@ def main() -> int:
     splits = loaded.context.read("temporal_split_registry", {})
     panel = loaded.context.read("feature_panel", {})
     feature_registry = sequence(loaded.context.read("feature_registry", {}), "feature registry")
+    if not feature_registry:
+        raise RuntimeError("P11_PRODUCTION_PATH_BLOCKED: FEATURE_REGISTRY_EMPTY")
+    fold_eligibility = loaded.context.read("fold_eligibility", {})
+    require_confirmatory_fold(fold_eligibility, args.outer_fold, "P11")
     inputs = loaded.context.read("l0_l1_inputs", {})
     weights = loaded.context.read("fold_aware_weights", {"fold_id": args.outer_fold})
     weight_diagnostics = mapping(
@@ -205,6 +210,14 @@ def main() -> int:
             )
     fits.extend(pu_results)
     result = _combine_fits(fits, selected_track_b=selected_measurement is not None)
+    if (
+        result.models["status"] != "PASS"
+        or result.oof_predictions.empty
+        or result.outer_predictions.empty
+    ):
+        raise RuntimeError(
+            "P11_REQUIRED_MODEL_TRACK_INCOMPLETE: SKIPPED is not a passing production state"
+        )
     model_manifest = loaded.context.write("model_artifacts", result.models, coordinates)
     oof_manifest = loaded.context.write(
         "development_oof_predictions", result.oof_predictions, coordinates
@@ -214,18 +227,13 @@ def main() -> int:
     )
     feature_config = mapping(loaded.registry.get("features"), "features")
     calibration = mapping(loaded.registry.get("calibration"), "calibration")
-    passed = (
-        result.models["status"] == "PASS"
-        and not result.oof_predictions.empty
-        and not result.outer_predictions.empty
-    )
     fitted_model_rows = [
         mapping(item, "fitted model")
         for item in sequence(result.models.get("models"), "fitted models")
     ]
     receipt: dict[str, object] = {
-        "status": "PASS" if passed else "SKIPPED",
-        "reason_code": None if passed else "REQUIRED_MODEL_TRACK_INCOMPLETE",
+        "status": "PASS",
+        "reason_code": None,
         "track_a_status": track_a.models["status"],
         "track_b_status": fits[1].models["status"]
         if selected_measurement is not None

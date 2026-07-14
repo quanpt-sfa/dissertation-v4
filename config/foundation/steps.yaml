@@ -318,6 +318,7 @@ steps:
     - l3_pilot_capability
     - fold_eligibility
     - mcse_report
+    - feature_registry
     optional_reads: []
     writes:
     - measurement_candidate_results
@@ -365,6 +366,7 @@ steps:
     - weight_diagnostics
     - source_config_manifest
     - environment_observation
+    - fold_eligibility
     optional_reads: []
     writes:
     - model_artifacts
