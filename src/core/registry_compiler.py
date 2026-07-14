@@ -9,6 +9,8 @@ import platform
 import subprocess
 from pathlib import Path
 
+from snapshot.injection import inject_snapshot
+
 from .access_matrix import compile_access_matrix
 from .config_loader import load_manifest, load_modules
 from .config_model import CompiledRegistry
@@ -21,9 +23,12 @@ COMPILER_VERSION = "0.2.0"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-def compile_registry(config_path: Path) -> CompiledRegistry:
+def compile_registry(config_path: Path, snapshot_path: Path | None = None) -> CompiledRegistry:
     manifest = load_manifest(config_path)
     registry, source_hashes = load_modules(manifest)
+    if snapshot_path is not None:
+        registry = inject_snapshot(registry, snapshot_path)
+        source_hashes["external/data_snapshot.json"] = _file_sha256(snapshot_path) or ""
     registry["schemas"] = dict(
         compile_schemas(registry.get("schemas"), registry.get("columns")).schemas
     )

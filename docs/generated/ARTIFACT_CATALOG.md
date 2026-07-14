@@ -16,7 +16,7 @@ Source: config/pipeline.yaml
 | decision_traceability | P00 | decision_traceability_schema | `P00/decision_traceability.json` |
 | development_oof_predictions | P11 | development_oof_predictions_frame | `P11/oof/{outer_fold}.parquet` |
 | domain_transfer_outputs | P13 | json_object | `P13/domain_transfer.json` |
-| duplicate_map | P02 | json_array | `P02/duplicate_map.json` |
+| duplicate_map | P02 | p02_resolution_schema | `P02/duplicate_map.json` |
 | environment_expectation | P00 | environment_expectation_schema | `P00/environment_expectation.json` |
 | environment_observation | P00 | environment_observation_schema | `P00/environment_observation.json` |
 | evaluation_metrics | P12 | json_object | `P12/metrics/{outer_fold}.json` |

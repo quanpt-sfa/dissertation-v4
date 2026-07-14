@@ -183,7 +183,7 @@ artifacts:
   duplicate_map:
     producer_step: P02
     path_template: P02/duplicate_map.json
-    schema_id: json_array
+    schema_id: p02_resolution_schema
     format: json
     coordinates: []
     sensitivity_class: restricted

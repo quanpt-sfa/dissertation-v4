@@ -1,1 +1,14 @@
-entity_resolution: {policy: registered_only}
+entity_resolution:
+  policy: registered_only
+  allow_identity_mapping: true
+  collision_policy: fail
+  normalization:
+    unicode_nfkc: true
+    trim: true
+    uppercase: true
+    collapse_internal_whitespace: true
+  aliases: {}
+  reporting_calendar:
+    default_fiscal_year_end_month_day: 12-31
+    firm_exceptions: {}
+    early_report_exceptions: []

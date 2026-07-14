@@ -7,7 +7,7 @@ from typing import Any, Literal, cast
 
 IssueSeverity = Literal["FAIL", "ISOLATE", "WARN", "INFO"]
 AuditStatus = Literal["PASS", "PASS_WITH_ISSUES", "FAILED"]
-SourceFormat = Literal["csv", "tsv", "parquet", "json", "jsonl"]
+SourceFormat = Literal["csv", "tsv", "parquet", "json", "jsonl", "xlsx"]
 
 
 def _mapping(value: object, context: str) -> dict[str, Any]:
@@ -131,7 +131,7 @@ class SourceSpec:
     source_agency: str
     original_unit: str
     related_period_field: str | None
-    availability_date_field: str
+    availability_date_field: str | None
     availability_date_source: str
     coverage_dimensions: tuple[str, ...]
     role: str
@@ -141,6 +141,8 @@ class SourceSpec:
     format: SourceFormat
     encoding: str
     delimiter: str | None
+    sheet_name: str | None
+    header_row: int | None
     locked_sha256: str
     schema: RawSchemaSpec
 
@@ -151,7 +153,7 @@ class SourceSpec:
         if not isinstance(enabled, bool):
             raise ValueError(f"source={source_id}.enabled: bool required")
         format_value = _string(raw.get("format"), f"source={source_id}.format").lower()
-        if format_value not in {"csv", "tsv", "parquet", "json", "jsonl"}:
+        if format_value not in {"csv", "tsv", "parquet", "json", "jsonl", "xlsx"}:
             raise ValueError(f"source={source_id}.format: unsupported format {format_value}")
         delimiter = raw.get("delimiter")
         if delimiter is not None and (not isinstance(delimiter, str) or len(delimiter) != 1):
@@ -170,9 +172,13 @@ class SourceSpec:
             source_agency=_string(raw.get("source_agency"), f"source={source_id}.source_agency"),
             original_unit=_string(raw.get("original_unit"), f"source={source_id}.original_unit"),
             related_period_field=related_period,
-            availability_date_field=_string(
-                raw.get("availability_date_field"),
-                f"source={source_id}.availability_date_field",
+            availability_date_field=(
+                _string(
+                    raw.get("availability_date_field"),
+                    f"source={source_id}.availability_date_field",
+                )
+                if raw.get("availability_date_field") is not None
+                else None
             ),
             availability_date_source=_string(
                 raw.get("availability_date_source"),
@@ -196,6 +202,14 @@ class SourceSpec:
             format=cast(SourceFormat, format_value),
             encoding=_string(raw.get("encoding", "utf-8"), f"source={source_id}.encoding"),
             delimiter=delimiter,
+            sheet_name=(
+                _string(raw.get("sheet_name"), f"source={source_id}.sheet_name")
+                if raw.get("sheet_name") is not None
+                else None
+            ),
+            header_row=(
+                cast(int, raw.get("header_row")) if isinstance(raw.get("header_row"), int) else None
+            ),
             locked_sha256=locked_hash,
             schema=RawSchemaSpec.from_mapping(raw.get("schema"), f"source={source_id}.schema"),
         )

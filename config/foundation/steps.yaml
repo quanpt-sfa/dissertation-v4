@@ -58,7 +58,7 @@ steps:
     - D04
   P02:
     description: Firm master and as-of panel
-    cli_module: scripts.p02_panel
+    cli_module: scripts.p02_build_firm_panel
     unit_coordinates: []
     reads:
     - raw_audit

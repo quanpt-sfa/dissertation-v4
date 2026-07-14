@@ -28,9 +28,12 @@ def main() -> int:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--snapshot-manifest", type=Path)
     parser.add_argument("--validate-only", action="store_true")
     args = parser.parse_args()
-    compiled = compile_registry(args.config)
+    if not args.validate_only and args.snapshot_manifest is None:
+        raise ValueError("--snapshot-manifest is required for a published operational P00 lock")
+    compiled = compile_registry(args.config, args.snapshot_manifest)
     if args.validate_only:
         return 0
 
@@ -136,6 +139,8 @@ def _report(run_id: str, protocol_hash: str, registry: dict[str, object]) -> str
             f"- Artifacts: {len(cast(Sized, registry['artifacts']))}",
             f"- Steps: {len(cast(Sized, registry['steps']))}",
             f"- Executable test controls: {len(cast(Sized, registry['tests']))}",
+            f"- Data snapshot ID: `{cast(dict[str, object], registry.get('data_snapshot', {})).get('snapshot_id')}`",
+            f"- Data snapshot hash: `{cast(dict[str, object], registry.get('data_snapshot', {})).get('snapshot_hash')}`",
             "- Methodological invariants: PASS",
             "- Artifact/access references: PASS",
             "- Test-node collection: PASS",

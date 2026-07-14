@@ -1,0 +1,230 @@
+source_catalog:
+  root_environment_variable: DISSERTATION_RAW_ROOT
+  snapshot_schema_version: 1
+  profiles:
+    financial_panel_wide:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/processed/panel_wide_clean.parquet
+        excludes: []
+        cardinality: one
+      format: parquet
+      channel_id: S1
+      source_type: processed_financial_panel
+      source_agency: dissertation_pipeline
+      original_unit: firm-year
+      role: predictor
+      verification_status: derived_from_audited_filings
+      coverage_dimensions: [year, listing_board, industry, auditor_tier]
+      data_risks: [missing_publication_date, duplicate_firm_year, schema_drift]
+      semantic_fields:
+        firm_id: [firm_master_id, firm_id, issuer_id, code, ticker, Mã]
+        fiscal_year: [fiscal_year, year, reporting_year, nam, Năm]
+        availability_date: [audited_publication_date, audit_publication_date, publication_date, report_date, publish_date, ngay_cong_bo, Ngày công bố]
+        fiscal_year_end: [fiscal_year_end, year_end_date, reporting_date, ngay_ket_thuc_nam]
+        ticker: [ticker, code, ma_ck, Mã]
+      required_semantic_fields: [firm_id, fiscal_year, availability_date]
+      key_semantics: [firm_id, fiscal_year]
+      date_semantics: [availability_date, fiscal_year_end]
+      panel_mapping:
+        enabled: true
+        core_predictor: true
+        contributes_to_firm_master: true
+    financial_panel_long:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/processed/panel_long_clean.parquet
+        excludes: []
+        cardinality: one
+      format: parquet
+      channel_id: S1
+      source_type: processed_financial_panel_long
+      source_agency: dissertation_pipeline
+      original_unit: firm-year-item
+      role: auxiliary
+      verification_status: derived_from_audited_filings
+      coverage_dimensions: [year, item]
+      data_risks: [schema_drift, duplicate_observation]
+      semantic_fields:
+        firm_id: [firm_master_id, firm_id, issuer_id, code, ticker, Mã]
+        fiscal_year: [fiscal_year, year, reporting_year, nam, Năm]
+      required_semantic_fields: [firm_id, fiscal_year]
+      key_semantics: []
+      date_semantics: []
+      panel_mapping:
+        enabled: false
+    audit_opinions:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/bctc1/YKienKiemToan.xlsx
+        excludes: []
+        cardinality: one
+      format: xlsx
+      reader:
+        sheet_name: first
+        header_row: auto
+      channel_id: S2
+      source_type: audit_opinion
+      source_agency: FiinPro-X
+      original_unit: firm-year
+      role: evidence
+      verification_status: observed
+      coverage_dimensions: [year, auditor]
+      data_risks: [missing_opinion_date, duplicate_firm_year, heterogeneous_headers]
+      semantic_fields:
+        firm_id: [firm_id, code, ticker, Mã, Mã CK]
+        fiscal_year: [fiscal_year, year, Năm]
+        availability_date: [availability_date, publication_date, Ngày công bố, Ngày BCTC]
+      required_semantic_fields: [firm_id, fiscal_year]
+      key_semantics: [firm_id, fiscal_year]
+      date_semantics: [availability_date]
+      panel_mapping:
+        enabled: false
+    capital_ownership:
+      enabled: true
+      required: false
+      discovery:
+        globs:
+        - data/bctc1/VonHoa.xlsx
+        excludes: []
+        cardinality: one_or_none
+      format: xlsx
+      reader:
+        sheet_name: first
+        header_row: auto
+      channel_id: S1
+      source_type: capital_ownership
+      source_agency: FiinPro-X
+      original_unit: firm-year
+      role: predictor
+      verification_status: observed
+      coverage_dimensions: [year]
+      data_risks: [missing_year, heterogeneous_headers]
+      semantic_fields:
+        firm_id: [firm_id, code, ticker, Mã, Mã CK]
+        fiscal_year: [fiscal_year, year, Năm]
+      required_semantic_fields: [firm_id, fiscal_year]
+      key_semantics: [firm_id, fiscal_year]
+      date_semantics: []
+      panel_mapping:
+        enabled: false
+    quarterly_financial_exports:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/bctc1/*.xlsx
+        excludes:
+        - data/bctc1/YKienKiemToan.xlsx
+        - data/bctc1/VonHoa.xlsx
+        - data/bctc1/*ICB*.xlsx
+        cardinality: many
+      format: xlsx
+      reader:
+        sheet_name: first
+        header_row: auto
+      channel_id: S1
+      source_type: quarterly_financial_export
+      source_agency: FiinPro-X
+      original_unit: export-file
+      role: predictor
+      verification_status: observed
+      coverage_dimensions: [period, item]
+      data_risks: [heterogeneous_headers, duplicate_export, schema_drift]
+      semantic_fields: {}
+      required_semantic_fields: []
+      key_semantics: []
+      date_semantics: []
+      panel_mapping:
+        enabled: false
+    listing_history:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/firms/listing_history_expanded_step31_vietstock_profile_timeline.csv
+        excludes: []
+        cardinality: one
+      format: csv
+      reader:
+        encoding: utf-8
+        delimiter: ','
+      channel_id: S3
+      source_type: listing_history
+      source_agency: Vietstock_profile_timeline
+      original_unit: issuer-listing-spell
+      role: reference
+      verification_status: observed
+      coverage_dimensions: [exchange, listing_type]
+      data_risks: [ticker_reuse, overlapping_spells]
+      semantic_fields:
+        firm_id: [code]
+        availability_date: [start_date]
+      required_semantic_fields: [firm_id]
+      key_semantics: []
+      date_semantics: [availability_date]
+      panel_mapping:
+        enabled: false
+    regulatory_labels:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/firms/research_labels_expanded_with_ticker.csv
+        excludes: []
+        cardinality: one
+      format: csv
+      reader:
+        encoding: utf-8
+        delimiter: ','
+      channel_id: S3
+      source_type: regulatory_label
+      source_agency: enforcement_decisions
+      original_unit: case-event
+      role: evidence
+      verification_status: observed
+      coverage_dimensions: [decision_year, violation_type]
+      data_risks: [ticker_match_uncertainty, event_to_firm_year_link]
+      semantic_fields:
+        firm_id: [ticker]
+        fiscal_year: [affected_fiscal_year]
+        availability_date: [decision_date]
+      required_semantic_fields: [firm_id, availability_date]
+      key_semantics: [case_id]
+      date_semantics: [availability_date]
+      panel_mapping:
+        enabled: false
+    firm_reference:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/firms/ThongTinCoBan.xlsx
+        excludes: []
+        cardinality: one
+      format: xlsx
+      reader:
+        sheet_name: Sheet1
+        header_row: 8
+      channel_id: S3
+      source_type: firm_reference
+      source_agency: FiinPro-X
+      original_unit: issuer
+      role: reference
+      verification_status: observed
+      coverage_dimensions: [exchange]
+      data_risks: [ticker_reuse, stale_reference]
+      semantic_fields:
+        firm_id: [Mã, Mã CK, code, ticker]
+        availability_date: [Ngày niêm yết]
+      required_semantic_fields: [firm_id]
+      key_semantics: [firm_id]
+      date_semantics: [availability_date]
+      panel_mapping:
+        enabled: false

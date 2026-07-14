@@ -34,12 +34,22 @@ def _mapping(value: object, context: str) -> StringMap:
     return cast(StringMap, value)
 
 
-def _is_p01_boundary(root: Path, path: Path) -> bool:
+def _is_registered_data_boundary(root: Path, path: Path) -> bool:
     relative = path.relative_to(root).as_posix()
-    return relative.startswith("src/p01/") or relative in {
-        "scripts/p01_audit_raw.py",
-        "scripts/p01_raw_audit.py",
-    }
+    return (
+        relative.startswith("src/p01/")
+        or relative.startswith("src/p02/")
+        or relative.startswith("src/snapshot/")
+        or relative
+        in {
+            "scripts/p01_audit_raw.py",
+            "scripts/p01_raw_audit.py",
+            "scripts/p02_build_firm_panel.py",
+            "scripts/p02_panel.py",
+            "scripts/create_data_snapshot.py",
+            "scripts/run_pipeline.py",
+        }
+    )
 
 
 def validate_source_patterns(
@@ -93,7 +103,7 @@ def validate_source_patterns(
             if isinstance(node, ast.Constant) and isinstance(node.value, str)
         }
 
-        if not _is_p01_boundary(root, path):
+        if not _is_registered_data_boundary(root, path):
             copied_columns = sorted(physical_names & literals)
             if copied_columns:
                 raise ConfigurationError(

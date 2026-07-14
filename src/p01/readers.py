@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+import openpyxl
 import pyarrow.parquet as pq
 
 from .models import SourceSpec
@@ -42,14 +43,15 @@ def inspect_file_signature(path: Path, spec: SourceSpec) -> dict[str, object]:
         else None
     )
     newline = "CRLF" if b"\r\n" in tail else "LF" if b"\n" in tail else "NONE_OR_BINARY"
+    sha256 = hash_file(path)
     return {
         "path_relative": spec.relative_path,
         "format": spec.format,
         "size_bytes": stat.st_size,
         "modified_at_utc": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
-        "sha256": hash_file(path),
+        "sha256": sha256,
         "locked_sha256": spec.locked_sha256,
-        "hash_matches_lock": hash_file(path) == spec.locked_sha256,
+        "hash_matches_lock": sha256 == spec.locked_sha256,
         "prefix_hex": prefix.hex(),
         "bom": bom,
         "newline_style": newline,
@@ -67,6 +69,14 @@ def read_header(path: Path, spec: SourceSpec) -> list[str]:
                 return []
     if spec.format == "parquet":
         return list(pq.ParquetFile(path).schema_arrow.names)
+    if spec.format == "xlsx":
+        workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        sheet = workbook[spec.sheet_name] if spec.sheet_name else workbook[workbook.sheetnames[0]]
+        header_row = spec.header_row or 1
+        values = next(sheet.iter_rows(min_row=header_row, max_row=header_row, values_only=True))
+        columns = ["" if value is None else str(value).strip() for value in values]
+        workbook.close()
+        return columns
     iterator = iter_rows(path, spec)
     try:
         return list(next(iterator))
@@ -87,6 +97,20 @@ def iter_rows(path: Path, spec: SourceSpec) -> Iterator[Row]:
         for batch in parquet.iter_batches(batch_size=65536):
             for row in batch.to_pylist():
                 yield {str(key): value for key, value in cast(Mapping[object, object], row).items()}
+        return
+    if spec.format == "xlsx":
+        workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        sheet = workbook[spec.sheet_name] if spec.sheet_name else workbook[workbook.sheetnames[0]]
+        header_row = spec.header_row or 1
+        header_values = next(
+            sheet.iter_rows(min_row=header_row, max_row=header_row, values_only=True)
+        )
+        columns = ["" if value is None else str(value).strip() for value in header_values]
+        for values in sheet.iter_rows(min_row=header_row + 1, values_only=True):
+            if all(value is None for value in values):
+                continue
+            yield {column: value for column, value in zip(columns, values, strict=False)}
+        workbook.close()
         return
     if spec.format == "jsonl":
         with path.open("r", encoding=spec.encoding) as stream:

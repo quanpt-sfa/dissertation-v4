@@ -86,6 +86,10 @@ Version: 1
 
 Version: 1
 
+## p02_resolution_schema
+
+Version: 1
+
 ## protocol_hash_schema
 
 Version: 1

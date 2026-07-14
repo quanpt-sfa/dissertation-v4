@@ -9,6 +9,7 @@ modules:
   capabilities: foundation/capabilities.yaml
   study: methodology/study.yaml
   data_sources: methodology/data_sources.yaml
+  source_catalog: methodology/source_catalog.yaml
   entity_resolution: methodology/entity_resolution.yaml
   evidence: methodology/evidence.yaml
   risksets: methodology/risksets.yaml

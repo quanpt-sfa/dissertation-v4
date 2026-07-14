@@ -234,3 +234,66 @@ def test_parquet_source_passes(tmp_path: Path) -> None:
     )
     assert report.status == "PASS"
     assert report.file_signature["format"] == "parquet"
+
+
+def test_missing_required_date_value_is_isolated(tmp_path: Path) -> None:
+    path = tmp_path / "source.csv"
+    _write_csv(
+        path,
+        [
+            {
+                "firm_id": "A",
+                "fiscal_year": "2023",
+                "availability_date": "",
+                "amount": "1000",
+            }
+        ],
+    )
+    report = audit_source(
+        run_id="run-a",
+        protocol_hash="a" * 64,
+        source_path=path,
+        spec=_profile(path, format_name="csv", locked_hash=hash_file(path)),
+    )
+    assert report.status == "PASS_WITH_ISSUES"
+    assert any(issue.code == "MISSING_REQUIRED_DATE_VALUES" for issue in report.issues)
+
+
+def test_missing_key_value_fails(tmp_path: Path) -> None:
+    path = tmp_path / "source.csv"
+    _write_csv(
+        path,
+        [
+            {
+                "firm_id": "",
+                "fiscal_year": "2023",
+                "availability_date": "2024-03-31",
+                "amount": "1000",
+            }
+        ],
+    )
+    report = audit_source(
+        run_id="run-a",
+        protocol_hash="a" * 64,
+        source_path=path,
+        spec=_profile(path, format_name="csv", locked_hash=hash_file(path)),
+    )
+    assert report.status == "FAILED"
+    assert any(issue.code == "MISSING_KEY_VALUES" for issue in report.issues)
+
+
+def test_jsonl_later_row_unregistered_field_fails(tmp_path: Path) -> None:
+    path = tmp_path / "source.jsonl"
+    path.write_text(
+        '{"firm_id":"A","fiscal_year":2023,"availability_date":"2024-03-31","amount":1}\n'
+        '{"firm_id":"B","fiscal_year":2023,"availability_date":"2024-04-01","amount":2,"later_extra":"x"}\n',
+        encoding="utf-8",
+    )
+    report = audit_source(
+        run_id="run-a",
+        protocol_hash="a" * 64,
+        source_path=path,
+        spec=_profile(path, format_name="jsonl", locked_hash=hash_file(path)),
+    )
+    assert report.status == "FAILED"
+    assert any(issue.code == "UNREGISTERED_SOURCE_FIELDS_IN_ROWS" for issue in report.issues)

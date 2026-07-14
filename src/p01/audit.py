@@ -179,6 +179,9 @@ def audit_source(
 
     row_count = 0
     nonmissing: Counter[str] = Counter({column: 0 for column in columns})
+    missing_required_values: Counter[str] = Counter()
+    missing_key_values: Counter[str] = Counter()
+    row_extra_fields: Counter[str] = Counter()
     key_counts: Counter[tuple[str, ...]] = Counter()
     duplicate_examples: list[dict[str, object]] = []
     date_stats = {column: DateFieldAudit() for column in spec.schema.date_columns}
@@ -194,7 +197,18 @@ def audit_source(
             if not _is_missing(row.get(column)):
                 nonmissing[column] += 1
 
-        if spec.schema.key_columns and all(column in row for column in spec.schema.key_columns):
+        for column in set(row) - spec.schema.registered_columns:
+            row_extra_fields[column] += 1
+        for column in spec.schema.required_columns:
+            if _is_missing(row.get(column)):
+                missing_required_values[column] += 1
+        for column in spec.schema.key_columns:
+            if _is_missing(row.get(column)):
+                missing_key_values[column] += 1
+
+        if spec.schema.key_columns and all(
+            not _is_missing(row.get(column)) for column in spec.schema.key_columns
+        ):
             key = tuple(
                 "" if _is_missing(row.get(column)) else str(row.get(column))
                 for column in spec.schema.key_columns
@@ -245,6 +259,43 @@ def audit_source(
             stats.parsed += 1
             if parsed < 0:
                 stats.negative += 1
+
+    if row_extra_fields and not spec.schema.allow_extra_columns:
+        issues.append(
+            classify_data_issue(
+                "UNREGISTERED_SOURCE_FIELDS_IN_ROWS",
+                f"Unregistered row fields are present: {sorted(row_extra_fields)}",
+                fatal=True,
+                count=sum(row_extra_fields.values()),
+            )
+        )
+
+    for column, count in sorted(missing_key_values.items()):
+        if count:
+            issues.append(
+                classify_data_issue(
+                    "MISSING_KEY_VALUES",
+                    f"{count} rows have a missing registered key value.",
+                    fatal=True,
+                    field_name=column,
+                    count=count,
+                )
+            )
+
+    for column, count in sorted(missing_required_values.items()):
+        if not count or column in spec.schema.key_columns:
+            continue
+        issues.append(
+            classify_data_issue(
+                "MISSING_REQUIRED_DATE_VALUES"
+                if column in spec.schema.required_date_columns
+                else "MISSING_REQUIRED_VALUES",
+                f"{count} rows have a missing required value.",
+                isolate=True,
+                field_name=column,
+                count=count,
+            )
+        )
 
     if row_count < spec.schema.row_count_min:
         issues.append(
@@ -372,6 +423,9 @@ def audit_source(
             "missing_required_columns": missing_required,
             "extra_columns": extra_columns,
             "allow_extra_columns": spec.schema.allow_extra_columns,
+            "missing_required_value_counts": dict(sorted(missing_required_values.items())),
+            "missing_key_value_counts": dict(sorted(missing_key_values.items())),
+            "unregistered_row_field_counts": dict(sorted(row_extra_fields.items())),
         },
         duplicate_key_audit={
             "key_columns": list(spec.schema.key_columns),
