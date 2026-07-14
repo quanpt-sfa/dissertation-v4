@@ -35,7 +35,10 @@ class ArtifactStore:
     def path(self, artifact_id: str, coordinates: Mapping[str, str]) -> Path:
         item = self._artifact(artifact_id)
         expected = item.get("coordinates")
-        if not isinstance(expected, list) or set(coordinates) != set(expected):
+        if not isinstance(expected, list):
+            raise ConfigurationError(f"artifact={artifact_id}: coordinates do not match catalog")
+        expected_coordinates = cast(list[object], expected)
+        if set(coordinates) != {str(name) for name in expected_coordinates}:
             raise ConfigurationError(f"artifact={artifact_id}: coordinates do not match catalog")
         relative = Path(str(item["path_template"]).format(**coordinates))
         result = (self.root / relative).resolve()
@@ -124,7 +127,8 @@ class ArtifactStore:
     def _recover_or_reject_existing(
         self, target: Path, manifest_path: Path, item: Mapping[str, object]
     ) -> None:
-        target_exists, manifest_exists = target.exists(), manifest_path.exists()
+        target_exists = target.exists()
+        manifest_exists = manifest_path.exists()
         if target_exists and manifest_exists:
             if item.get("immutability") == "immutable":
                 raise ConfigurationError(f"artifact={target}: immutable artifact already exists")
@@ -146,9 +150,12 @@ class ArtifactStore:
 
     def _artifact(self, artifact_id: str) -> dict[str, Any]:
         item = self.artifacts.get(artifact_id)
-        if not isinstance(item, dict) or not isinstance(item.get("path_template"), str):
+        if not isinstance(item, dict):
             raise ConfigurationError(f"artifact={artifact_id}: undeclared artifact")
-        return cast(dict[str, Any], item)
+        item_spec = cast(dict[str, Any], item)
+        if not isinstance(item_spec.get("path_template"), str):
+            raise ConfigurationError(f"artifact={artifact_id}: undeclared artifact")
+        return item_spec
 
     def _manifest(
         self,

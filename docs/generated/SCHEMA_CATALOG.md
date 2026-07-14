@@ -90,6 +90,10 @@ Version: 1
 
 Version: 1
 
+## raw_audit_schema
+
+Version: 1
+
 ## raw_outer_predictions_frame
 
 Version: 1

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 import yaml
@@ -33,13 +35,17 @@ def configuration(tmp_path: Path) -> Path:
     return destination / "pipeline.yaml"
 
 
-def read_yaml(path: Path) -> dict[str, object]:
+YamlData = dict[str, Any]
+Mutator = Callable[[YamlData], None]
+
+
+def read_yaml(path: Path) -> YamlData:
     value = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
-    return value
+    return cast(YamlData, value)
 
 
-def write_yaml(path: Path, value: dict[str, object]) -> None:
+def write_yaml(path: Path, value: YamlData) -> None:
     path.write_text(
         yaml.safe_dump(value, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
@@ -127,35 +133,41 @@ def test_path_collision_and_incomplete_traceability_fail(
         shutil.rmtree(copied)
 
 
+def mutate_measurement(value: YamlData) -> None:
+    cast(YamlData, value["measurement"])["selection_candidates"] = [
+        "L2",
+        "L3_hierarchical_pi",
+        "none",
+    ]
+
+
+def mutate_features(value: YamlData) -> None:
+    cast(YamlData, value["features"])["label_model_allows_content"] = True
+
+
+def mutate_evaluation(value: YamlData) -> None:
+    cast(YamlData, value["evaluation"])["ap_soft_targets"] = True
+
+
+def mutate_weighting(value: YamlData) -> None:
+    cast(YamlData, value["weighting"])["ipcw_role"] = "confirmatory"
+
+
 @pytest.mark.parametrize(
     ("path", "mutator"),
     [
-        (
-            "methodology/measurement.yaml",
-            lambda value: value["measurement"].update(
-                {"selection_candidates": ["L2", "L3_hierarchical_pi", "none"]}
-            ),
-        ),
-        (
-            "methodology/features.yaml",
-            lambda value: value["features"].update({"label_model_allows_content": True}),
-        ),
-        (
-            "methodology/evaluation.yaml",
-            lambda value: value["evaluation"].update({"ap_soft_targets": True}),
-        ),
-        (
-            "execution/weighting.yaml",
-            lambda value: value["weighting"].update({"ipcw_role": "confirmatory"}),
-        ),
+        ("methodology/measurement.yaml", mutate_measurement),
+        ("methodology/features.yaml", mutate_features),
+        ("methodology/evaluation.yaml", mutate_evaluation),
+        ("execution/weighting.yaml", mutate_weighting),
     ],
 )
 def test_methodological_invariants_fail_closed(
-    configuration: Path, path: str, mutator: object
+    configuration: Path, path: str, mutator: Mutator
 ) -> None:
     target = configuration.parent / path
     value = read_yaml(target)
-    mutator(value)  # type: ignore[operator]
+    mutator(value)
     write_yaml(target, value)
     with pytest.raises(MethodologicalInvariantError):
         compile_registry(configuration)

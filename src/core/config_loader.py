@@ -18,7 +18,10 @@ from .hashing import file_hash
 
 
 def _mapping(value: object, context: str) -> dict[str, Any]:
-    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+    if not isinstance(value, dict):
+        raise ConfigurationError(f"{context}: expected a mapping; correct the YAML structure")
+    raw = cast(dict[object, object], value)
+    if not all(isinstance(key, str) for key in raw):
         raise ConfigurationError(f"{context}: expected a mapping; correct the YAML structure")
     return cast(dict[str, Any], value)
 
@@ -51,10 +54,15 @@ def load_manifest(path: Path) -> Manifest:
             f"source={path}: duplicate module path; each namespace needs one owner"
         )
     schemas_raw = raw.get("schema_modules", [])
-    if not isinstance(schemas_raw, list) or not all(isinstance(item, str) for item in schemas_raw):
+    if not isinstance(schemas_raw, list):
+        raise ConfigurationError(f"source={path}, key=schema_modules: list of paths required")
+    schema_items = cast(list[object], schemas_raw)
+    if not all(isinstance(item, str) for item in schema_items):
         raise ConfigurationError(f"source={path}, key=schema_modules: list of paths required")
     return Manifest(
-        path=path, modules=cast(dict[str, str], modules), schema_modules=tuple(schemas_raw)
+        path=path,
+        modules=cast(dict[str, str], modules),
+        schema_modules=tuple(cast(list[str], schema_items)),
     )
 
 

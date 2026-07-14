@@ -35,7 +35,7 @@ steps:
     - D45
   P01:
     description: Raw audit
-    cli_module: scripts.p01_raw_audit
+    cli_module: scripts.p01_audit_raw
     unit_coordinates:
     - source_id
     reads: []

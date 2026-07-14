@@ -66,7 +66,7 @@ def validate_decisions(registry: dict[str, object]) -> list[dict[str, object]]:
             if (
                 not isinstance(value, list)
                 or not value
-                or not all(isinstance(item, str) for item in value)
+                or not all(isinstance(item, str) for item in cast(list[object], value))
             ):
                 raise DecisionTraceabilityError(
                     f"decision={decision_id}: non-empty {name} required"
@@ -132,10 +132,10 @@ def validate_test_registry(registry: dict[str, object], root: Path) -> None:
         if (
             not isinstance(nodes, list)
             or not nodes
-            or not all(isinstance(node, str) for node in nodes)
+            or not all(isinstance(node, str) for node in cast(list[object], nodes))
         ):
             raise DecisionTraceabilityError(f"test={test_id}: pytest_nodes required")
-        if not isinstance(decision_ids, list) or len(decision_ids) != 1:
+        if not isinstance(decision_ids, list) or len(cast(list[object], decision_ids)) != 1:
             raise DecisionTraceabilityError(f"test={test_id}: exactly one decision_id required")
         for node in cast(list[str], nodes):
             if node in declared_nodes:

@@ -18,3 +18,8 @@ data_sources:
     - 0.01
     - 0.03
     - 0.05
+  source_registry:
+    root_environment_variable: DISSERTATION_RAW_ROOT
+    schema_evolution_policy: fail_on_unregistered_fields
+    hash_policy: locked_sha256_required
+    sources: {}

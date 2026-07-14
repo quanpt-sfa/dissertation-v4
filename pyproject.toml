@@ -13,7 +13,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8",
-  "ruff>=0.12",
+  "ruff==0.15.21",
   "pyright>=1.1",
   "pre-commit>=4",
   "pandas-stubs>=2.2",
@@ -34,7 +34,3 @@ ignore = ["E501"]
 [tool.pyright]
 typeCheckingMode = "strict"
 include = ["src", "scripts", "tests"]
-reportUnknownArgumentType = "warning"
-reportUnknownLambdaType = "warning"
-reportUnknownMemberType = "warning"
-reportUnknownVariableType = "warning"

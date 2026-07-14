@@ -44,7 +44,7 @@ def test_parquet_round_trip_and_manifest(tmp_path: Path) -> None:
     artifact_store.write("raw_outer_predictions", predictions(), coordinates, "P11")
     observed = artifact_store.read("raw_outer_predictions", coordinates)
     assert isinstance(observed, pd.DataFrame)
-    assert observed["prediction"].iloc[0] == pytest.approx(0.25)
+    assert abs(float(observed["prediction"].iloc[0]) - 0.25) < 1e-12
 
 
 def test_missing_manifest_fails_closed(tmp_path: Path) -> None:

@@ -152,7 +152,7 @@ artifacts:
   raw_audit:
     producer_step: P01
     path_template: P01/raw_audit/{source_id}.json
-    schema_id: json_object
+    schema_id: raw_audit_schema
     format: json
     coordinates:
     - source_id

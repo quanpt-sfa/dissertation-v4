@@ -70,7 +70,8 @@ def assert_access(
         raise AccessPolicyError(f"step={step_id}, artifact={artifact_id}: {mode} is not declared")
 
     if mode == "read":
-        sensitivity = artifact.get("sensitivity_class")
+        artifact_spec = cast(dict[str, Any], artifact)
+        sensitivity = artifact_spec.get("sensitivity_class")
         if sensitivity == "outer" and typed.get("outer_access") != "open":
             raise AccessPolicyError(
                 f"step={step_id}, artifact={artifact_id}: outer outcome is sealed"

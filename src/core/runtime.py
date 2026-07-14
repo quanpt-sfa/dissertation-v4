@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 from .access_matrix import assert_access
 from .artifact_store import ArtifactStore
@@ -51,21 +51,43 @@ class RunContext:
             or not isinstance(policy, dict)
         ):
             raise AccessPolicyError("runtime: access foundations unavailable")
-        assert_access(matrix, artifacts, policy, self.step_id, artifact_id, mode, self.state)
+        assert_access(
+            cast(dict[str, Any], matrix),
+            cast(dict[str, Any], artifacts),
+            cast(dict[str, Any], policy),
+            self.step_id,
+            artifact_id,
+            mode,
+            self.state,
+        )
 
     def _verify_required_receipts(self) -> None:
         matrix = self.registry.get("access_matrix")
         artifacts = self.registry.get("artifacts")
         if not isinstance(matrix, dict) or not isinstance(artifacts, dict):
             raise AccessPolicyError("runtime: access matrix unavailable")
-        step = matrix.get(self.step_id)
+        matrix_map = cast(dict[str, Any], matrix)
+        artifact_map = cast(dict[str, Any], artifacts)
+        step = matrix_map.get(self.step_id)
         if not isinstance(step, dict):
             raise AccessPolicyError(f"step={self.step_id}: unknown")
-        for receipt_id in step.get("required_receipts", []):
-            receipt = artifacts.get(receipt_id)
+        step_spec = cast(dict[str, Any], step)
+        receipts = step_spec.get("required_receipts", [])
+        if not isinstance(receipts, list):
+            raise AccessPolicyError(f"step={self.step_id}: required_receipts must be a list")
+        for receipt_id in cast(list[object], receipts):
+            if not isinstance(receipt_id, str):
+                raise AccessPolicyError(f"step={self.step_id}: receipt id must be a string")
+            receipt = artifact_map.get(receipt_id)
             if not isinstance(receipt, dict):
                 raise AccessPolicyError(f"receipt={receipt_id}: unknown")
-            required_names = set(receipt.get("coordinates", []))
+            receipt_spec = cast(dict[str, Any], receipt)
+            coordinate_names = receipt_spec.get("coordinates", [])
+            if not isinstance(coordinate_names, list) or not all(
+                isinstance(name, str) for name in cast(list[object], coordinate_names)
+            ):
+                raise AccessPolicyError(f"receipt={receipt_id}: coordinate names invalid")
+            required_names = set(cast(list[str], coordinate_names))
             coordinates = {
                 name: self.unit_coordinates[name]
                 for name in required_names

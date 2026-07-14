@@ -5,14 +5,17 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
+from typing import Any, cast
 
 
 def normalize(value: object) -> object:
     """Recursively sort mappings while preserving semantically ordered lists."""
     if isinstance(value, Mapping):
-        return {str(key): normalize(value[key]) for key in sorted(value, key=str)}
+        mapping = cast(Mapping[Any, Any], value)
+        return {str(key): normalize(mapping[key]) for key in sorted(mapping, key=str)}
     if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-        return [normalize(item) for item in value]
+        sequence = cast(Sequence[Any], value)
+        return [normalize(item) for item in sequence]
     return value
 
 

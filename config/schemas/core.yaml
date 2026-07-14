@@ -527,3 +527,23 @@ schemas:
     strict_columns: true
     coerce: false
     compatibility_policy: strict
+  raw_audit_schema:
+    contract_type: json_object
+    version: 1
+    required_keys:
+    - run_id
+    - source_id
+    - protocol_hash
+    - audited_at_utc
+    - status
+    - source_metadata
+    - file_signature
+    - schema_audit
+    - duplicate_key_audit
+    - date_audit
+    - unit_audit
+    - coverage
+    - issues
+    - decision
+    additional_properties: false
+    compatibility_policy: strict

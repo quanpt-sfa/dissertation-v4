@@ -1,0 +1,43 @@
+# Copy this file outside config/, fill it, then register it with
+# tools/p01_register_source.py before creating the final P00 lock.
+
+enabled: true
+channel_id: S1
+source_type: official
+source_agency: REPLACE_WITH_ORIGINATING_AGENCY
+original_unit: firm-year
+related_period_field: fiscal_year
+availability_date_field: availability_date
+availability_date_source: REPLACE_WITH_DATE_CONFIRMATION_SOURCE
+coverage_dimensions:
+  - year
+  - listing_board
+  - industry
+  - auditor_tier
+role: predictor
+verification_status: observed
+data_risks:
+  - duplicate_records
+  - missing_availability_date
+  - uncertain_firm_year_link
+format: parquet
+encoding: utf-8
+delimiter: null
+
+schema:
+  required_columns:
+    - firm_id
+    - fiscal_year
+    - availability_date
+  optional_columns: []
+  key_columns:
+    - firm_id
+    - fiscal_year
+  date_columns:
+    - availability_date
+  required_date_columns:
+    - availability_date
+  numeric_columns: {}
+  allow_extra_columns: false
+  key_unique: true
+  row_count_min: 1

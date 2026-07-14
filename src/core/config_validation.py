@@ -53,9 +53,10 @@ def validate_references(registry: dict[str, object]) -> None:
         if producer not in steps or schema_id not in schemas:
             raise UnknownReferenceError(f"artifact={artifact_id}: unknown producer or schema")
         schema = schemas[schema_id]
+        schema_spec = cast(dict[str, Any], schema) if isinstance(schema, dict) else {}
         if (
             not isinstance(schema, dict)
-            or schema.get("contract_type") not in format_contracts[item["format"]]
+            or schema_spec.get("contract_type") not in format_contracts[item["format"]]
         ):
             raise UnknownReferenceError(f"artifact={artifact_id}: format/contract mismatch")
         template = str(item["path_template"])

@@ -47,7 +47,7 @@ Source: config/pipeline.yaml
 | outer_open_receipt | P12 | outer_open_receipt_schema | `P12/outer_open/{outer_fold}.json` |
 | p00_audit_report | P00 | p00_audit_markdown | `P00/P00_AUDIT_REPORT.md` |
 | protocol_hash | P00 | protocol_hash_schema | `P00/protocol_hash.txt` |
-| raw_audit | P01 | json_object | `P01/raw_audit/{source_id}.json` |
+| raw_audit | P01 | raw_audit_schema | `P01/raw_audit/{source_id}.json` |
 | raw_outer_predictions | P11 | raw_outer_predictions_frame | `P11/predictions/{outer_fold}.parquet` |
 | registry_lock | P00 | registry_lock_schema | `P00/registry.lock.json` |
 | risk_sets | P04 | risk_sets_frame | `P04/risk_sets.parquet` |
