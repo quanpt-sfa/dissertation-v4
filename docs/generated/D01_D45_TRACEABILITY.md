@@ -4,48 +4,48 @@ Source: config/pipeline.yaml
 # D01–D45 traceability
 | Decision | Statement | Tests |
 |---|---|---|
-| D01 | The protocol has one configuration entry point. | T001 |
-| D02 | Track A uses L1 and Gate 1 uses only allowed candidates. | T001 |
-| D03 | Hierarchical-pi is sensitivity-only. | T001 |
-| D04 | AP is not evaluated against soft targets. | T001 |
-| D05 | Content predictors are excluded from label models. | T001 |
-| D06 | Missing source is not evidence zero. | T001 |
-| D07 | Immature follow-up is not a negative outcome. | T001 |
-| D08 | Initial fold is excluded from confirmatory pooling. | T001 |
-| D09 | Prospective fold is excluded from retrospective evaluation. | T001 |
-| D10 | Known cases remain sealed until P15. | T001 |
-| D11 | Outer outcomes require model freeze. | T001 |
-| D12 | Full-sample weights are descriptive only. | T001 |
-| D13 | Analytical weights are development-history fitted. | T001 |
-| D14 | IPCW is sensitivity only. | T001 |
-| D15 | The benchmark ladder has six levels and PU is separate. | T001 |
-| D16 | Strict selection removes held-out channel information. | T001 |
-| D17 | Fixed-pi reports exclude pi bias and RMSE. | T001 |
-| D18 | Hierarchical-pi parameter bias is limited to estimated parameters. | T001 |
-| D19 | CHNC3 inference is family adjusted. | T001 |
-| D20 | Utility costs remain separate. | T001 |
-| D21 | Simulation imports production labels. | T001 |
-| D22 | Simulation replication and MCSE targets are locked. | T001 |
-| D23 | Simulation roster contains required model classes. | T001 |
-| D24 | Simulation includes Gate 3 operating characteristics. | T001 |
-| D25 | Shared ledger append operations are forbidden. | T001 |
-| D26 | Physical columns have one owned registry. | T001 |
-| D27 | Artifact paths are centrally declared. | T001 |
-| D28 | Step access is centrally declared. | T001 |
-| D29 | Schema contracts resolve logical columns. | T001 |
-| D30 | Status vocabulary is registered. | T001 |
-| D31 | Declared channels are controlled by configuration. | T001 |
-| D32 | Maturity is required for risk sets. | T001 |
-| D33 | Calibration uses development cross-fitting. | T001 |
-| D34 | Learners are registered configuration objects. | T001 |
-| D35 | Domains are centrally registered. | T001 |
-| D36 | Reporting catalogs are generated from configuration. | T001 |
-| D37 | Agent rules are generated from their owned module. | T001 |
-| D38 | Configuration sources are versioned protocol metadata. | T001 |
-| D39 | Entity resolution is registered before later stages. | T001 |
-| D40 | Reason codes are centrally registered. | T001 |
-| D41 | Known-case identifiers are sealed configuration content. | T001 |
-| D42 | The configuration hash algorithm is declared. | T001 |
-| D43 | Track A policy is registered. | T001 |
-| D44 | Generated documentation remains reproducible. | T001 |
-| D45 | P0 publishes an immutable locked registry. | T001 |
+| D01 | One manifest is the sole configuration entry point. | T001 |
+| D02 | Track A endpoint and Gate 1 candidate set are locked. | T021 |
+| D03 | Hierarchical pi is sensitivity only. | T022 |
+| D04 | Average precision is not used with soft targets. | T023 |
+| D05 | Content predictors cannot enter label models. | T024 |
+| D06 | Missing source is not evidence zero. | T005 |
+| D07 | Immature follow-up is not negative. | T006 |
+| D08 | Initial fold is excluded from confirmatory pooling. | T025 |
+| D09 | Prospective fold remains distinct from retrospective evaluation. | T025 |
+| D10 | Known cases remain sealed until the registered opening step. | T026 |
+| D11 | Outer outcomes open only after model freeze. | T027 |
+| D12 | Full-sample weights are descriptive only. | T028 |
+| D13 | Analytical weights are fitted on development history. | T029 |
+| D14 | IPCW is sensitivity only. | T030 |
+| D15 | The benchmark ladder has six levels and PU is separate. | T031 |
+| D16 | Strict selection excludes held-out-channel information. | T013 |
+| D17 | Fixed pi output excludes pi bias and RMSE. | T032 |
+| D18 | Hierarchical pi bias is only for estimated parameters. | T033 |
+| D19 | CHNC3 uses family-adjusted inference. | T034 |
+| D20 | Review and false-positive costs remain distinct. | T035 |
+| D21 | Simulation imports the registered production label structures. | T036 |
+| D22 | Core and L3 simulation precision targets are distinct and locked. | T011 |
+| D23 | Required oracle and benchmark model classes are retained. | T010 |
+| D24 | Gate 3 operating characteristics are simulated. | T037 |
+| D25 | Shared ledger append operations are forbidden. | T002 |
+| D26 | Physical columns have one registry owner. | T038 |
+| D27 | Artifact paths resolve only from the catalog. | T039 |
+| D28 | Step access is centrally declared. | T027 |
+| D29 | Schema contracts resolve logical columns. | T040 |
+| D30 | Status vocabulary is registered. | T041 |
+| D31 | Declared source channels are controlled by configuration. | T003 |
+| D32 | Maturity is required for risk sets. | T006 |
+| D33 | Calibration is development cross-fitted. | T015 |
+| D34 | Learners are registered configuration objects. | T014 |
+| D35 | Domains are centrally registered. | T016 |
+| D36 | Reporting artifacts are generated from configuration. | T020 |
+| D37 | Agent rules are generated from their owner module. | T043 |
+| D38 | Configuration sources have versioned provenance. | T044 |
+| D39 | Entity resolution is registered before later stages. | T004 |
+| D40 | Reason codes are centrally registered. | T041 |
+| D41 | Known-case identifiers are sealed configuration content. | T018 |
+| D42 | The hash algorithm and environment policy are registered. | T042 |
+| D43 | Track A study policy is registered. | T021 |
+| D44 | Generated documents remain reproducible. | T043 |
+| D45 | P00 publishes an immutable locked registry. | T045 |

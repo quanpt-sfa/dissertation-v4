@@ -1,2 +1,46 @@
 tests:
-  T001: {description: P0 configuration contract test, severity: required}
+  T001: {description: sole manifest ownership, severity: required}
+  T002: {description: atomic P00 publication, severity: required}
+  T003: {description: raw audit interface, severity: required}
+  T004: {description: entity panel contract, severity: required}
+  T005: {description: evidence missingness rule, severity: required}
+  T006: {description: maturity risk set rule, severity: required}
+  T007: {description: measurement policy, severity: required}
+  T008: {description: observability policy, severity: required}
+  T009: {description: feature leakage policy, severity: required}
+  T010: {description: simulation roster, severity: required}
+  T011: {description: simulation MCSE thresholds, severity: required}
+  T012: {description: fold-aware weighting, severity: required}
+  T013: {description: gate one selection, severity: required}
+  T014: {description: model freeze firewall, severity: required}
+  T015: {description: outer evaluation firewall, severity: required}
+  T016: {description: sensitivity registration, severity: required}
+  T017: {description: gate two interface, severity: required}
+  T018: {description: known case seal, severity: required}
+  T019: {description: gate three interface, severity: required}
+  T020: {description: final reporting interface, severity: required}
+  T021: {description: track A endpoint invariant, severity: required}
+  T022: {description: hierarchical pi sensitivity invariant, severity: required}
+  T023: {description: soft target AP invariant, severity: required}
+  T024: {description: content feature invariant, severity: required}
+  T025: {description: fold role invariant, severity: required}
+  T026: {description: known case opening invariant, severity: required}
+  T027: {description: outer outcome opening invariant, severity: required}
+  T028: {description: descriptive weight invariant, severity: required}
+  T029: {description: analytical weight fit invariant, severity: required}
+  T030: {description: IPCW sensitivity invariant, severity: required}
+  T031: {description: benchmark ladder invariant, severity: required}
+  T032: {description: fixed pi reporting invariant, severity: required}
+  T033: {description: hierarchical pi reporting invariant, severity: required}
+  T034: {description: family inference invariant, severity: required}
+  T035: {description: utility component invariant, severity: required}
+  T036: {description: production label simulation invariant, severity: required}
+  T037: {description: simulation scenario dimension invariant, severity: required}
+  T038: {description: registered columns invariant, severity: required}
+  T039: {description: artifact path invariant, severity: required}
+  T040: {description: executable schema invariant, severity: required}
+  T041: {description: vocabulary invariant, severity: required}
+  T042: {description: reproducibility invariant, severity: required}
+  T043: {description: generated documentation invariant, severity: required}
+  T044: {description: provenance invariant, severity: required}
+  T045: {description: immutable lock invariant, severity: required}

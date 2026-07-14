@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from .errors import AccessPolicyError
 
@@ -27,7 +27,9 @@ def compile_access_matrix(steps: object) -> dict[str, object]:
     return matrix
 
 
-def assert_access(matrix: Mapping[str, object], step_id: str, artifact_id: str, mode: str, state: str) -> None:
+def assert_access(
+    matrix: Mapping[str, object], step_id: str, artifact_id: str, mode: str, state: str
+) -> None:
     """Enforce a compiled read/write permission for a future RunContext."""
     contract = matrix.get(step_id)
     if not isinstance(contract, dict):

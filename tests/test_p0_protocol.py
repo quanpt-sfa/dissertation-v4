@@ -12,17 +12,16 @@ import pytest
 from core.config_loader import load_manifest
 from core.errors import (
     ArtifactPathCollisionError,
+    ConfigurationError,
     DecisionTraceabilityError,
     DuplicateOwnershipError,
     GeneratedFileDriftError,
     MethodologicalInvariantError,
     MissingModuleError,
-    ConfigurationError,
 )
-from core.generated_docs import render_documents, write_or_check_documents
 from core.forbidden_patterns import validate_source_patterns
+from core.generated_docs import render_documents, write_or_check_documents
 from core.registry_compiler import compile_registry
-
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -47,10 +46,16 @@ def test_valid_manifest_and_repeated_hash_are_deterministic(configuration: Path)
 
 def test_formatting_does_not_change_hash_but_semantics_do(configuration: Path) -> None:
     first = compile_registry(configuration).protocol_hash
-    with (configuration.parent / "methodology" / "study.yaml").open("a", encoding="utf-8") as stream:
+    with (configuration.parent / "methodology" / "study.yaml").open(
+        "a", encoding="utf-8"
+    ) as stream:
         stream.write("\n# formatting-only comment\n")
     assert compile_registry(configuration).protocol_hash == first
-    replace(configuration.parent / "methodology" / "study.yaml", "observed_endpoint", "different_endpoint")
+    replace(
+        configuration.parent / "methodology" / "study.yaml",
+        "observed_endpoint",
+        "different_endpoint",
+    )
     assert compile_registry(configuration).protocol_hash != first
 
 
@@ -60,7 +65,8 @@ def test_missing_module_and_duplicate_owner_fail(configuration: Path) -> None:
         compile_registry(configuration)
     configuration = ROOT / "config" / "pipeline.yaml"
     raw = configuration.read_text(encoding="utf-8").replace(
-        "  metadata: foundation/metadata.yaml", "  duplicate: foundation/metadata.yaml\n  metadata: foundation/metadata.yaml"
+        "  metadata: foundation/metadata.yaml",
+        "  duplicate: foundation/metadata.yaml\n  metadata: foundation/metadata.yaml",
     )
     local = ROOT / "work" / "duplicate-pipeline.yaml"
     local.write_text(raw, encoding="utf-8")
@@ -72,7 +78,11 @@ def test_missing_module_and_duplicate_owner_fail(configuration: Path) -> None:
 
 
 def test_path_collision_and_traceability_fail(configuration: Path) -> None:
-    replace(configuration.parent / "foundation" / "artifacts.yaml", "P17/report.json", "P00/registry.lock.json")
+    replace(
+        configuration.parent / "foundation" / "artifacts.yaml",
+        "P17/final_report.md",
+        "P00/registry.lock.json",
+    )
     with pytest.raises(ArtifactPathCollisionError):
         compile_registry(configuration)
     configuration = ROOT / "config" / "pipeline.yaml"
@@ -102,7 +112,9 @@ def test_methodological_invariants_fail_closed(configuration: Path, old: str, ne
         compile_registry(configuration)
 
 
-def test_generated_docs_have_header_and_drift_is_detected(configuration: Path, tmp_path: Path) -> None:
+def test_generated_docs_have_header_and_drift_is_detected(
+    configuration: Path, tmp_path: Path
+) -> None:
     compiled = compile_registry(configuration)
     documents = render_documents(dict(compiled.registry))
     assert all(value.startswith("GENERATED FILE — DO NOT EDIT") for value in documents.values())
@@ -121,7 +133,16 @@ def test_forbidden_pattern_guard_uses_compiled_columns(configuration: Path, tmp_
 
 
 def test_p00_cli_is_atomic_and_non_overwriting(tmp_path: Path) -> None:
-    command = [sys.executable, str(ROOT / "scripts" / "p00_lock_protocol.py"), "--config", str(ROOT / "config" / "pipeline.yaml"), "--run-id", "test", "--output-root", str(tmp_path)]
+    command = [
+        sys.executable,
+        str(ROOT / "scripts" / "p00_lock_protocol.py"),
+        "--config",
+        str(ROOT / "config" / "pipeline.yaml"),
+        "--run-id",
+        "test",
+        "--output-root",
+        str(tmp_path),
+    ]
     assert subprocess.run(command, check=False).returncode == 0
     assert (tmp_path / "test" / "P00" / "_SUCCESS.json").is_file()
     assert subprocess.run(command, check=False).returncode != 0

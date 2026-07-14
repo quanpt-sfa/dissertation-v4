@@ -1,1 +1,13 @@
-simulation: {imports_production_labels: true, minimum_replications: 100, mcse_target: 0.01, model_roster: [oracle, observability_only, content_only, full], gate3_operating_characteristics: true}
+simulation:
+  imports_production_labels: true
+  core: {minimum_replications: 2500, pass_fail_mcse_max: 0.01, batch_size: 250, maximum_replications: 10000}
+  l3: {initial_replications: 1000, pass_fail_mcse_max: 0.02, batch_size: 100, maximum_replications: 5000}
+  continuous_metrics: {mcse_fraction_of_minimum_meaningful_improvement_max: 0.10}
+  adaptive_replication: {enabled: true}
+  prevalence: {low: 0.01, medium: 0.05, high: 0.10, independent_scenario_dimension: true}
+  anchor_false_positive_grid: [0.00, 0.01, 0.03, 0.05]
+  model_roster: [oracle, observability_only, content_only, full]
+  fixed_pi_output_policy: {report_pi_bias: false, report_pi_rmse: false}
+  hierarchical_pi_output_policy: {role: sensitivity_only, bias_for_estimated_parameters_only: true}
+  gate3_operating_characteristics: true
+  dimensions: [source_dependence, selective_verification, delay_and_maturity, concept_drift, label_policy_drift, sample_size, channel_count]

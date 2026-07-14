@@ -42,14 +42,20 @@ def load_manifest(path: Path) -> Manifest:
         )
     modules = _mapping(raw.get("modules"), f"source={path}, key=modules")
     if not modules or not all(isinstance(value, str) for value in modules.values()):
-        raise ConfigurationError(f"source={path}, key=modules: non-empty ID-to-path mapping required")
+        raise ConfigurationError(
+            f"source={path}, key=modules: non-empty ID-to-path mapping required"
+        )
     module_paths = list(cast(dict[str, str], modules).values())
     if len(module_paths) != len(set(module_paths)):
-        raise DuplicateOwnershipError(f"source={path}: duplicate module path; each namespace needs one owner")
+        raise DuplicateOwnershipError(
+            f"source={path}: duplicate module path; each namespace needs one owner"
+        )
     schemas_raw = raw.get("schema_modules", [])
     if not isinstance(schemas_raw, list) or not all(isinstance(item, str) for item in schemas_raw):
         raise ConfigurationError(f"source={path}, key=schema_modules: list of paths required")
-    return Manifest(path=path, modules=cast(dict[str, str], modules), schema_modules=tuple(schemas_raw))
+    return Manifest(
+        path=path, modules=cast(dict[str, str], modules), schema_modules=tuple(schemas_raw)
+    )
 
 
 def load_modules(manifest: Manifest) -> tuple[dict[str, object], dict[str, str]]:
@@ -61,9 +67,13 @@ def load_modules(manifest: Manifest) -> tuple[dict[str, object], dict[str, str]]
     for module_id, relative in manifest.modules.items():
         candidate = (root / relative).resolve()
         if root not in candidate.parents:
-            raise ConfigurationError(f"module={module_id}, source={relative}: path escapes config root")
+            raise ConfigurationError(
+                f"module={module_id}, source={relative}: path escapes config root"
+            )
         if not candidate.is_file():
-            raise MissingModuleError(f"module={module_id}, source={candidate}: create the declared module")
+            raise MissingModuleError(
+                f"module={module_id}, source={candidate}: create the declared module"
+            )
         data = _read_yaml(candidate)
         if set(data) != {module_id}:
             raise DuplicateOwnershipError(
@@ -71,22 +81,28 @@ def load_modules(manifest: Manifest) -> tuple[dict[str, object], dict[str, str]]
             )
         registry[module_id] = data[module_id]
         declared.add(candidate)
-        hashes=capture_hash(hashes, root, candidate)
+        hashes = capture_hash(hashes, root, candidate)
     schemas: dict[str, object] = {}
     for relative in manifest.schema_modules:
         candidate = (root / relative).resolve()
         if not candidate.is_file():
-            raise MissingModuleError(f"schema source={candidate}: create the declared schema module")
+            raise MissingModuleError(
+                f"schema source={candidate}: create the declared schema module"
+            )
         data = _read_yaml(candidate)
         if set(data) != {"schemas"}:
-            raise DuplicateOwnershipError(f"source={candidate}: schema modules own only the schemas namespace")
+            raise DuplicateOwnershipError(
+                f"source={candidate}: schema modules own only the schemas namespace"
+            )
         section = _mapping(data["schemas"], f"source={candidate}, key=schemas")
         overlap = set(schemas) & set(section)
         if overlap:
-            raise DuplicateOwnershipError(f"source={candidate}: schema IDs already owned: {sorted(overlap)}")
+            raise DuplicateOwnershipError(
+                f"source={candidate}: schema IDs already owned: {sorted(overlap)}"
+            )
         schemas.update(section)
         declared.add(candidate)
-        hashes=capture_hash(hashes, root, candidate)
+        hashes = capture_hash(hashes, root, candidate)
     registry["schemas"] = schemas
     actual = {item.resolve() for item in root.rglob("*.yaml")}
     undeclared = actual - declared

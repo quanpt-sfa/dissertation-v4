@@ -23,7 +23,11 @@ def validate_source_patterns(root: Path, registry: dict[str, object]) -> None:
         text = path.read_text(encoding="utf-8")
         for pattern in FORBIDDEN:
             if pattern in text:
-                raise ConfigurationError(f"source={path}: forbidden pattern {pattern}; use the core runtime layer")
+                raise ConfigurationError(
+                    f"source={path}: forbidden pattern {pattern}; use the core runtime layer"
+                )
         for physical_name in physical_names:
             if physical_name in text:
-                raise ConfigurationError(f"source={path}: registered physical column copied into source")
+                raise ConfigurationError(
+                    f"source={path}: registered physical column copied into source"
+                )

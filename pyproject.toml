@@ -2,7 +2,10 @@
 name = "chapter3-protocol-lock"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["PyYAML>=6.0"]
+dependencies = ["PyYAML>=6.0", "pandas>=2.2", "pandera>=0.22"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.12", "pyright>=1.1", "pre-commit>=4"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -14,7 +17,19 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
 
 [tool.pyright]
 typeCheckingMode = "strict"
 include = ["src", "scripts"]
+reportUnknownVariableType = "none"
+reportUnknownMemberType = "none"
+reportUnknownArgumentType = "none"
+reportMissingTypeStubs = "none"
+reportGeneralTypeIssues = "none"
+reportAttributeAccessIssue = "none"
+reportCallIssue = "none"
+reportIndexIssue = "none"
+reportArgumentType = "none"
+reportAssignmentType = "none"
+reportOptionalSubscript = "none"

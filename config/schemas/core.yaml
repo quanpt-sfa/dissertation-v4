@@ -1,11 +1,18 @@
 schemas:
-  registry_schema:
+  json_object: {contract_type: json_object, version: 1, required_keys: [], compatibility_policy: strict}
+  json_array: {contract_type: json_array, version: 1, item_type: object, compatibility_policy: strict}
+  text_value: {contract_type: text, version: 1, min_length: 1, compatibility_policy: strict}
+  markdown_document: {contract_type: markdown, version: 1, required_prefix: "#", compatibility_policy: strict}
+  receipt_schema: {contract_type: receipt, version: 1, required_keys: [status, protocol_hash], compatibility_policy: strict}
+  firm_year_frame:
+    contract_type: dataframe
     version: 1
     columns:
-      - {column: value, dtype: string, nullable: false}
-    primary_key: []
-    uniqueness_constraints: []
-    allowed_value_references: []
+      - {column: firm_id, dtype: string, nullable: false}
+      - {column: fiscal_year, dtype: int16, nullable: false}
+    primary_key: [firm_id, fiscal_year]
+    uniqueness_constraints: [[firm_id, fiscal_year]]
+    allowed_values: {}
     row_checks: []
     cross_column_checks: []
     compatibility_policy: strict

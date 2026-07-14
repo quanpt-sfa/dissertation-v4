@@ -4,3 +4,20 @@ repos:
     hooks:
       - id: ruff-check
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: protocol-validate
+        name: protocol validate
+        entry: python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+        language: system
+        pass_filenames: false
+      - id: generated-document-drift
+        name: generated document drift
+        entry: python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
+        language: system
+        pass_filenames: false
+      - id: p0-tests
+        name: focused P0 tests
+        entry: python -m pytest -q
+        language: system
+        pass_filenames: false
