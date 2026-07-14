@@ -48,7 +48,7 @@ Measurement inputs and L3 fixed-pi pilot interface
 
 Reads: ['risk_sets']
 
-Writes: ['source_channel_matrices', 'l0_l1_inputs', 'l3_pilot_capability']
+Writes: ['source_channel_matrices', 'l0_l1_inputs', 'l3_pilot_capability', 'sealed_outcome_store']
 
 ## P06
 
@@ -96,15 +96,15 @@ Model fitting and freeze interface
 
 Reads: ['measurement_selection_registry']
 
-Writes: ['model_artifacts', 'model_freeze_receipt']
+Writes: ['model_artifacts', 'development_oof_predictions', 'raw_outer_predictions', 'model_freeze_receipt']
 
 ## P12
 
 Outer opening and evaluation interface
 
-Reads: ['model_freeze_receipt']
+Reads: ['model_freeze_receipt', 'development_oof_predictions', 'raw_outer_predictions', 'sealed_outcome_store']
 
-Writes: ['outer_open_receipt', 'raw_outer_predictions', 'calibration_outputs', 'evaluation_metrics', 'bootstrap_batches', 'utility_scenarios']
+Writes: ['outer_open_receipt', 'calibration_outputs', 'evaluation_metrics', 'bootstrap_batches', 'utility_scenarios']
 
 ## P13
 

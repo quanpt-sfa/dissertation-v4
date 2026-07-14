@@ -1,46 +1,46 @@
 tests:
-  T001: {description: sole manifest ownership, severity: required}
-  T002: {description: atomic P00 publication, severity: required}
-  T003: {description: raw audit interface, severity: required}
-  T004: {description: entity panel contract, severity: required}
-  T005: {description: evidence missingness rule, severity: required}
-  T006: {description: maturity risk set rule, severity: required}
-  T007: {description: measurement policy, severity: required}
-  T008: {description: observability policy, severity: required}
-  T009: {description: feature leakage policy, severity: required}
-  T010: {description: simulation roster, severity: required}
-  T011: {description: simulation MCSE thresholds, severity: required}
-  T012: {description: fold-aware weighting, severity: required}
-  T013: {description: gate one selection, severity: required}
-  T014: {description: model freeze firewall, severity: required}
-  T015: {description: outer evaluation firewall, severity: required}
-  T016: {description: sensitivity registration, severity: required}
-  T017: {description: gate two interface, severity: required}
-  T018: {description: known case seal, severity: required}
-  T019: {description: gate three interface, severity: required}
-  T020: {description: final reporting interface, severity: required}
-  T021: {description: track A endpoint invariant, severity: required}
-  T022: {description: hierarchical pi sensitivity invariant, severity: required}
-  T023: {description: soft target AP invariant, severity: required}
-  T024: {description: content feature invariant, severity: required}
-  T025: {description: fold role invariant, severity: required}
-  T026: {description: known case opening invariant, severity: required}
-  T027: {description: outer outcome opening invariant, severity: required}
-  T028: {description: descriptive weight invariant, severity: required}
-  T029: {description: analytical weight fit invariant, severity: required}
-  T030: {description: IPCW sensitivity invariant, severity: required}
-  T031: {description: benchmark ladder invariant, severity: required}
-  T032: {description: fixed pi reporting invariant, severity: required}
-  T033: {description: hierarchical pi reporting invariant, severity: required}
-  T034: {description: family inference invariant, severity: required}
-  T035: {description: utility component invariant, severity: required}
-  T036: {description: production label simulation invariant, severity: required}
-  T037: {description: simulation scenario dimension invariant, severity: required}
-  T038: {description: registered columns invariant, severity: required}
-  T039: {description: artifact path invariant, severity: required}
-  T040: {description: executable schema invariant, severity: required}
-  T041: {description: vocabulary invariant, severity: required}
-  T042: {description: reproducibility invariant, severity: required}
-  T043: {description: generated documentation invariant, severity: required}
-  T044: {description: provenance invariant, severity: required}
-  T045: {description: immutable lock invariant, severity: required}
+  T001: {description: D01 prediction-date traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T001]"]}
+  T002: {description: D02 horizon traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T002]"]}
+  T003: {description: D03 source-set traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T003]"]}
+  T004: {description: D04 primary-outcome traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T004]"]}
+  T005: {description: D05 prior-domain traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T005]"]}
+  T006: {description: D06 review-budget traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T006]"]}
+  T007: {description: D07 learner-roster traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T007]"]}
+  T008: {description: D08 tuning-budget traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T008]"]}
+  T009: {description: D09 outer-fold traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T009]"]}
+  T010: {description: D10 gate-2 traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T010]"]}
+  T011: {description: D11 gate-3 traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T011]"]}
+  T012: {description: D12 transfer-domain traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T012]"]}
+  T013: {description: D13 source-retention traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T013]"]}
+  T014: {description: D14 L0-L3 ladder traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T014]"]}
+  T015: {description: D15 measurement-learner traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T015]"]}
+  T016: {description: D16 L2-L3 objective traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T016]"]}
+  T017: {description: D17 L3 model-role traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T017]"]}
+  T018: {description: D18 selective-verification traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T018]"]}
+  T019: {description: D19 K1-K4 firewall traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T019]"]}
+  T020: {description: D20 label-model firewall traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T020]"]}
+  T021: {description: D21 maturity traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T021]"]}
+  T022: {description: D22 source-horizon traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T022]"]}
+  T023: {description: D23 gate-criteria traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T023]"]}
+  T024: {description: D24 interaction-library traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T024]"]}
+  T025: {description: D25 exit-censoring traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T025]"]}
+  T026: {description: D26 CHNC1 transfer traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T026]"]}
+  T027: {description: D27 source-candidate traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T027]"]}
+  T028: {description: D28 PU-positive traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T028]"]}
+  T029: {description: D29 uncertainty-unit traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T029]"]}
+  T030: {description: D30 known-case veto traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T030]"]}
+  T031: {description: D31 track-B metric traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T031]"]}
+  T032: {description: D32 measurement-selection traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T032]"]}
+  T033: {description: D33 measurement-stability traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T033]"]}
+  T034: {description: D34 L2-missingness traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T034]"]}
+  T035: {description: D35 final-calibration traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T035]"]}
+  T036: {description: D36 multiple-testing traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T036]"]}
+  T037: {description: D37 censoring traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T037]"]}
+  T038: {description: D38 simulation-objective traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T038]"]}
+  T039: {description: D39 two-level simulation traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T039]"]}
+  T040: {description: D40 DGP traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T040]"]}
+  T041: {description: D41 scenario-space traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T041]"]}
+  T042: {description: D42 simulation-methods traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T042]"]}
+  T043: {description: D43 simulation-metrics traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T043]"]}
+  T044: {description: D44 replications traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T044]"]}
+  T045: {description: D45 protocol-role traceability, severity: required, pytest_nodes: ["tests/test_registry_nodes.py::test_registered_control_node[T045]"]}

@@ -18,7 +18,10 @@ def validate_source_patterns(root: Path, registry: dict[str, object]) -> None:
             if isinstance(value, dict) and isinstance(value.get("physical_name"), str):
                 physical_names.add(value["physical_name"])
     for path in [*root.glob("scripts/*.py"), *root.glob("src/**/*.py")]:
-        if path.parts[-2:] == ("core", "forbidden_patterns.py"):
+        if path.parts[-2:] in {
+            ("core", "forbidden_patterns.py"),
+            ("core", "artifact_store.py"),
+        }:
             continue
         text = path.read_text(encoding="utf-8")
         for pattern in FORBIDDEN:

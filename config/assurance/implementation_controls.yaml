@@ -1,0 +1,6 @@
+implementation_controls:
+  IC001: {statement: Sole configuration manifest with exclusive namespace ownership., test_ids: [T001], output_evidence: [registry_lock]}
+  IC002: {statement: Generated documentation and bindings are checked for drift., test_ids: [T043], output_evidence: [p00_audit_report]}
+  IC003: {statement: P00 publication stages privately and publishes atomically., test_ids: [T002], output_evidence: [success_receipt]}
+  IC004: {statement: Artifact paths and contracts are catalog-owned., test_ids: [T039, T040], output_evidence: [artifact_catalog, schema_catalog]}
+  IC005: {statement: Shared artifact append is forbidden., test_ids: [T002], output_evidence: [job_manifest]}

@@ -1,1 +1,2 @@
-learners: {registered: [deterministic_logistic]}
+learners:
+  registered: [logistic, main_boosting]

@@ -1,0 +1,4 @@
+capabilities:
+  l3: {initial_status: EMPIRICALLY_PENDING}
+  strict_channel_holdout: {initial_status: STRUCTURALLY_ELIGIBLE}
+  observed_verification: {initial_status: UNAVAILABLE_BY_DESIGN}

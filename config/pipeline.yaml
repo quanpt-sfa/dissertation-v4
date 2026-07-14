@@ -28,6 +28,8 @@ modules:
   tests: assurance/tests.yaml
   reporting: assurance/reporting.yaml
   agent_contract: assurance/agent_contract.yaml
+  implementation_controls: assurance/implementation_controls.yaml
+  capabilities: foundation/capabilities.yaml
 schema_modules:
   - schemas/core.yaml
   - schemas/evidence.yaml

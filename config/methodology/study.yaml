@@ -1,1 +1,7 @@
-study: {track_a: observed_endpoint, missing_source_policy: not_evidence_zero, immature_followup_policy: not_negative}
+study:
+  track_a: observed_endpoint
+  prediction_time_definition: latest_time_all_core_predictors_valid_and_auditable
+  primary_horizon_months: 12
+  sensitivity_horizon_months: 24
+  missing_source_policy: not_evidence_zero
+  immature_followup_policy: not_negative

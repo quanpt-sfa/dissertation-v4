@@ -136,6 +136,7 @@ def validate_methodology(registry: dict[str, object]) -> None:
     features = _mapping(registry, "features")
     weighting = _mapping(registry, "weighting")
     simulation = _mapping(registry, "simulation")
+    learners = _mapping(registry, "learners")
     utility = _mapping(registry, "utility")
     inference = _mapping(registry, "inference")
     if measurement.get("track_a_primary_endpoint") != "L1":
@@ -189,10 +190,26 @@ def validate_methodology(registry: dict[str, object]) -> None:
         "observability_only",
         "content_only",
         "full",
+        "anchor_pu",
     }.issubset(roster):
         raise MethodologicalInvariantError(
-            "simulation.model_roster: oracle, observability-only, content-only, full required"
+            "simulation.model_roster: oracle, observability-only, content-only, full, anchor-PU required"
         )
+    if simulation.get("targets") != ["L1", "L2", "L3_fixed_pi"]:
+        raise MethodologicalInvariantError("simulation.targets: L1, L2, L3_fixed_pi required")
+    if simulation.get("methods") != [
+        "oracle",
+        "observability_only",
+        "content_only",
+        "full",
+        "anchor_pu",
+    ]:
+        raise MethodologicalInvariantError("simulation.methods: registered five-method roster required")
+    if simulation.get("learners") != ["logistic", "main_boosting"] or learners.get("registered") != [
+        "logistic",
+        "main_boosting",
+    ]:
+        raise MethodologicalInvariantError("learners: logistic and main_boosting required")
     if simulation.get("gate3_operating_characteristics") is not True:
         raise MethodologicalInvariantError("simulation.gate3_operating_characteristics: required")
     core = simulation.get("core")

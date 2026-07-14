@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sized
 from pathlib import Path
+from typing import Any, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from core.atomic_io import publish_p00
-from core.registry_compiler import compile_registry, source_manifest
+from core.registry_compiler import compile_registry, environment_observation, source_manifest
 from core.schema_registry import contract_registry
 
 
@@ -40,6 +42,9 @@ def main() -> int:
         or not isinstance(vocabulary, dict)
     ):
         raise TypeError("compiled registry lacks P00 foundations")
+    artifacts = cast(dict[str, Any], artifacts)
+    reproducibility = cast(dict[str, Any], reproducibility)
+    vocabulary = cast(dict[str, Any], vocabulary)
     output_template = reproducibility.get("output_root_template")
     lock = artifacts.get("registry_lock")
     if (
@@ -57,24 +62,32 @@ def main() -> int:
     stage = Path(lock["path_template"]).parent
     target = run_root / stage
     contracts = contract_registry(registry)
-    status = vocabulary.get("statuses")
-    if not isinstance(status, list) or not isinstance(vocabulary.get("reason_codes"), list):
+    capabilities = registry.get("capabilities")
+    publication_statuses = vocabulary.get("publication_statuses")
+    seal_states = vocabulary.get("seal_states")
+    if (
+        not isinstance(capabilities, dict)
+        or not isinstance(publication_statuses, dict)
+        or not isinstance(seal_states, dict)
+        or not isinstance(vocabulary.get("reason_codes"), list)
+    ):
         raise TypeError("configured vocabulary is incomplete")
+    capabilities = cast(dict[str, Any], capabilities)
+    publication_statuses = cast(dict[str, str], publication_statuses)
+    seal_states = cast(dict[str, str], seal_states)
 
     def p(artifact_id: str) -> str:
         return _path(artifacts, artifact_id, stage)
 
-    environment = dict(reproducibility.get("environment_expectations", {}))
-    environment["compiler_version"] = registry["compiler_version"]
-    environment["hash_algorithm"] = reproducibility["hash_algorithm"]
+    environment = environment_observation(root)
     files: dict[str, object] = {
         p("registry_lock"): registry,
         p("protocol_hash"): compiled.protocol_hash + "\n",
         p("source_config_manifest"): source_manifest(compiled, root),
         p("capability_seed"): {
-            "L3": status[-2],
-            "strict_channel_holdout": status[-3],
-            "observed_verification": status[-1],
+            capability_id: specification["initial_status"]
+            for capability_id, specification in capabilities.items()
+            if isinstance(specification, dict) and isinstance(specification.get("initial_status"), str)
         },
         p("decision_traceability"): registry["decision_traceability"],
         p("artifact_catalog"): artifacts,
@@ -82,9 +95,9 @@ def main() -> int:
         p("step_catalog"): registry["steps"],
         p("access_matrix"): registry["access_matrix"],
         p("known_cases_seal"): {
-            "status": status[-4],
+            "status": seal_states["sealed"],
             "protocol_hash": compiled.protocol_hash,
-            "opens_at_step": registry["access_control"]["known_cases_open_at"],
+            "opens_at_step": registry["known_cases"]["opening_step"],
         },
         p("environment_expectation"): environment,
         p("job_manifest"): {
@@ -122,7 +135,7 @@ def main() -> int:
         files,
         validate,
         {
-            "status": vocabulary["publication_success_status"],
+            "status": publication_statuses["success"],
             "protocol_hash": compiled.protocol_hash,
         },
     )
@@ -131,6 +144,17 @@ def main() -> int:
 
 def _report(run_id: str, protocol_hash: str, registry: dict[str, object]) -> str:
     decisions = registry["decision_traceability"]
+    schemas = registry["schemas"]
+    artifacts = registry["artifacts"]
+    steps = registry["steps"]
+    tests = registry["tests"]
+    if not all(isinstance(item, dict) or isinstance(item, list) for item in (decisions, schemas, artifacts, steps, tests)):
+        raise TypeError("compiled registry lacks reportable catalogs")
+    decisions = cast(Sized, decisions)
+    schemas = cast(Sized, schemas)
+    artifacts = cast(Sized, artifacts)
+    steps = cast(Sized, steps)
+    tests = cast(Sized, tests)
     return "\n".join(
         (
             "# P00 audit report",
@@ -139,10 +163,10 @@ def _report(run_id: str, protocol_hash: str, registry: dict[str, object]) -> str
             f"- Protocol hash: `{protocol_hash}`",
             f"- Compiler version: `{registry['compiler_version']}`",
             f"- Source module count: {len(registry) - 4}",
-            f"- Schema count: {len(registry['schemas'])}",
-            f"- Artifact count: {len(registry['artifacts'])}",
-            f"- Step count: {len(registry['steps'])}",
-            f"- Test count: {len(registry['tests'])}",
+            f"- Schema count: {len(schemas)}",
+            f"- Artifact count: {len(artifacts)}",
+            f"- Step count: {len(steps)}",
+            f"- Test count: {len(tests)}",
             f"- D01-D45 completeness: {len(decisions) == 45}",
             "- Methodological invariants: passed during compilation",
             "- Access policy: passed during compilation",

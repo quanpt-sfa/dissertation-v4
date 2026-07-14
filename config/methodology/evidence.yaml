@@ -1,1 +1,4 @@
-evidence: {missing_is_zero: false, immature_is_negative: false}
+evidence:
+  availability_date_required: true
+  missing_is_zero: false
+  immature_is_negative: false

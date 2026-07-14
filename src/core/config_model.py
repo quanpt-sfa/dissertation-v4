@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,6 @@ class Manifest:
 class CompiledRegistry:
     """Canonical registry and provenance produced by P0 compilation."""
 
-    registry: Mapping[str, object]
+    registry: Mapping[str, Any]
     protocol_hash: str
     source_hashes: Mapping[str, str]

@@ -1,51 +1,51 @@
 GENERATED FILE — DO NOT EDIT
 Source: config/pipeline.yaml
 
-# D01–D45 traceability
-| Decision | Statement | Tests |
-|---|---|---|
-| D01 | One manifest is the sole configuration entry point. | T001 |
-| D02 | Track A endpoint and Gate 1 candidate set are locked. | T021 |
-| D03 | Hierarchical pi is sensitivity only. | T022 |
-| D04 | Average precision is not used with soft targets. | T023 |
-| D05 | Content predictors cannot enter label models. | T024 |
-| D06 | Missing source is not evidence zero. | T005 |
-| D07 | Immature follow-up is not negative. | T006 |
-| D08 | Initial fold is excluded from confirmatory pooling. | T025 |
-| D09 | Prospective fold remains distinct from retrospective evaluation. | T025 |
-| D10 | Known cases remain sealed until the registered opening step. | T026 |
-| D11 | Outer outcomes open only after model freeze. | T027 |
-| D12 | Full-sample weights are descriptive only. | T028 |
-| D13 | Analytical weights are fitted on development history. | T029 |
-| D14 | IPCW is sensitivity only. | T030 |
-| D15 | The benchmark ladder has six levels and PU is separate. | T031 |
-| D16 | Strict selection excludes held-out-channel information. | T013 |
-| D17 | Fixed pi output excludes pi bias and RMSE. | T032 |
-| D18 | Hierarchical pi bias is only for estimated parameters. | T033 |
-| D19 | CHNC3 uses family-adjusted inference. | T034 |
-| D20 | Review and false-positive costs remain distinct. | T035 |
-| D21 | Simulation imports the registered production label structures. | T036 |
-| D22 | Core and L3 simulation precision targets are distinct and locked. | T011 |
-| D23 | Required oracle and benchmark model classes are retained. | T010 |
-| D24 | Gate 3 operating characteristics are simulated. | T037 |
-| D25 | Shared ledger append operations are forbidden. | T002 |
-| D26 | Physical columns have one registry owner. | T038 |
-| D27 | Artifact paths resolve only from the catalog. | T039 |
-| D28 | Step access is centrally declared. | T027 |
-| D29 | Schema contracts resolve logical columns. | T040 |
-| D30 | Status vocabulary is registered. | T041 |
-| D31 | Declared source channels are controlled by configuration. | T003 |
-| D32 | Maturity is required for risk sets. | T006 |
-| D33 | Calibration is development cross-fitted. | T015 |
-| D34 | Learners are registered configuration objects. | T014 |
-| D35 | Domains are centrally registered. | T016 |
-| D36 | Reporting artifacts are generated from configuration. | T020 |
-| D37 | Agent rules are generated from their owner module. | T043 |
-| D38 | Configuration sources have versioned provenance. | T044 |
-| D39 | Entity resolution is registered before later stages. | T004 |
-| D40 | Reason codes are centrally registered. | T041 |
-| D41 | Known-case identifiers are sealed configuration content. | T018 |
-| D42 | The hash algorithm and environment policy are registered. | T042 |
-| D43 | Track A study policy is registered. | T021 |
-| D44 | Generated documents remain reproducible. | T043 |
-| D45 | P00 publishes an immutable locked registry. | T045 |
+# D01-D45 traceability
+| Decision | Title | Chapter reference | Tests |
+|---|---|---|---|
+| D01 | Prediction date tau_it | Appendix B, D01 | T001 |
+| D02 | Primary prediction horizon | Appendix B, D02 | T002 |
+| D03 | Source set J | Appendix B, D03 | T003 |
+| D04 | Primary outcome definition | Appendix B, D04 | T004 |
+| D05 | Prior and accuracy domain | Appendix B, D05 | T005 |
+| D06 | Review budget | Appendix B, D06 | T006 |
+| D07 | Learner roster | Appendix B, D07 | T007 |
+| D08 | Tuning budget | Appendix B, D08 | T008 |
+| D09 | Outer folds | Appendix B, D09 | T009 |
+| D10 | Gate 2 criterion | Appendix B, D10 | T010 |
+| D11 | Gate 3 interaction gate | Appendix B, D11 | T011 |
+| D12 | Transfer domains | Appendix B, D12 | T012 |
+| D13 | Source retention rule | Appendix B, D13 | T013 |
+| D14 | L0-L3 role ladder | Appendix B, D14 | T014 |
+| D15 | Measurement by learner grid | Appendix B, D15 | T015 |
+| D16 | Objective for L2 and L3 | Appendix B, D16 | T016 |
+| D17 | L3 model role | Appendix B, D17 | T017 |
+| D18 | Selective verification | Appendix B, D18 | T018 |
+| D19 | K1-K4 firewall | Appendix B, D19 | T019 |
+| D20 | Label-model variable firewall | Appendix B, D20 | T020 |
+| D21 | Maturity rule | Appendix B, D21 | T021 |
+| D22 | Source horizon | Appendix B, D22 | T022 |
+| D23 | Gate criteria | Appendix B, D23 | T023 |
+| D24 | Interaction library | Appendix B, D24 | T024 |
+| D25 | Exit and competing events | Appendix B, D25 | T025 |
+| D26 | CHNC1 transfer role | Appendix B, D26 | T026 |
+| D27 | Retained-source candidate selection | Appendix B, D27 | T027 |
+| D28 | PU positive set | Appendix B, D28 | T028 |
+| D29 | Uncertainty unit | Appendix B, D29 | T029 |
+| D30 | Soft known-case veto | Appendix B, D30 | T030 |
+| D31 | Track B metric | Appendix B, D31 | T031 |
+| D32 | Measurement selection | Appendix B, D32 | T032 |
+| D33 | Measurement stability | Appendix B, D33 | T033 |
+| D34 | L2 missingness | Appendix B, D34 | T034 |
+| D35 | Final calibration | Appendix B, D35 | T035 |
+| D36 | Multiple testing | Appendix B, D36 | T036 |
+| D37 | Censoring | Appendix B, D37 | T037 |
+| D38 | Simulation objective | Appendix B, D38 | T038 |
+| D39 | Two-level simulation | Appendix B, D39 | T039 |
+| D40 | Data-generating process | Appendix B, D40 | T040 |
+| D41 | Scenario space | Appendix B, D41 | T041 |
+| D42 | Simulation methods | Appendix B, D42 | T042 |
+| D43 | Simulation metrics | Appendix B, D43 | T043 |
+| D44 | Replications | Appendix B, D44 | T044 |
+| D45 | Protocol role | Appendix B, D45 | T045 |

@@ -4,7 +4,34 @@ schemas:
   text_value: {contract_type: text, version: 1, min_length: 1, compatibility_policy: strict}
   markdown_document: {contract_type: markdown, version: 1, required_prefix: "#", compatibility_policy: strict}
   receipt_schema: {contract_type: receipt, version: 1, required_keys: [status, protocol_hash], compatibility_policy: strict}
-  firm_year_frame:
+
+  registry_lock_schema: {contract_type: json_object, version: 1, required_keys: [metadata, artifacts, schemas, steps, tests, decisions, access_matrix, decision_traceability, compiler_version], compatibility_policy: strict}
+  protocol_hash_schema: {contract_type: text, version: 1, min_length: 64, compatibility_policy: strict}
+  source_config_manifest_schema: {contract_type: json_object, version: 1, required_keys: [source_hashes, compiler_version, python_version, git_commit, git_dirty, package_lock, environment_observation], compatibility_policy: strict}
+  capability_seed_schema: {contract_type: json_object, version: 1, required_keys: [l3, strict_channel_holdout, observed_verification], compatibility_policy: strict}
+  decision_traceability_schema: {contract_type: json_array, version: 1, item_type: object, compatibility_policy: strict}
+  artifact_catalog_schema: {contract_type: json_object, version: 1, required_keys: [registry_lock, success_receipt, sealed_outcome_store, development_oof_predictions, raw_outer_predictions], compatibility_policy: strict}
+  schema_catalog_schema: {contract_type: json_object, version: 1, required_keys: [registry_lock_schema, sealed_outcome_frame, development_oof_predictions_frame, raw_outer_predictions_frame], compatibility_policy: strict}
+  step_catalog_schema: {contract_type: json_object, version: 1, required_keys: [P00, P10, P11, P12, P15, P16, P17], compatibility_policy: strict}
+  access_matrix_schema: {contract_type: json_object, version: 1, required_keys: [P00, P10, P11, P12, P15, P16, P17], compatibility_policy: strict}
+  seal_receipt_schema: {contract_type: receipt, version: 1, required_keys: [status, protocol_hash, opens_at_step], compatibility_policy: strict}
+  environment_observation_schema: {contract_type: json_object, version: 1, required_keys: [compiler_version, hash_algorithm, python_version, platform, uv_lock_hash], compatibility_policy: strict}
+  p00_audit_markdown: {contract_type: markdown, version: 1, required_prefix: "# P00 audit report", compatibility_policy: strict}
+  job_manifest_schema: {contract_type: json_object, version: 1, required_keys: [run_id, protocol_hash, output_hashes], compatibility_policy: strict}
+  success_receipt_schema: {contract_type: receipt, version: 1, required_keys: [status, protocol_hash, manifest_hash], compatibility_policy: strict}
+
+  firm_master_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+      - {column: firm_id, dtype: string, nullable: false}
+    primary_key: [firm_id]
+    uniqueness_constraints: [[firm_id]]
+    row_checks: []
+    cross_column_checks: []
+    compatibility_policy: strict
+
+  firm_year_panel_frame:
     contract_type: dataframe
     version: 1
     columns:
@@ -12,7 +39,109 @@ schemas:
       - {column: fiscal_year, dtype: int16, nullable: false}
     primary_key: [firm_id, fiscal_year]
     uniqueness_constraints: [[firm_id, fiscal_year]]
-    allowed_values: {}
-    row_checks: []
+    row_checks: [{column: fiscal_year, check: between, min: 1990, max: 2100}]
+    cross_column_checks: []
+    compatibility_policy: strict
+
+  evidence_ledger_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+      - {column: firm_id, dtype: string, nullable: false}
+      - {column: fiscal_year, dtype: int16, nullable: false}
+      - {column: value, dtype: string, nullable: true}
+    primary_key: [firm_id, fiscal_year]
+    uniqueness_constraints: [[firm_id, fiscal_year]]
+    row_checks: [{column: fiscal_year, check: between, min: 1990, max: 2100}]
+    cross_column_checks: []
+    compatibility_policy: strict
+
+  risk_sets_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+      - {column: firm_id, dtype: string, nullable: false}
+      - {column: fiscal_year, dtype: int16, nullable: false}
+    primary_key: [firm_id, fiscal_year]
+    uniqueness_constraints: [[firm_id, fiscal_year]]
+    row_checks: [{column: fiscal_year, check: between, min: 1990, max: 2100}]
+    cross_column_checks: []
+    compatibility_policy: strict
+
+  l0_l1_inputs_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+      - {column: firm_id, dtype: string, nullable: false}
+      - {column: fiscal_year, dtype: int16, nullable: false}
+      - {column: value, dtype: string, nullable: true}
+    primary_key: [firm_id, fiscal_year]
+    uniqueness_constraints: [[firm_id, fiscal_year]]
+    row_checks: [{column: fiscal_year, check: between, min: 1990, max: 2100}]
+    cross_column_checks: []
+    compatibility_policy: strict
+
+  sealed_outcome_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+      - {column: firm_id, dtype: string, nullable: false}
+      - {column: fiscal_year, dtype: int16, nullable: false}
+      - {column: value, dtype: string, nullable: true}
+    primary_key: [firm_id, fiscal_year]
+    uniqueness_constraints: [[firm_id, fiscal_year]]
+    row_checks: [{column: fiscal_year, check: between, min: 1990, max: 2100}]
+    cross_column_checks: [{left: firm_id, right: fiscal_year, check: not_both_null}]
+    compatibility_policy: strict
+
+  feature_panel_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+      - {column: firm_id, dtype: string, nullable: false}
+      - {column: fiscal_year, dtype: int16, nullable: false}
+      - {column: value, dtype: string, nullable: true}
+    primary_key: [firm_id, fiscal_year]
+    uniqueness_constraints: [[firm_id, fiscal_year]]
+    row_checks: [{column: fiscal_year, check: between, min: 1990, max: 2100}]
+    cross_column_checks: []
+    compatibility_policy: strict
+
+  fold_weights_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+      - {column: firm_id, dtype: string, nullable: false}
+      - {column: fiscal_year, dtype: int16, nullable: false}
+      - {column: value, dtype: string, nullable: false}
+    primary_key: [firm_id, fiscal_year]
+    uniqueness_constraints: [[firm_id, fiscal_year]]
+    row_checks: [{column: fiscal_year, check: between, min: 1990, max: 2100}]
+    cross_column_checks: []
+    compatibility_policy: strict
+
+  development_oof_predictions_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+      - {column: firm_id, dtype: string, nullable: false}
+      - {column: fiscal_year, dtype: int16, nullable: false}
+      - {column: value, dtype: string, nullable: false}
+    primary_key: [firm_id, fiscal_year]
+    uniqueness_constraints: [[firm_id, fiscal_year]]
+    row_checks: [{column: fiscal_year, check: between, min: 1990, max: 2100}]
+    cross_column_checks: []
+    compatibility_policy: strict
+
+  raw_outer_predictions_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+      - {column: firm_id, dtype: string, nullable: false}
+      - {column: fiscal_year, dtype: int16, nullable: false}
+      - {column: value, dtype: string, nullable: false}
+    primary_key: [firm_id, fiscal_year]
+    uniqueness_constraints: [[firm_id, fiscal_year]]
+    row_checks: [{column: fiscal_year, check: between, min: 1990, max: 2100}]
     cross_column_checks: []
     compatibility_policy: strict

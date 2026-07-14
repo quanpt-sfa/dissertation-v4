@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import yaml
 
@@ -17,13 +17,13 @@ from .errors import (
 from .hashing import file_hash
 
 
-def _mapping(value: object, context: str) -> dict[str, object]:
+def _mapping(value: object, context: str) -> dict[str, Any]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise ConfigurationError(f"{context}: expected a mapping; correct the YAML structure")
-    return cast(dict[str, object], value)
+    return cast(dict[str, Any], value)
 
 
-def _read_yaml(path: Path) -> dict[str, object]:
+def _read_yaml(path: Path) -> dict[str, Any]:
     try:
         loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
@@ -58,12 +58,12 @@ def load_manifest(path: Path) -> Manifest:
     )
 
 
-def load_modules(manifest: Manifest) -> tuple[dict[str, object], dict[str, str]]:
+def load_modules(manifest: Manifest) -> tuple[dict[str, Any], dict[str, str]]:
     """Load every declared module into its own namespace and reject stray YAML."""
     root = manifest.path.parent.resolve()
     declared = {manifest.path.resolve()}
-    registry: dict[str, object] = {}
-    hashes: dict[str, str] = {}
+    registry: dict[str, Any] = {}
+    hashes: dict[str, str] = capture_hash({}, root, manifest.path.resolve())
     for module_id, relative in manifest.modules.items():
         candidate = (root / relative).resolve()
         if root not in candidate.parents:

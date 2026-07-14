@@ -1,6 +1,7 @@
 access_control:
   outer_outcomes_open_after: P12
   known_cases_open_at: P15
+  known_cases_open_after: P15
   known_case_access_steps: [P15, P16, P17]
   post_outer_open_write_prohibited_steps: [P10, P11]
   sealed_sensitivity_classes: [outer, known_case]

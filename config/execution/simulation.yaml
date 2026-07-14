@@ -6,7 +6,10 @@ simulation:
   adaptive_replication: {enabled: true}
   prevalence: {low: 0.01, medium: 0.05, high: 0.10, independent_scenario_dimension: true}
   anchor_false_positive_grid: [0.00, 0.01, 0.03, 0.05]
-  model_roster: [oracle, observability_only, content_only, full]
+  targets: [L1, L2, L3_fixed_pi]
+  methods: [oracle, observability_only, content_only, full, anchor_pu]
+  learners: [logistic, main_boosting]
+  model_roster: [oracle, observability_only, content_only, full, anchor_pu]
   fixed_pi_output_policy: {report_pi_bias: false, report_pi_rmse: false}
   hierarchical_pi_output_policy: {role: sensitivity_only, bias_for_estimated_parameters_only: true}
   gate3_operating_characteristics: true

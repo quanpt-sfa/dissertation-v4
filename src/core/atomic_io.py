@@ -8,6 +8,7 @@ import shutil
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 from .errors import ConfigurationError
 
@@ -21,8 +22,8 @@ def publish_p00(
     """Stage, validate, hash, receipt, then atomically publish without overwrite."""
     success_name = "_SUCCESS.json"
     if final_directory.exists():
-        receipt = final_directory / success_name
-        if receipt.is_file():
+        success_path = final_directory / success_name
+        if success_path.is_file():
             raise ConfigurationError(f"output={final_directory}: successful run is immutable")
         quarantine = final_directory.with_name(final_directory.name + ".quarantine")
         if quarantine.exists():
@@ -33,6 +34,8 @@ def publish_p00(
     try:
         hashes: dict[str, str] = {}
         for name, content in files.items():
+            if name == "job_manifest.json":
+                continue
             validate(name, content)
             destination = staging / name
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -43,13 +46,16 @@ def publish_p00(
             )
             destination.write_text(rendered, encoding="utf-8")
             hashes[name] = hashlib.sha256(rendered.encode("utf-8")).hexdigest()
-        manifest_path = staging / "job_manifest.json"
-        if manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            manifest["output_hashes"] = hashes
-            manifest_path.write_text(
-                json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8"
-            )
+        manifest_raw = files.get("job_manifest.json")
+        if not isinstance(manifest_raw, dict):
+            raise ConfigurationError("job_manifest.json: required for P00 publication")
+        manifest = dict(cast(dict[str, Any], manifest_raw))
+        manifest["output_hashes"] = hashes
+        validate("job_manifest.json", manifest)
+        manifest_text = json.dumps(manifest, indent=2, sort_keys=True)
+        (staging / "job_manifest.json").write_text(manifest_text, encoding="utf-8")
+        receipt = dict(receipt)
+        receipt["manifest_hash"] = hashlib.sha256(manifest_text.encode("utf-8")).hexdigest()
         validate(success_name, receipt)
         (staging / success_name).write_text(
             json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8"

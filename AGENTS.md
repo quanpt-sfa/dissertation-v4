@@ -12,5 +12,3 @@ Source: config/pipeline.yaml
 - Content predictors cannot enter label models; hierarchical-pi is sensitivity only.
 - Outer outcomes and K1-K4 content remain sealed until their configured opening steps.
 - Notebooks do not write artifacts; run required tests before committing.
-
-Catalogs: docs/generated/ARTIFACT_CATALOG.md, SCHEMA_CATALOG.md, STEP_CARDS.md, D01_D45_TRACEABILITY.md

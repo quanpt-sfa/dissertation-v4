@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 from .access_matrix import assert_access
 from .artifact_store import ArtifactStore
@@ -15,7 +16,7 @@ class RunContext:
         step_id: str,
         state: str,
         protocol_hash: str,
-        registry: Mapping[str, object],
+        registry: Mapping[str, Any],
         store: ArtifactStore,
     ) -> None:
         self.step_id, self.state, self.protocol_hash, self.registry, self.store = (
@@ -32,7 +33,7 @@ class RunContext:
 
     def write(self, artifact_id: str, value: object, coordinates: Mapping[str, str]) -> None:
         self._access(artifact_id, "write")
-        self.store.write(artifact_id, value, coordinates)
+        self.store.write(artifact_id, value, coordinates, self.step_id)
 
     def _access(self, artifact_id: str, mode: str) -> None:
         matrix = self.registry.get("access_matrix")
