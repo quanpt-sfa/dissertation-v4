@@ -1,0 +1,2 @@
+tests:
+  T001: {description: P0 configuration contract test, severity: required}

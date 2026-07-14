@@ -1,0 +1,11 @@
+schemas:
+  registry_schema:
+    version: 1
+    columns:
+      - {column: value, dtype: string, nullable: false}
+    primary_key: []
+    uniqueness_constraints: []
+    allowed_value_references: []
+    row_checks: []
+    cross_column_checks: []
+    compatibility_policy: strict

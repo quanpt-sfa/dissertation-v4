@@ -1,0 +1,4 @@
+access_control:
+  outer_outcomes_open_after: P11
+  known_cases_open_at: P15
+  post_outer_open_write_prohibited_steps: [P10, P11]

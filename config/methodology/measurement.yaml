@@ -1,0 +1,6 @@
+measurement:
+  track_a_primary_endpoint: L1
+  selection_candidates: [L2, L3_fixed_pi, none]
+  hierarchical_pi: {role: sensitivity_only, estimated_parameter_bias_only: true}
+  fixed_pi: {report_pi_bias: false, report_pi_rmse: false}
+  strict_selection: {remove_heldout_channel_from: [target, label_model, features, tuning, calibration]}

@@ -1,0 +1,4 @@
+evaluation:
+  ap_soft_targets: false
+  benchmark_ladder: [fixed_accounting, reestimated_linear, observability_only, content_only, full, nonlinear]
+  pu_branch: separate

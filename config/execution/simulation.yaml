@@ -1,0 +1,1 @@
+simulation: {imports_production_labels: true, minimum_replications: 100, mcse_target: 0.01, model_roster: [oracle, observability_only, content_only, full], gate3_operating_characteristics: true}

@@ -1,0 +1,1 @@
+weighting: {full_sample_role: descriptive_only, analytical_fit_scope: development_history, ipcw_role: sensitivity_only}

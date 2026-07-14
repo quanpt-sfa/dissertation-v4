@@ -1,0 +1,17 @@
+artifacts:
+  registry_lock: {producer_step: P00, path_template: P00/registry.lock.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}
+  protocol_hash: {producer_step: P00, path_template: P00/protocol_hash.txt, schema_id: registry_schema, format: text, coordinates: [], sensitivity_class: public, immutability: immutable}
+  source_config_manifest: {producer_step: P00, path_template: P00/source_config_manifest.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}
+  capability_seed: {producer_step: P00, path_template: P00/capability_seed.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}
+  decision_traceability: {producer_step: P00, path_template: P00/decision_traceability.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}
+  artifact_catalog: {producer_step: P00, path_template: P00/artifact_catalog.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}
+  schema_catalog: {producer_step: P00, path_template: P00/schema_catalog.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}
+  step_catalog: {producer_step: P00, path_template: P00/step_catalog.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}
+  access_matrix: {producer_step: P00, path_template: P00/access_matrix.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}
+  known_cases_seal: {producer_step: P00, path_template: P00/known_cases_seal.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: restricted, immutability: immutable}
+  environment_expectation: {producer_step: P00, path_template: P00/environment_expectation.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}
+  p00_audit_report: {producer_step: P00, path_template: P00/P00_AUDIT_REPORT.md, schema_id: registry_schema, format: markdown, coordinates: [], sensitivity_class: public, immutability: immutable}
+  measurement_selection_registry: {producer_step: P10, path_template: "P10/selection/{outer_fold}.json", schema_id: registry_schema, format: json, coordinates: [outer_fold], sensitivity_class: restricted, immutability: immutable}
+  model_freeze_receipt: {producer_step: P11, path_template: P11/freeze.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: restricted, immutability: immutable}
+  known_case_results: {producer_step: P15, path_template: P15/known_cases.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: sealed, immutability: immutable}
+  final_report: {producer_step: P17, path_template: P17/report.json, schema_id: registry_schema, format: json, coordinates: [], sensitivity_class: public, immutability: immutable}

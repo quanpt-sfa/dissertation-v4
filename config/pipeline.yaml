@@ -1,0 +1,35 @@
+config_format_version: 1
+modules:
+  metadata: foundation/metadata.yaml
+  vocabulary: foundation/vocabulary.yaml
+  columns: foundation/columns.yaml
+  artifacts: foundation/artifacts.yaml
+  steps: foundation/steps.yaml
+  access_control: foundation/access_control.yaml
+  study: methodology/study.yaml
+  data_sources: methodology/data_sources.yaml
+  entity_resolution: methodology/entity_resolution.yaml
+  evidence: methodology/evidence.yaml
+  risksets: methodology/risksets.yaml
+  folds: methodology/folds.yaml
+  measurement: methodology/measurement.yaml
+  features: methodology/features.yaml
+  calibration: methodology/calibration.yaml
+  evaluation: methodology/evaluation.yaml
+  inference: methodology/inference.yaml
+  utility: methodology/utility.yaml
+  domains: methodology/domains.yaml
+  known_cases: methodology/known_cases.yaml
+  weighting: execution/weighting.yaml
+  learners: execution/learners.yaml
+  simulation: execution/simulation.yaml
+  reproducibility: execution/reproducibility.yaml
+  decisions: assurance/decisions.yaml
+  tests: assurance/tests.yaml
+  reporting: assurance/reporting.yaml
+  agent_contract: assurance/agent_contract.yaml
+schema_modules:
+  - schemas/core.yaml
+  - schemas/evidence.yaml
+  - schemas/modeling.yaml
+  - schemas/reporting.yaml

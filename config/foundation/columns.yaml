@@ -1,0 +1,4 @@
+columns:
+  firm_id: {physical_name: firm_master_id, dtype: string, semantic_role: entity_key}
+  fiscal_year: {physical_name: fiscal_year, dtype: int16, semantic_role: reporting_period}
+  value: {physical_name: protocol_value, dtype: string, semantic_role: payload}

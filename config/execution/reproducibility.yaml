@@ -1,0 +1,1 @@
+reproducibility: {hash_algorithm: sha256, shared_ledger_append: forbidden}
