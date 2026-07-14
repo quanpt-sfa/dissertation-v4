@@ -1,0 +1,53 @@
+raw_field,raw_value,observed_count,semantic_meaning,source,channel,label_role,included_or_excluded,reason
+train_include_flag,True,535,row inclusion decision,sanction_evidence,S3,row_inclusion,included,locked only as row inclusion and never read as outcome
+event_include_flag,1,535,upstream event curation inclusion,sanction_evidence,S3,row_inclusion,excluded_from_outcome,redundant curation flag and not an independent label
+is_direct_label,1,535,explicit direct enforcement label,sanction_evidence,S3,L0_L1_hard_positive_and_anchor_PU_positive,included,positive indicator is explicit and false or missing remains unknown
+is_indirect_label,0,535,indirect evidence indicator,sanction_evidence,S3,weak_evidence,excluded_from_current_label,no indirect evidence is present and zero is not an explicit negative
+indirect_proxy_code,<blank>,535,indirect proxy taxonomy,sanction_evidence,S3,weak_evidence,excluded_from_current_label,no proxy is observed
+label_status,accepted,535,source adjudication status,sanction_evidence,S3,quality_input,included_as_provenance,not an outcome by itself
+label_release_status,released,535,source release status,sanction_evidence,S3,quality_input,included_as_provenance,not an outcome by itself
+label_confidence,HIGH,505,period-link and label confidence,sanction_evidence,S3,severity_quality_input,included_as_period_link_provenance,not converted to a score or threshold
+label_confidence,MEDIUM,30,period-link and label confidence,sanction_evidence,S3,severity_quality_input,included_as_period_link_provenance,not converted to a score or threshold
+label_year_source,affected_fiscal_year,142,affected-period linkage method,sanction_evidence,S3,affected_fiscal_year_link,included_as_period_link_provenance,retained in event ledger
+label_year_source,fiscal_year,393,fallback fiscal-period linkage method,sanction_evidence,S3,affected_fiscal_year_link,included_as_period_link_provenance,retained in event ledger
+affected_fiscal_year,<nonblank>,142,explicit affected fiscal year,sanction_evidence,S3,affected_fiscal_year_link,included_as_period_link_input,equals label year in current source
+affected_fiscal_year,<blank>,393,no explicit affected fiscal year,sanction_evidence,S3,affected_fiscal_year_link,excluded_as_direct_link,label_year_source records the fallback and absence is not negative
+primary_violation_l1,DISCLOSURE,278,violation taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,same decision mechanism and not an independent channel
+primary_violation_l1,FIN_REPORTING,110,violation taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,same decision mechanism and not an independent channel
+primary_violation_l1,GOVERNANCE,51,violation taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,same decision mechanism and not an independent channel
+primary_violation_l1,INTERMEDIARY_COMPLIANCE,38,violation taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,same decision mechanism and not an independent channel
+primary_violation_l1,ISSUANCE_OFFERING,33,violation taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,same decision mechanism and not an independent channel
+primary_violation_l1,LISTING_REGISTRATION,20,violation taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,same decision mechanism and not an independent channel
+primary_violation_l1,BOND_PUBLIC_OFFERING,3,violation taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,same decision mechanism and not an independent channel
+primary_violation_l1,AUDIT_ASSURANCE,1,violation taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,same decision mechanism and not an independent channel
+primary_violation_l1,TRADING_MARKET_CONDUCT,1,violation taxonomy subtype,sanction_evidence,S3,separate_outcome_candidate,not_operationalized_as_separate_outcome,no locked endpoint mapping permits a securities-manipulation label
+construct_target,periodic_disclosure_irregularity,143,construct taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,not an independent channel or label layer
+construct_target,misleading_or_incomplete_disclosure,89,construct taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,not an independent channel or label layer
+construct_target,late_or_missing_financial_report,84,construct taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,not an independent channel or label layer
+construct_target,other_or_review,81,construct taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,not an independent channel or label layer
+construct_target,governance_or_managerial_violation,51,construct taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,not an independent channel or label layer
+construct_target,securities_intermediary_violation,38,construct taxonomy subtype,sanction_evidence,S3,separate_outcome_candidate,not_operationalized_as_separate_outcome,no locked endpoint definition
+construct_target,offering_or_issuance_violation,36,construct taxonomy subtype,sanction_evidence,S3,S3_taxonomy,included_as_provenance,not an independent channel or label layer
+construct_target,financial_statement_misstatement_proxy,11,construct taxonomy subtype,sanction_evidence,S3,weak_evidence_taxonomy,included_as_provenance,direct event remains S3 hard positive but proxy subtype is not a separate label
+construct_target,market_conduct_violation,1,construct taxonomy subtype,sanction_evidence,S3,separate_outcome_candidate,not_operationalized_as_separate_outcome,no locked securities-manipulation endpoint definition
+construct_target,audit_or_reporting_quality_proxy,1,construct taxonomy subtype,sanction_evidence,S3,weak_evidence_taxonomy,included_as_provenance,not a separate S1 or S2 observation
+has_fine,True,523,sanction severity component,sanction_evidence,S3,severity_quality_input,included_as_provenance,never converted to label or score
+has_fine,False,12,sanction severity component,sanction_evidence,S3,severity_quality_input,included_as_provenance,false is not an explicit negative
+has_suspension,True,5,sanction severity component,sanction_evidence,S3,severity_quality_input,included_as_provenance,never converted to label or score
+has_warning,True,7,sanction severity component,sanction_evidence,S3,severity_quality_input,included_as_provenance,never converted to label or score
+has_remedy,True,59,sanction severity component,sanction_evidence,S3,severity_quality_input,included_as_provenance,never converted to label or score
+has_other_sanction,True,19,sanction severity component,sanction_evidence,S3,severity_quality_input,included_as_provenance,never converted to label or score
+audit_status,audited,1033471,before-after statement state,financial_statement_core_long,S1,separate_outcome_input,not_operationalized_as_label,requires locked adjustment definition materiality rule availability and opportunity semantics
+audit_status,unaudited,705775,before-after statement state,financial_statement_core_long,S1,separate_outcome_input,not_operationalized_as_label,requires matched pair and locked adjustment endpoint
+audit_opinion_raw,Chấp nhận toàn phần,17370,audit opinion category,audit_annual_long,S2,separate_outcome_candidate,not_operationalized_as_label,no source availability date or locked positive negative unknown mapping
+audit_opinion_raw,Ý kiến ngoại trừ,2039,audit opinion category,audit_annual_long,S2,separate_outcome_candidate,not_operationalized_as_label,no source availability date or locked endpoint mapping
+audit_opinion_raw,Từ chối ra ý kiến,395,audit opinion category,audit_annual_long,S2,separate_outcome_candidate,not_operationalized_as_label,no source availability date or locked endpoint mapping
+audit_opinion_raw,Ý kiến trái ngược,16,audit opinion category,audit_annual_long,S2,separate_outcome_candidate,not_operationalized_as_label,no source availability date or locked endpoint mapping
+audit_opinion_raw where audit_indicator=audit_opinion,<blank>,316,missing audit opinion,audit_annual_long,S2,missing,excluded_from_label,missing is not explicit negative
+audit_firm_raw where audit_indicator=audit_firm,<blank>,0,missing audit firm,audit_annual_long,S2,missing,excluded_from_label,current source has no missing audit-firm value in firm rows and config still prohibits zero encoding
+known_cases,K1_K4_configured_ids,4,sealed known-case identifiers,known_cases,known_case,sealed_known_case,intentionally_unavailable,no source binding or case data exists and access stays sealed until P15
+requested_label_layer,FSF_STRICT,0,requested taxonomy layer,not_present,not_assigned,separate_outcome_candidate,intentionally_unavailable,not found in current raw source catalog config or artifacts
+requested_label_layer,FSF_PROSECUTED,0,requested taxonomy layer,not_present,not_assigned,separate_outcome_candidate,intentionally_unavailable,not found in current raw source catalog config or artifacts
+requested_label_layer,REGULATORY_FS_MISSTATEMENT,0,requested taxonomy layer,not_present,not_assigned,separate_outcome_candidate,intentionally_unavailable,not found in current raw source catalog config or artifacts
+requested_label_layer,SECURITIES_MANIPULATION,0,requested taxonomy layer,not_present,not_assigned,separate_outcome_candidate,intentionally_unavailable,not found in current raw source catalog config or artifacts
+requested_label_layer,HIGH_SUSPICION,0,requested taxonomy layer,not_present,not_assigned,weak_evidence,intentionally_unavailable,not found in current raw source catalog config or artifacts
