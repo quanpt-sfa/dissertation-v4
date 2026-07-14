@@ -13,7 +13,14 @@ inference:
     stratify_by: outer_year
     event_cluster_role: sensitivity
     small_fold_t_interval_forbidden: true
+    replications: 2000
+    confidence_level: 0.95
   interaction_library:
     confirmatory_threshold_claims: 2
     confirmatory_block: pressure_x_monitoring
     remaining_interactions_role: exploratory
+    operational_bindings:
+      pressure_feature_id: null
+      monitoring_feature_id: null
+      parent_model_id: null
+      domain_feature_id: null

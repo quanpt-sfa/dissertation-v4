@@ -23,6 +23,7 @@ APPROVED_CORE_FILES = {
     "artifact_store.py",
     "config_loader.py",
     "forbidden_patterns.py",
+    "semantic_keys.py",
 }
 
 StringMap = dict[str, Any]

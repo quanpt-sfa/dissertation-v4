@@ -3,3 +3,14 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+
+# Empirical inputs stay in this repo but never enter Git history.
+data/raw/**
+!data/raw/**/
+!data/raw/**/.gitkeep
+data/processed/**
+!data/processed/**/
+!data/processed/**/.gitkeep
+data/standardized/**
+!data/standardized/**/
+!data/standardized/**/.gitkeep

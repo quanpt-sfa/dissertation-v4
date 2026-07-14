@@ -361,7 +361,7 @@ schemas:
       - fiscal_year
     row_checks: []
     cross_column_checks: []
-    strict_columns: true
+    strict_columns: false
     coerce: false
     compatibility_policy: strict
   fold_weights_frame:
@@ -499,6 +499,9 @@ schemas:
     - column: scenario_id
       dtype: string
       nullable: false
+    - column: method_id
+      dtype: string
+      nullable: false
     - column: replication_id
       dtype: int64
       nullable: false
@@ -513,10 +516,12 @@ schemas:
       nullable: true
     primary_key:
     - scenario_id
+    - method_id
     - replication_id
     - metric_id
     uniqueness_constraints:
     - - scenario_id
+      - method_id
       - replication_id
       - metric_id
     row_checks:

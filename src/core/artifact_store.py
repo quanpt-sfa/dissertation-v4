@@ -124,6 +124,37 @@ class ArtifactStore:
             json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
 
+    def inventory(self) -> list[dict[str, object]]:
+        """Return a verified manifest inventory without bypassing the core I/O layer."""
+        rows: list[dict[str, object]] = []
+        for manifest_path in sorted(self.root.rglob("*.manifest.json")):
+            raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise ConfigurationError(f"manifest={manifest_path}: object required")
+            manifest = cast(dict[str, Any], raw)
+            artifact_id = manifest.get("artifact_id")
+            coordinates_raw = manifest.get("coordinates")
+            if not isinstance(artifact_id, str) or not isinstance(coordinates_raw, dict):
+                raise ConfigurationError(f"manifest={manifest_path}: identity is incomplete")
+            coordinates = {
+                str(key): str(value)
+                for key, value in cast(dict[object, object], coordinates_raw).items()
+            }
+            target = self.path(artifact_id, coordinates)
+            if self._manifest_path(target) != manifest_path.resolve():
+                raise ConfigurationError(
+                    f"manifest={manifest_path}: path does not match artifact catalog"
+                )
+            self.read(artifact_id, coordinates)
+            rows.append(
+                {
+                    **manifest,
+                    "relative_path": target.relative_to(self.root).as_posix(),
+                    "manifest_relative_path": manifest_path.relative_to(self.root).as_posix(),
+                }
+            )
+        return rows
+
     def _recover_or_reject_existing(
         self, target: Path, manifest_path: Path, item: Mapping[str, object]
     ) -> None:

@@ -9,6 +9,7 @@ evidence:
   - Q
   - Z_M
   cross_fitted_expanded_label_model_role: sensitivity_only
+  lag_identity_tolerance_days: 0
   exit_events:
     delisting_or_merger_is_negative: false
     retain_when_evidence_followup_possible: true

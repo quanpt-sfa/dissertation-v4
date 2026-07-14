@@ -62,9 +62,9 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/bctc1/YKienKiemToan.xlsx
+        - data/raw/fiinpro/audit_opinions/*.xlsx
         excludes: []
-        cardinality: one
+        cardinality: many
       format: xlsx
       reader:
         sheet_name: first
@@ -81,7 +81,10 @@ source_catalog:
         firm_id: [firm_id, code, ticker, Mã, Mã CK]
         fiscal_year: [fiscal_year, year, Năm]
         availability_date: [availability_date, publication_date, Ngày công bố, Ngày BCTC]
-      required_semantic_fields: [firm_id, fiscal_year]
+        outcome: [outcome, non_clean, audit_opinion_non_clean_flag]
+        event_id: [event_id, audit_opinion_event_id]
+        event_cluster_id: [event_cluster_id, upstream_decision_id]
+      required_semantic_fields: [firm_id, fiscal_year, availability_date, outcome]
       key_semantics: [firm_id, fiscal_year]
       date_semantics: [availability_date]
       panel_mapping:
@@ -91,9 +94,9 @@ source_catalog:
       required: false
       discovery:
         globs:
-        - data/bctc1/VonHoa.xlsx
+        - data/raw/fiinpro/capital_ownership/*.xlsx
         excludes: []
-        cardinality: one_or_none
+        cardinality: many
       format: xlsx
       reader:
         sheet_name: first
@@ -119,11 +122,8 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/bctc1/*.xlsx
-        excludes:
-        - data/bctc1/YKienKiemToan.xlsx
-        - data/bctc1/VonHoa.xlsx
-        - data/bctc1/*ICB*.xlsx
+        - data/raw/fiinpro/quarterly_exports/*.xlsx
+        excludes: []
         cardinality: many
       format: xlsx
       reader:
@@ -148,7 +148,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/firms/listing_history_expanded_step31_vietstock_profile_timeline.csv
+        - data/raw/vietstock/listing_history.csv
         excludes: []
         cardinality: one
       format: csv
@@ -176,7 +176,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/firms/research_labels_expanded_with_ticker.csv
+        - data/raw/regulatory/research_labels.csv
         excludes: []
         cardinality: one
       format: csv
@@ -195,8 +195,11 @@ source_catalog:
         firm_id: [ticker]
         fiscal_year: [affected_fiscal_year]
         availability_date: [decision_date]
-      required_semantic_fields: [firm_id, availability_date]
-      key_semantics: [case_id]
+        outcome: [outcome, is_positive, positive_label]
+        event_id: [event_id, case_id]
+        event_cluster_id: [event_cluster_id, bundle_id, document_id]
+      required_semantic_fields: [firm_id, fiscal_year, availability_date, outcome, event_id]
+      key_semantics: [event_id]
       date_semantics: [availability_date]
       panel_mapping:
         enabled: false
@@ -205,7 +208,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/firms/ThongTinCoBan.xlsx
+        - data/raw/reference/ThongTinCoBan.xlsx
         excludes: []
         cardinality: one
       format: xlsx
@@ -226,5 +229,34 @@ source_catalog:
       required_semantic_fields: [firm_id]
       key_semantics: [firm_id]
       date_semantics: [availability_date]
+      panel_mapping:
+        enabled: false
+    known_cases:
+      enabled: true
+      required: false
+      discovery:
+        globs:
+        - data/raw/known_cases/known_cases.csv
+        excludes: []
+        cardinality: one_or_none
+      format: csv
+      reader:
+        encoding: utf-8
+        delimiter: ','
+      channel_id: S3
+      source_type: sealed_known_case_ledger
+      source_agency: independent_case_review
+      original_unit: case-firm-year
+      role: known_case
+      verification_status: high_confirmation
+      coverage_dimensions: [year]
+      data_risks: [identity_disclosure, eligibility_mismatch]
+      semantic_fields:
+        firm_id: [firm_master_id, firm_id, ticker]
+        fiscal_year: [fiscal_year, year]
+        case_id: [case_id, known_case_id]
+      required_semantic_fields: [firm_id, fiscal_year, case_id]
+      key_semantics: [case_id]
+      date_semantics: []
       panel_mapping:
         enabled: false

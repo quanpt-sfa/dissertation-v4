@@ -1,4 +1,5 @@
 simulation:
+  operational_scenarios: []
   imports_production_labels: true
   objective:
     targets:

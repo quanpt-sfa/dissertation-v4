@@ -63,6 +63,10 @@ columns:
     physical_name: scenario_id
     dtype: string
     semantic_role: simulation_scenario
+  method_id:
+    physical_name: method_id
+    dtype: string
+    semantic_role: simulation_method
   replication_id:
     physical_name: replication_id
     dtype: int64

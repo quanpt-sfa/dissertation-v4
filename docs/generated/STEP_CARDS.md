@@ -36,7 +36,7 @@ Required receipts: []
 
 Evidence ledger
 
-Reads: ['firm_year_panel']
+Reads: ['firm_year_panel', 'raw_audit']
 
 Writes: ['evidence_ledger', 'availability_registry', 'lag_decomposition']
 
@@ -46,9 +46,9 @@ Required receipts: []
 
 Risk set and maturity
 
-Reads: ['evidence_ledger']
+Reads: ['firm_year_panel', 'evidence_ledger']
 
-Writes: ['risk_sets', 'maturity_audit']
+Writes: ['risk_sets', 'maturity_audit', 'prospective_set', 'censoring_registry']
 
 Required receipts: []
 
@@ -56,9 +56,9 @@ Required receipts: []
 
 Measurement construction
 
-Reads: ['risk_sets']
+Reads: ['risk_sets', 'evidence_ledger']
 
-Writes: ['source_channel_matrices', 'l0_l1_inputs', 'l3_pilot_capability', 'sealed_outcome_store']
+Writes: ['source_channel_matrices', 'l0_l1_inputs', 'l3_pilot_capability', 'measurement_variable_registry', 'channel_capability', 'anchor_capability', 'fold_eligibility', 'sealed_outcome_store']
 
 Required receipts: []
 
@@ -66,7 +66,7 @@ Required receipts: []
 
 Verification and observability
 
-Reads: ['l3_pilot_capability']
+Reads: ['l3_pilot_capability', 'source_channel_matrices']
 
 Writes: ['observability_registry']
 
@@ -76,9 +76,9 @@ Required receipts: []
 
 Feature and leakage audit
 
-Reads: ['observability_registry']
+Reads: ['observability_registry', 'firm_year_panel', 'risk_sets', 'raw_audit']
 
-Writes: ['feature_panel', 'feature_registry']
+Writes: ['feature_panel', 'feature_registry', 'leakage_registry']
 
 Required receipts: []
 
@@ -86,7 +86,7 @@ Required receipts: []
 
 Method simulation
 
-Reads: ['feature_registry']
+Reads: ['feature_registry', 'source_channel_matrices', 'simulation_scenario_registry', 'simulation_batches']
 
 Writes: ['simulation_scenario_registry', 'simulation_batches', 'mcse_report']
 
@@ -96,9 +96,9 @@ Required receipts: []
 
 Splits and weights
 
-Reads: ['feature_panel']
+Reads: ['feature_panel', 'risk_sets', 'observability_registry', 'source_channel_matrices', 'fold_eligibility']
 
-Writes: ['temporal_split_registry', 'channel_time_split_registry', 'fold_aware_weights']
+Writes: ['temporal_split_registry', 'channel_time_split_registry', 'fold_aware_weights', 'weight_diagnostics']
 
 Required receipts: []
 
@@ -106,7 +106,7 @@ Required receipts: []
 
 Measurement selection
 
-Reads: ['fold_aware_weights']
+Reads: ['fold_aware_weights', 'weight_diagnostics', 'temporal_split_registry', 'channel_time_split_registry', 'source_channel_matrices', 'l0_l1_inputs', 'l3_pilot_capability', 'fold_eligibility', 'mcse_report']
 
 Writes: ['measurement_candidate_results', 'measurement_selection_registry', 'channel_measurement_selection']
 
@@ -116,7 +116,7 @@ Required receipts: []
 
 Learner fitting and freeze
 
-Reads: ['measurement_selection_registry']
+Reads: ['measurement_selection_registry', 'temporal_split_registry', 'feature_panel', 'feature_registry', 'l0_l1_inputs', 'fold_aware_weights', 'weight_diagnostics', 'source_config_manifest', 'environment_observation']
 
 Writes: ['model_artifacts', 'development_oof_predictions', 'raw_outer_predictions', 'model_freeze_receipt']
 
@@ -136,9 +136,9 @@ Required receipts: ['model_freeze_receipt']
 
 Sensitivity and transfer
 
-Reads: ['evaluation_metrics']
+Reads: ['evaluation_metrics', 'raw_outer_predictions', 'sealed_outcome_store', 'feature_panel', 'feature_registry', 'l3_pilot_capability', 'evidence_ledger', 'lag_decomposition', 'censoring_registry', 'weight_diagnostics']
 
-Writes: ['domain_transfer_outputs', 'hierarchical_pi_sensitivity', 'ablation_results']
+Writes: ['domain_transfer_outputs', 'source_sensitivity_outputs', 'censoring_sensitivity_outputs', 'hierarchical_pi_sensitivity', 'ablation_results']
 
 Required receipts: []
 
@@ -146,7 +146,7 @@ Required receipts: []
 
 Gate 2
 
-Reads: ['domain_transfer_outputs']
+Reads: ['domain_transfer_outputs', 'source_sensitivity_outputs', 'censoring_sensitivity_outputs', 'evaluation_metrics', 'ablation_results', 'bootstrap_batches']
 
 Writes: ['gate2_verdict']
 
@@ -156,7 +156,7 @@ Required receipts: []
 
 Known cases
 
-Reads: ['gate2_verdict']
+Reads: ['gate2_verdict', 'model_freeze_receipt', 'outer_open_receipt', 'evaluation_metrics', 'raw_outer_predictions']
 
 Writes: ['known_case_results']
 
@@ -166,7 +166,7 @@ Required receipts: ['known_cases_seal', 'gate2_verdict']
 
 Gate 3
 
-Reads: ['known_case_results']
+Reads: ['known_case_results', 'gate2_verdict', 'evaluation_metrics', 'feature_panel', 'raw_outer_predictions', 'sealed_outcome_store', 'feature_registry']
 
 Writes: ['threshold_interaction_results', 'gate3_verdict']
 
@@ -178,7 +178,7 @@ Final reporting
 
 Reads: ['gate3_verdict']
 
-Writes: ['final_result_ledger', 'final_report']
+Writes: ['final_result_ledger', 'final_verdict_matrix', 'final_artifact_manifest', 'final_decision_log', 'chapter4_input_tables', 'final_gate_figure', 'final_audit_report', 'final_report']
 
 Required receipts: ['gate3_verdict']
 

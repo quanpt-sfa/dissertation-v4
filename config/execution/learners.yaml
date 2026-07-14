@@ -7,6 +7,19 @@ learners:
   - anchor_pu
   sensitivity:
   - noisy_positive_pu
+  settings:
+    elastic_net_logistic:
+      inverse_regularization: 1.0
+      l1_ratio: 0.5
+      maximum_iterations: 2000
+    random_forest:
+      trees: 500
+      minimum_leaf_size: 5
+      maximum_features: sqrt
+    main_boosting:
+      maximum_iterations: 200
+      learning_rate: 0.05
+      maximum_leaf_nodes: 15
   tuning:
     max_valid_configurations_per_learner_inner_fold: 50
     equivalent_budget_allowed: true

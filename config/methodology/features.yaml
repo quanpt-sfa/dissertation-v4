@@ -6,3 +6,8 @@ features:
   - T
   - Q
   - Z_M
+  registry: []
+  preprocessing:
+    numeric_imputation: median
+    linear_scaling: standard
+    fit_scope: inner_development_only

@@ -1,5 +1,6 @@
 agent_contract:
   rules:
+    - Read docs/AGENT_REPO_MAP.md and docs/PIPELINE_P00_P17.md before changing a pipeline stage.
     - Setup with a Python 3.11+ environment and install PyYAML plus development tools.
     - Run python -m pytest -q and python scripts/bootstrap_repository.py --config config/pipeline.yaml --check.
     - Run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check before committing configuration changes.

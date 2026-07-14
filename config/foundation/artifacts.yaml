@@ -240,6 +240,26 @@ artifacts:
     immutability: immutable
     aggregation_behavior: singleton
     checkpoint_role: none
+  prospective_set:
+    producer_step: P04
+    path_template: P04/prospective_set.parquet
+    schema_id: risk_sets_frame
+    format: parquet
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  censoring_registry:
+    producer_step: P04
+    path_template: P04/censoring_registry.json
+    schema_id: json_array
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
   source_channel_matrices:
     producer_step: P05
     path_template: P05/source_channel_matrices.json
@@ -264,6 +284,46 @@ artifacts:
     producer_step: P05
     path_template: P05/l3_pilot_capability.json
     schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: capability
+  measurement_variable_registry:
+    producer_step: P05
+    path_template: P05/measurement_variable_registry.json
+    schema_id: json_array
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: capability
+  channel_capability:
+    producer_step: P05
+    path_template: P05/channel_capability.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: capability
+  anchor_capability:
+    producer_step: P05
+    path_template: P05/anchor_capability.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: capability
+  fold_eligibility:
+    producer_step: P05
+    path_template: P05/fold_eligibility.json
+    schema_id: json_array
     format: json
     coordinates: []
     sensitivity_class: restricted
@@ -310,6 +370,16 @@ artifacts:
     immutability: immutable
     aggregation_behavior: singleton
     checkpoint_role: none
+  leakage_registry:
+    producer_step: P07
+    path_template: P07/leakage_registry.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
   simulation_scenario_registry:
     producer_step: P08
     path_template: P08/scenario_registry.json
@@ -322,11 +392,13 @@ artifacts:
     checkpoint_role: adaptive_simulation
   simulation_batches:
     producer_step: P08
-    path_template: P08/batches/{scenario_id}.parquet
+    path_template: P08/batches/{scenario_id}/{method_id}/{batch_id}.parquet
     schema_id: simulation_batch_frame
     format: parquet
     coordinates:
     - scenario_id
+    - method_id
+    - batch_id
     sensitivity_class: public
     immutability: immutable
     aggregation_behavior: partitioned
@@ -366,6 +438,17 @@ artifacts:
     path_template: P09/weights/{fold_id}.parquet
     schema_id: fold_weights_frame
     format: parquet
+    coordinates:
+    - fold_id
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: partitioned
+    checkpoint_role: none
+  weight_diagnostics:
+    producer_step: P09
+    path_template: P09/weight_diagnostics/{fold_id}.json
+    schema_id: json_object
+    format: json
     coordinates:
     - fold_id
     sensitivity_class: restricted
@@ -514,6 +597,26 @@ artifacts:
     immutability: immutable
     aggregation_behavior: singleton
     checkpoint_role: none
+  source_sensitivity_outputs:
+    producer_step: P13
+    path_template: P13/source_sensitivity.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: outer
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  censoring_sensitivity_outputs:
+    producer_step: P13
+    path_template: P13/censoring_sensitivity.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: outer
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
   hierarchical_pi_sensitivity:
     producer_step: P13
     path_template: P13/hierarchical_pi.json
@@ -579,6 +682,66 @@ artifacts:
     path_template: P17/final_ledger.json
     schema_id: json_array
     format: json
+    coordinates: []
+    sensitivity_class: public
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: reporting
+  final_verdict_matrix:
+    producer_step: P17
+    path_template: P17/final_verdict_matrix.json
+    schema_id: json_array
+    format: json
+    coordinates: []
+    sensitivity_class: public
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: reporting
+  final_artifact_manifest:
+    producer_step: P17
+    path_template: P17/final_artifact_manifest.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: public
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: reporting
+  final_decision_log:
+    producer_step: P17
+    path_template: P17/final_decision_log.json
+    schema_id: json_array
+    format: json
+    coordinates: []
+    sensitivity_class: public
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: reporting
+  chapter4_input_tables:
+    producer_step: P17
+    path_template: P17/chapter4_input_tables.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: public
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: reporting
+  final_gate_figure:
+    producer_step: P17
+    path_template: P17/final_gate_figure.svg
+    schema_id: text_value
+    format: text
+    coordinates: []
+    sensitivity_class: public
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: reporting
+  final_audit_report:
+    producer_step: P17
+    path_template: P17/FINAL_AUDIT_REPORT.md
+    schema_id: markdown_document
+    format: markdown
     coordinates: []
     sensitivity_class: public
     immutability: immutable
