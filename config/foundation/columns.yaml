@@ -15,6 +15,70 @@ columns:
     physical_name: availability_date
     dtype: datetime64[ns]
     semantic_role: availability_time
+  document_id:
+    physical_name: document_id
+    dtype: string
+    semantic_role: regulatory_decision_key
+  decision_number:
+    physical_name: decision_number
+    dtype: string
+    semantic_role: regulatory_decision_provenance
+  sanction_year:
+    physical_name: sanction_year
+    dtype: int16
+    semantic_role: regulatory_source_year
+  target_fiscal_year:
+    physical_name: target_fiscal_year
+    dtype: int16
+    semantic_role: assigned_outcome_period
+  affected_fiscal_year:
+    physical_name: affected_fiscal_year
+    dtype: int16
+    semantic_role: sensitivity_period_provenance
+  decision_date:
+    physical_name: decision_date
+    dtype: datetime64[ns]
+    semantic_role: decision_timing_provenance
+  publish_date:
+    physical_name: publish_date
+    dtype: datetime64[ns]
+    semantic_role: publication_timing_provenance
+  label_known_date:
+    physical_name: label_known_date
+    dtype: datetime64[ns]
+    semantic_role: labels_as_known_time
+  legacy_event_id:
+    physical_name: legacy_event_id
+    dtype: string
+    semantic_role: source_row_reference
+  hard_positive:
+    physical_name: hard_positive
+    dtype: bool
+    semantic_role: source_hard_positive_indicator
+  row_inclusion:
+    physical_name: row_inclusion
+    dtype: bool
+    semantic_role: source_row_inclusion_indicator
+  primary_violation_l1:
+    physical_name: primary_violation_l1
+    dtype: string
+    semantic_role: normalized_taxonomy_level_1
+  primary_violation_l2:
+    physical_name: primary_violation_l2
+    dtype: string
+    semantic_role: normalized_taxonomy_level_2
+  construct_family:
+    physical_name: construct_family
+    dtype: string
+    semantic_role: normalized_construct_family
+  construct_target:
+    physical_name: construct_target
+    dtype: string
+    semantic_role: normalized_construct_target
+  normalized_violation_code:
+    physical_name: normalized_violation_code
+    dtype: string
+    semantic_role: normalized_taxonomy_code
   evidence_record_id:
     physical_name: evidence_record_id
     dtype: string
@@ -55,6 +119,54 @@ columns:
     physical_name: source_record_refs
     dtype: string
     semantic_role: raw_source_record_provenance
+  decision_count:
+    physical_name: decision_count
+    dtype: int64
+    semantic_role: unique_document_count
+  document_ids:
+    physical_name: document_ids
+    dtype: string
+    semantic_role: decision_key_collection
+  decision_numbers:
+    physical_name: decision_numbers
+    dtype: string
+    semantic_role: decision_number_collection
+  decision_total_fine:
+    physical_name: total_fine
+    dtype: float64
+    semantic_role: decision_severity_metadata
+  has_fine:
+    physical_name: has_fine
+    dtype: bool
+    semantic_role: decision_severity_metadata
+  has_suspension:
+    physical_name: has_suspension
+    dtype: bool
+    semantic_role: decision_severity_metadata
+  has_warning:
+    physical_name: has_warning
+    dtype: bool
+    semantic_role: decision_severity_metadata
+  has_remedy:
+    physical_name: has_remedy
+    dtype: bool
+    semantic_role: decision_severity_metadata
+  first_label_known_date:
+    physical_name: first_label_known_date
+    dtype: datetime64[ns]
+    semantic_role: earliest_label_provenance_time
+  last_label_known_date:
+    physical_name: last_label_known_date
+    dtype: datetime64[ns]
+    semantic_role: latest_label_provenance_time
+  taxonomy_codes:
+    physical_name: taxonomy_codes
+    dtype: string
+    semantic_role: normalized_taxonomy_collection
+  taxonomy_reason_code:
+    physical_name: taxonomy_reason_code
+    dtype: string
+    semantic_role: taxonomy_classification_status
   event_id:
     physical_name: event_id
     dtype: string
@@ -123,6 +235,26 @@ columns:
     physical_name: mature
     dtype: bool
     semantic_role: outcome_maturity
+  annual_measurement_mature:
+    physical_name: annual_measurement_mature
+    dtype: bool
+    semantic_role: annual_anchor_maturity
+  s3_next_year_mature:
+    physical_name: s3_next_year_mature
+    dtype: bool
+    semantic_role: sanction_source_year_maturity
+  required_sanction_year:
+    physical_name: required_sanction_year
+    dtype: int16
+    semantic_role: required_regulatory_source_year
+  source_year_complete:
+    physical_name: source_year_complete
+    dtype: bool
+    semantic_role: regulatory_source_completeness
+  maturity_status:
+    physical_name: maturity_status
+    dtype: string
+    semantic_role: target_maturity_reason
   scenario_id:
     physical_name: scenario_id
     dtype: string

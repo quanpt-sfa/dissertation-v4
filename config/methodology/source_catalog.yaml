@@ -80,42 +80,66 @@ source_catalog:
       original_unit: enforcement-event
       role: evidence
       verification_status: high_confirmation
-      coverage_dimensions: [label_year, violation_family, label_confidence]
-      data_risks: [event_to_firm_year_link, bundled_decisions, indirect_label]
+      coverage_dimensions: [sanction_year, construct_family, normalized_violation_code]
+      data_risks: [decision_to_firm_link, multi_firm_decision, incomplete_source_year, unmapped_taxonomy]
       semantic_fields:
         firm_id: [issuer_ticker]
-        fiscal_year: [label_year]
-        availability_date: [publish_date]
+        document_id: [document_id]
+        decision_number: [decision_number]
+        sanction_year: [sanction_year]
+        decision_date: [decision_date]
+        publish_date: [publish_date]
+        target_fiscal_year: [target_fiscal_year]
+        label_known_date: [label_known_date]
+        primary_violation_l1: [primary_violation_l1]
+        primary_violation_l2: [primary_violation_l2]
+        construct_family: [construct_family]
+        construct_target: [construct_target]
+        normalized_violation_code: [normalized_violation_code]
         row_inclusion: [train_include_flag]
         hard_positive: [is_direct_label]
-        event_id: [firm_event_id]
-        event_cluster_id: [bundle_id]
+        legacy_event_id: [firm_event_id]
+        affected_fiscal_year: [affected_fiscal_year, label_year]
         period_link_source: [label_year_source]
         period_link_confidence: [label_confidence]
+        decision_total_fine: [total_fine, fine_amount]
+        has_fine: [has_fine]
+        has_suspension: [has_suspension]
+        has_warning: [has_warning]
+        has_remedy: [has_remedy]
       required_semantic_fields:
       - firm_id
-      - fiscal_year
-      - availability_date
+      - document_id
       - row_inclusion
       - hard_positive
-      - event_id
-      key_semantics: [event_id]
-      date_semantics: [availability_date]
+      key_semantics: [document_id, firm_id]
+      date_semantics: [decision_date, publish_date, label_known_date]
       evidence_mapping:
-        processor: delayed_event
-        temporal_role: delayed_verification
-        availability_rule: actual_publish_date
-        explicit_negative_allowed: false
-        outcome_mode: positive_indicator
+        processor: sanction_calendar_year
+        temporal_role: next_calendar_year_regulatory_event
+        availability_rule: sanction_calendar_year
+        target_year_rule: sanction_year_minus_one
+        decision_key_semantic: document_id
+        decision_provenance_semantic: decision_number
+        sanction_year_precedence: [sanction_year, decision_date, publish_date]
+        label_known_date_precedence: [label_known_date, publish_date, decision_date]
+        affected_fiscal_year_role: sensitivity_provenance_only
+        explicit_negative_allowed: true
         row_inclusion_semantic: row_inclusion
         positive_semantic: hard_positive
-        false_indicator_policy: unknown
-        absence_policy: unknown
-        opportunity_semantic: null
-        duplicate_representative_rule: identical_signature_then_source_event_id
+        absence_policy: explicit_false_when_complete_source_year
+        opportunity_semantic: derived_source_year_completeness
+        duplicate_representative_rule: identical_signature_then_document_id_firm
+        taxonomy_registry: s3_taxonomy
         logical_sources:
-        - source_id: S3_sanction_evidence
-          endpoint_id: sanction_evidence
+        - source_id: S3_BROAD
+          endpoint_id: S3_BROAD
+        - source_id: S3_REPORTING
+          endpoint_id: S3_REPORTING
+        - source_id: S3_CONTENT
+          endpoint_id: S3_CONTENT
+        - source_id: S3_TIMELINESS
+          endpoint_id: S3_TIMELINESS
       panel_mapping:
         enabled: false
 

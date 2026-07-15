@@ -5,3 +5,5 @@ risksets:
   ipcw_role: sensitivity_only_when_diagnostics_pass
   data_cutoff_required: true
   data_cutoff: "2026-03-31"
+  primary_target_id_owner: measurement.primary_target_id
+  sanction_source_completeness_owner: s3_taxonomy.sanction_source_completeness

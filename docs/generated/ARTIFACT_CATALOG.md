@@ -66,6 +66,7 @@ Source: config/pipeline.yaml
 | raw_outer_predictions | P11 | raw_outer_predictions_frame | `P11/predictions/{outer_fold}.parquet` |
 | registry_lock | P00 | registry_lock_schema | `P00/registry.lock.json` |
 | risk_sets | P04 | risk_sets_frame | `P04/risk_sets.parquet` |
+| sanction_decision_ledger | P03 | sanction_decision_ledger_frame | `P03/sanction_decision_ledger.parquet` |
 | schema_catalog | P00 | schema_catalog_schema | `P00/schema_catalog.json` |
 | sealed_outcome_store | P05 | sealed_outcome_frame | `P05/sealed_outcomes.parquet` |
 | simulation_batches | P08 | simulation_batch_frame | `P08/batches/{scenario_id}/{method_id}/{batch_id}.parquet` |

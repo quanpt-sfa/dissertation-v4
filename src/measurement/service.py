@@ -9,6 +9,7 @@ from typing import Any, cast
 import pandas as pd
 
 from core.semantic_keys import (
+    ANNUAL_MEASUREMENT_MATURE,
     AVAILABILITY_DATE,
     CHANNEL_ID,
     ELIGIBLE,
@@ -18,6 +19,7 @@ from core.semantic_keys import (
     OUTCOME,
     OUTER_FOLD,
     PREDICTION_TIME,
+    S3_NEXT_YEAR_MATURE,
     SOURCE_ID,
     SOURCE_OPPORTUNITY,
     TARGET_ID,
@@ -36,6 +38,7 @@ class MeasurementResult:
     measurement_variables: list[dict[str, object]]
     channel_capability: dict[str, object]
     anchor_capability: dict[str, object]
+    target_maturity: pd.DataFrame
 
 
 def l3_channel_capability_allows_pilot(capability: dict[str, object]) -> bool:
@@ -70,6 +73,7 @@ def build_measurement_inputs(
     source_temporal_roles: dict[str, str] | None = None,
     explicit_negative_allowed: dict[str, bool] | None = None,
     l2_scoring: dict[str, Any] | None = None,
+    candidate_targets: dict[str, list[str]] | None = None,
 ) -> MeasurementResult:
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
@@ -80,6 +84,7 @@ def build_measurement_inputs(
     channel = columns[CHANNEL_ID]
     availability = columns[AVAILABILITY_DATE]
     outcome = columns[OUTCOME]
+    target = columns[TARGET_ID]
     temporal = columns.get(TEMPORAL_ROLE, TEMPORAL_ROLE)
     opportunity = columns.get(SOURCE_OPPORTUNITY, SOURCE_OPPORTUNITY)
     required_risk = {firm, year, prediction, mature, eligible}
@@ -93,9 +98,6 @@ def build_measurement_inputs(
         row = {str(key): value for key, value in raw.items()}
         evidence_by_key.setdefault((str(row[firm]), int(row[year])), []).append(row)
 
-    input_rows: list[dict[str, object]] = []
-    sealed_rows: list[dict[str, object]] = []
-    matrix_rows: list[dict[str, object]] = []
     expected_source_ids = sorted(expected_sources)
     expected_channels = sorted(set(expected_sources.values()))
     temporal_roles = source_temporal_roles or {
@@ -108,17 +110,31 @@ def build_measurement_inputs(
         raise ValueError("P05 temporal roles must cover every logical source")
     if set(negative_policy) != set(expected_source_ids):
         raise ValueError("P05 explicit-negative policy must cover every logical source")
+    targets = candidate_targets or {"L1": expected_source_ids}
+    if not targets or any(not values for values in targets.values()):
+        raise ValueError("P05 candidate targets require nonempty source lists")
+    unknown_target_sources = sorted(
+        {item for values in targets.values() for item in values} - set(expected_source_ids)
+    )
+    if unknown_target_sources:
+        raise ValueError(
+            f"P05 candidate targets reference unknown sources {unknown_target_sources}"
+        )
     l2_configuration = _l2_configuration(
         expected_source_ids=expected_source_ids,
         source_profiles=source_profiles or {},
         scoring=l2_scoring or {},
     )
+    input_rows: list[dict[str, object]] = []
+    sealed_rows: list[dict[str, object]] = []
+    matrix_rows: list[dict[str, object]] = []
+    target_maturity_rows: list[dict[str, object]] = []
     for raw in cast(list[dict[str, Any]], risk_sets.to_dict(orient="records")):
         risk = {str(key): value for key, value in raw.items()}
         key = (str(risk[firm]), int(risk[year]))
         prediction_time = pd.Timestamp(risk[prediction])
         horizon_end = prediction_time + pd.DateOffset(months=horizon_months)
-        source_events: dict[str, list[tuple[bool | None, int]]] = {
+        source_events: dict[str, list[tuple[bool | None, int | None]]] = {
             item: [] for item in expected_source_ids
         }
         source_opportunity_values: dict[str, list[bool | None]] = {
@@ -133,17 +149,28 @@ def build_measurement_inputs(
             source_id = str(event[source])
             if source_id not in source_events:
                 raise ValueError(f"P05 evidence source is not registered: {source_id}")
-            event_time = pd.Timestamp(cast(Any, event[availability]))
             row_temporal_role = str(event.get(temporal, temporal_roles[source_id]))
             if row_temporal_role != temporal_roles[source_id]:
                 raise ValueError(f"source={source_id}: evidence temporal role drift")
+            event_time_raw = event.get(availability)
+            event_time = (
+                None
+                if pd.isna(cast(Any, event_time_raw))
+                else pd.Timestamp(cast(Any, event_time_raw))
+            )
             if row_temporal_role == "annual_measurement_at_anchor":
                 if event_time != prediction_time:
                     raise ValueError(
                         f"source={source_id}: annual evidence must be available at anchor"
                     )
                 lag_days = 0
+            elif row_temporal_role == "next_calendar_year_regulatory_event":
+                lag_days = (
+                    int((event_time - prediction_time).days) if event_time is not None else None
+                )
             elif row_temporal_role == "delayed_verification":
+                if event_time is None:
+                    raise ValueError(f"source={source_id}: delayed evidence requires a date")
                 if event_time <= prediction_time or event_time > horizon_end:
                     continue
                 lag_days = int((event_time - prediction_time).days)
@@ -172,27 +199,53 @@ def build_measurement_inputs(
             )
             observed[source_id] = aggregate
             if aggregate is not None:
-                observed_lag_days[source_id] = min(
-                    lag for value, lag in events if value is aggregate
-                )
+                matching_lags = [
+                    lag for value, lag in events if value is aggregate and lag is not None
+                ]
+                observed_lag_days[source_id] = min(matching_lags) if matching_lags else None
+        source_maturity = {
+            source_id: _source_is_mature(risk, temporal_roles[source_id], columns)
+            for source_id in expected_source_ids
+        }
         for source_id in expected_source_ids:
             input_rows.append(
                 {
                     firm: key[0],
                     year: key[1],
-                    columns[TARGET_ID]: f"L0:{source_id}",
-                    outcome: observed[source_id]
-                    if temporal_roles[source_id] == "annual_measurement_at_anchor"
-                    or bool(risk[mature])
-                    else None,
+                    target: f"L0:{source_id}",
+                    outcome: (
+                        observed[source_id]
+                        if source_maturity[source_id] and bool(risk[eligible])
+                        else None
+                    ),
                 }
             )
-        l1 = (
-            aggregate_l1(observed, observed_opportunities)
-            if bool(risk[mature]) and bool(risk[eligible])
-            else None
-        )
-        input_rows.append({firm: key[0], year: key[1], columns[TARGET_ID]: "L1", outcome: l1})
+        candidate_values: dict[str, bool | None] = {}
+        candidate_maturity: dict[str, bool] = {}
+        for target_id, required_sources in sorted(targets.items()):
+            target_is_mature = all(source_maturity[item] for item in required_sources)
+            candidate_maturity[target_id] = target_is_mature
+            value = (
+                aggregate_l1(
+                    {item: observed[item] for item in required_sources},
+                    {item: observed_opportunities[item] for item in required_sources},
+                )
+                if target_is_mature and bool(risk[eligible])
+                else None
+            )
+            candidate_values[target_id] = value
+            input_rows.append({firm: key[0], year: key[1], target: target_id, outcome: value})
+            target_maturity_rows.append(
+                {
+                    firm: key[0],
+                    year: key[1],
+                    target: target_id,
+                    eligible: bool(risk[eligible]),
+                    mature: target_is_mature,
+                }
+            )
+            if value is not None:
+                sealed_rows.append({firm: key[0], year: key[1], target: target_id, outcome: value})
         channel_values: dict[str, bool | None] = {item: None for item in expected_channels}
         channel_opportunities: dict[str, bool | None] = {item: None for item in expected_channels}
         for channel_id in expected_channels:
@@ -220,7 +273,10 @@ def build_measurement_inputs(
                 FIRM_ID: key[0],
                 FISCAL_YEAR: key[1],
                 ELIGIBLE: bool(risk[eligible]),
-                MATURE: bool(risk[mature]),
+                MATURE: all(source_maturity.values()),
+                "source_maturity": source_maturity,
+                "target_maturity": candidate_maturity,
+                "candidate_outcomes": candidate_values,
                 "source_outcomes": observed,
                 "source_opportunities": observed_opportunities,
                 "channel_outcomes": channel_values,
@@ -244,7 +300,7 @@ def build_measurement_inputs(
                 "source_opportunity_unknown_count": sum(
                     value is None for value in observed_opportunities.values()
                 ),
-                "l1": l1,
+                "l1": candidate_values.get("L1"),
                 "l2_score": evidence_score_l2(channel_scores)
                 if l2_configuration["status"] == "AVAILABLE"
                 else None,
@@ -252,19 +308,26 @@ def build_measurement_inputs(
                 "l2_score_reason_code": l2_configuration["reason_code"],
             }
         )
-        if l1 is not None:
-            sealed_rows.append({firm: key[0], year: key[1], outcome: l1})
 
-    inputs = pd.DataFrame(input_rows, columns=[firm, year, columns[TARGET_ID], outcome])
+    inputs = pd.DataFrame(input_rows, columns=[firm, year, target, outcome])
     inputs[firm] = inputs[firm].astype("string")
     inputs[year] = inputs[year].astype("int16")
-    inputs[columns[TARGET_ID]] = inputs[columns[TARGET_ID]].astype("string")
+    inputs[target] = inputs[target].astype("string")
     inputs[outcome] = inputs[outcome].astype("boolean")
-    sealed = pd.DataFrame(sealed_rows, columns=[firm, year, outcome])
+    sealed = pd.DataFrame(sealed_rows, columns=[firm, year, target, outcome])
     if not sealed.empty:
         sealed[firm] = sealed[firm].astype("string")
         sealed[year] = sealed[year].astype("int16")
+        sealed[target] = sealed[target].astype("string")
         sealed[outcome] = sealed[outcome].astype(bool)
+    target_maturity_frame = pd.DataFrame(
+        target_maturity_rows, columns=[firm, year, target, eligible, mature]
+    )
+    target_maturity_frame[firm] = target_maturity_frame[firm].astype("string")
+    target_maturity_frame[year] = target_maturity_frame[year].astype("int16")
+    target_maturity_frame[target] = target_maturity_frame[target].astype("string")
+    target_maturity_frame[eligible] = target_maturity_frame[eligible].astype(bool)
+    target_maturity_frame[mature] = target_maturity_frame[mature].astype(bool)
     valid_channels = sorted(
         {
             channel_id
@@ -298,11 +361,15 @@ def build_measurement_inputs(
     ]
     variables.extend(
         [
-            {
-                "variable_id": "L1",
-                "role": "primary_binary_union",
-                "missing_source_encoded_as_zero": False,
-            },
+            *[
+                {
+                    "variable_id": target_id,
+                    "role": "candidate_binary_aggregation",
+                    "required_sources": list(required_sources),
+                    "missing_source_encoded_as_zero": False,
+                }
+                for target_id, required_sources in sorted(targets.items())
+            ],
             {
                 "variable_id": "L2",
                 "role": "observed_channel_normalized_score",
@@ -318,6 +385,7 @@ def build_measurement_inputs(
         matrices={
             "expected_sources": expected_sources,
             "expected_channels": expected_channels,
+            "candidate_targets": targets,
             "valid_channels": valid_channels,
             "rows": matrix_rows,
             "missing_source_encoded_as_zero": False,
@@ -341,7 +409,24 @@ def build_measurement_inputs(
             "reason_code": None if anchor_ids else "ANCHOR_UNAVAILABLE",
             "clean_positive_assumption": False,
         },
+        target_maturity=target_maturity_frame,
     )
+
+
+def _source_is_mature(risk: dict[str, Any], temporal_role: str, columns: dict[str, str]) -> bool:
+    if temporal_role == "annual_measurement_at_anchor":
+        field = columns.get(ANNUAL_MEASUREMENT_MATURE)
+        return bool(risk[field]) if field is not None and field in risk else True
+    if temporal_role == "next_calendar_year_regulatory_event":
+        field = columns.get(S3_NEXT_YEAR_MATURE)
+        return (
+            bool(risk[field])
+            if field is not None and field in risk
+            else bool(risk[columns[MATURE]])
+        )
+    if temporal_role == "delayed_verification":
+        return bool(risk[columns[MATURE]])
+    raise ValueError(f"unsupported temporal role={temporal_role}")
 
 
 def _l2_configuration(
@@ -444,7 +529,8 @@ def _l2_channel_scores(
 def summarize_fold_eligibility(
     *,
     sealed_outcomes: pd.DataFrame,
-    risk_sets: pd.DataFrame,
+    risk_sets: pd.DataFrame | None = None,
+    target_maturity: pd.DataFrame | None = None,
     initial_outer_year: int,
     confirmatory_years: list[int],
     prospective_year: int,
@@ -452,33 +538,51 @@ def summarize_fold_eligibility(
     sensitivity_positive_range: tuple[int, int],
     columns: dict[str, str],
 ) -> list[dict[str, object]]:
-    """Assign only aggregate fold roles; row-level outer outcomes never leave P05."""
+    """Assign aggregate fold roles independently for each registered candidate target."""
     year = columns[FISCAL_YEAR]
     outcome = columns[OUTCOME]
     mature = columns[MATURE]
     eligible = columns[ELIGIBLE]
-    required_risk = {year, mature, eligible}
-    if not required_risk.issubset(risk_sets.columns):
-        raise ValueError("P05 fold eligibility requires mature risk-set rows")
+    target = columns[TARGET_ID]
+    sealed = sealed_outcomes.copy()
+    if target not in sealed.columns:
+        sealed[target] = "L1"
+    if target_maturity is None:
+        if risk_sets is None:
+            raise ValueError("P05 fold eligibility requires target maturity rows")
+        required_risk = {year, mature, eligible}
+        if not required_risk.issubset(risk_sets.columns):
+            raise ValueError("P05 fold eligibility requires mature risk-set rows")
+        target_maturity = risk_sets.copy()
+        target_maturity[target] = "L1"
+    required_maturity = {year, target, mature, eligible}
+    if not required_maturity.issubset(target_maturity.columns):
+        raise ValueError("P05 fold eligibility target-maturity contract is incomplete")
+    target_ids = sorted(str(value) for value in target_maturity[target].unique())
     counts = (
-        sealed_outcomes.groupby(year, sort=True)[outcome].agg(["count", "sum"])
-        if not sealed_outcomes.empty
+        sealed.groupby([target, year], sort=True)[outcome].agg(["count", "sum"])
+        if not sealed.empty
         else pd.DataFrame()
     )
     mature_counts = (
-        risk_sets.loc[risk_sets[mature].astype(bool) & risk_sets[eligible].astype(bool)]
-        .groupby(year, sort=True)
+        target_maturity.loc[
+            target_maturity[mature].astype(bool) & target_maturity[eligible].astype(bool)
+        ]
+        .groupby([target, year], sort=True)
         .size()
     )
     eligible_counts = (
-        risk_sets.loc[risk_sets[eligible].astype(bool)].groupby(year, sort=True).size()
+        target_maturity.loc[target_maturity[eligible].astype(bool)]
+        .groupby([target, year], sort=True)
+        .size()
     )
 
-    def row_for(fold_year: int, configured_role: str) -> dict[str, object]:
-        labeled_count = int(str(counts.loc[fold_year, "count"])) if fold_year in counts.index else 0
-        positive_count = int(str(counts.loc[fold_year, "sum"])) if fold_year in counts.index else 0
-        mature_count = int(mature_counts.get(fold_year, 0))
-        eligible_count = int(eligible_counts.get(fold_year, 0))
+    def row_for(target_id: str, fold_year: int, configured_role: str) -> dict[str, object]:
+        key = (target_id, fold_year)
+        labeled_count = int(str(counts.loc[key, "count"])) if key in counts.index else 0
+        positive_count = int(str(counts.loc[key, "sum"])) if key in counts.index else 0
+        mature_count = int(mature_counts.get(key, 0))
+        eligible_count = int(eligible_counts.get(key, 0))
         explicit_negative_count = labeled_count - positive_count
         unknown_count = mature_count - labeled_count
         if unknown_count < 0:
@@ -508,6 +612,7 @@ def summarize_fold_eligibility(
             role = "prospective_or_descriptive"
             reason = "INSUFFICIENT_POSITIVES"
         return {
+            TARGET_ID: target_id,
             OUTER_FOLD: str(fold_year),
             "configured_role": configured_role,
             "assigned_role": role,
@@ -526,11 +631,16 @@ def summarize_fold_eligibility(
             "row_level_outer_labels_exposed": False,
         }
 
-    return [
-        row_for(initial_outer_year, "initial"),
-        *[row_for(value, "fully_nested") for value in confirmatory_years],
-        row_for(prospective_year, "prospective"),
-    ]
+    result: list[dict[str, object]] = []
+    for target_id in target_ids:
+        result.extend(
+            [
+                row_for(target_id, initial_outer_year, "initial"),
+                *[row_for(target_id, value, "fully_nested") for value in confirmatory_years],
+                row_for(target_id, prospective_year, "prospective"),
+            ]
+        )
+    return result
 
 
 def measurement_target_frame(

@@ -8,7 +8,7 @@ import json
 import sys
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -18,21 +18,40 @@ from core.evidence_registry import LogicalEvidenceSource, logical_evidence_sourc
 from core.pipeline import load_run, mapping, physical_columns
 from core.runtime import RunContext
 from core.semantic_keys import (
+    AFFECTED_FISCAL_YEAR,
     AUDIT_INDICATOR,
     AUDIT_OPINION,
     AUDIT_STATUS,
     AVAILABILITY_DATE,
+    CONSTRUCT_FAMILY,
+    CONSTRUCT_TARGET,
+    DECISION_DATE,
+    DECISION_NUMBER,
+    DECISION_TOTAL_FINE,
+    DOCUMENT_ID,
     EVENT_CLUSTER_ID,
     EVENT_ID,
     FIRM_ID,
     FISCAL_YEAR,
     HARD_POSITIVE,
+    HAS_FINE,
+    HAS_REMEDY,
+    HAS_SUSPENSION,
+    HAS_WARNING,
     ITEM_ID,
+    LABEL_KNOWN_DATE,
+    LEGACY_EVENT_ID,
+    NORMALIZED_VIOLATION_CODE,
     OUTCOME,
     PERIOD_LINK_CONFIDENCE,
     PERIOD_LINK_SOURCE,
     PERIOD_TYPE,
     PREDICTION_TIME,
+    PRIMARY_VIOLATION_L1,
+    PRIMARY_VIOLATION_L2,
+    PUBLISH_DATE,
+    ROW_INCLUSION,
+    SANCTION_YEAR,
     SOURCE_COLUMN,
     SOURCE_FILE,
     SOURCE_ID,
@@ -49,6 +68,7 @@ from evidence.annual import (
     build_audit_adjustment_records,
     build_audit_opinion_records,
 )
+from evidence.sanctions import SanctionDecisionInput, build_s3_evidence
 from evidence.service import EvidenceRecord, build_evidence_ledger, map_evidence_outcome
 from p01.readers import iter_rows
 from p01.registry import resolve_source
@@ -77,10 +97,11 @@ def main() -> int:
         raise ValueError("firm_year_panel must be a DataFrame")
     columns = physical_columns(loaded.registry)
     panel_anchors = _panel_anchors(panel, columns)
-    records, annual_builds = _records(
+    records, annual_builds, sanction_ledger, sanction_audit = _records(
         loaded.registry,
         loaded.context,
         panel_anchors=panel_anchors,
+        columns=columns,
     )
     entity = EntityResolutionSpec.from_mapping(loaded.registry.get("entity_resolution"))
     evidence = mapping(loaded.registry.get("evidence"), "evidence")
@@ -97,6 +118,7 @@ def main() -> int:
     if args.validate_only:
         return 0
     loaded.context.write("evidence_ledger", result.ledger, {})
+    loaded.context.write("sanction_decision_ledger", sanction_ledger, {})
     loaded.context.write("availability_registry", result.availability_registry, {})
     loaded.context.write("lag_decomposition", result.lag_decomposition, {})
     loaded.context.write(
@@ -118,6 +140,7 @@ def main() -> int:
             "annual_measurement_records_are_events": False,
             "annual_anchor_equals_prediction_time": True,
             "missing_is_negative": False,
+            "sanction_calendar_year": sanction_audit,
         },
         {},
     )
@@ -130,7 +153,8 @@ def _records(
     context: RunContext,
     *,
     panel_anchors: dict[tuple[str, int], datetime],
-) -> tuple[list[EvidenceRecord], list[AnnualEvidenceBuild]]:
+    columns: dict[str, str],
+) -> tuple[list[EvidenceRecord], list[AnnualEvidenceBuild], pd.DataFrame, dict[str, object]]:
     data_sources = mapping(registry.get("data_sources"), "data_sources")
     source_registry = mapping(data_sources.get("source_registry"), "source_registry")
     sources = mapping(source_registry.get("sources"), "source_registry.sources")
@@ -141,6 +165,8 @@ def _records(
         logical_by_physical.setdefault(logical.physical_source_id, []).append(logical)
     result: list[EvidenceRecord] = []
     annual_builds: list[AnnualEvidenceBuild] = []
+    sanction_ledgers: list[pd.DataFrame] = []
+    sanction_audits: list[dict[str, object]] = []
     for source_id, raw in sorted(sources.items()):
         source = mapping(raw, f"source={source_id}")
         if source.get("role") != "evidence" or source.get("enabled") is not True:
@@ -189,6 +215,34 @@ def _records(
             )
             result.extend(build.records)
             annual_builds.append(build)
+            continue
+        if processor == "sanction_calendar_year":
+            taxonomy = mapping(registry.get("s3_taxonomy"), "s3_taxonomy")
+            completeness = mapping(
+                taxonomy.get("sanction_source_completeness"),
+                "s3_taxonomy.sanction_source_completeness",
+            )
+            build = build_s3_evidence(
+                panel_keys=set(panel_anchors),
+                decisions=_sanction_rows(
+                    source_id=source_id,
+                    path=path,
+                    spec=spec,
+                    semantics=semantics,
+                    entity=entity,
+                ),
+                taxonomy=taxonomy,
+                complete_through_year=int(completeness["complete_through_year"]),
+                incomplete_years={
+                    int(str(value))
+                    for value in cast(list[object], completeness.get("incomplete_years", []))
+                },
+                columns=columns,
+                source_profile_id=source_id,
+            )
+            result.extend(build.endpoint_records)
+            sanction_ledgers.append(build.decision_ledger)
+            sanction_audits.append(build.audit)
             continue
         if processor != "delayed_event" or len(logical) != 1:
             raise ValueError(f"source={source_id}: unsupported evidence processor")
@@ -276,7 +330,9 @@ def _records(
             )
     if not result:
         raise ValueError("P03 requires at least one registered evidence record")
-    return result, annual_builds
+    if len(sanction_ledgers) != 1 or len(sanction_audits) != 1:
+        raise ValueError("P03 requires exactly one sanction calendar-year source")
+    return result, annual_builds, sanction_ledgers[0], sanction_audits[0]
 
 
 def _panel_anchors(panel: pd.DataFrame, columns: dict[str, str]) -> dict[tuple[str, int], datetime]:
@@ -290,6 +346,65 @@ def _panel_anchors(panel: pd.DataFrame, columns: dict[str, str]) -> dict[tuple[s
             raise ValueError(f"P03 duplicate panel anchor={key}")
         anchors[key] = _datetime(row[prediction])
     return anchors
+
+
+def _sanction_rows(
+    *,
+    source_id: str,
+    path: Path,
+    spec: object,
+    semantics: dict[str, Any],
+    entity: EntityResolutionSpec,
+) -> list[SanctionDecisionInput]:
+    from p01.models import SourceSpec
+
+    if not isinstance(spec, SourceSpec):
+        raise TypeError("locked source specification required")
+    required = {FIRM_ID, DOCUMENT_ID, ROW_INCLUSION, HARD_POSITIVE}
+    if not required.issubset(semantics):
+        raise ValueError(
+            f"source={source_id}: unresolved S3 semantics {sorted(required - set(semantics))}"
+        )
+    result: list[SanctionDecisionInput] = []
+    for row in iter_rows(path, spec):
+        firm_raw = _required(row.get(str(semantics[FIRM_ID])), FIRM_ID)
+        normalized = normalize_entity_field(str(firm_raw), entity)
+        canonical, _ = resolve_entity_link(source_id, str(firm_raw), normalized, entity)
+        row_included = _boolean(row.get(str(semantics[ROW_INCLUSION])))
+        hard_positive = _boolean(row.get(str(semantics[HARD_POSITIVE])))
+        if row_included is None or hard_positive is None:
+            raise ValueError(
+                f"source={source_id}: S3 inclusion and hard-positive flags are required"
+            )
+        result.append(
+            SanctionDecisionInput(
+                document_id=str(_required(row.get(str(semantics[DOCUMENT_ID])), DOCUMENT_ID)),
+                firm_id=canonical,
+                decision_number=_optional_text(row, semantics, DECISION_NUMBER),
+                sanction_year=_optional_int(row, semantics, SANCTION_YEAR),
+                decision_date=_optional_datetime(row, semantics, DECISION_DATE),
+                publish_date=_optional_datetime(row, semantics, PUBLISH_DATE),
+                label_known_date=_optional_datetime(row, semantics, LABEL_KNOWN_DATE),
+                affected_fiscal_year=_optional_int(row, semantics, AFFECTED_FISCAL_YEAR),
+                primary_violation_l1=_optional_text(row, semantics, PRIMARY_VIOLATION_L1),
+                primary_violation_l2=_optional_text(row, semantics, PRIMARY_VIOLATION_L2),
+                construct_family=_optional_text(row, semantics, CONSTRUCT_FAMILY),
+                construct_target=_optional_text(row, semantics, CONSTRUCT_TARGET),
+                normalized_violation_code=_optional_text(row, semantics, NORMALIZED_VIOLATION_CODE),
+                row_included=row_included,
+                hard_positive=hard_positive,
+                legacy_event_id=_optional_text(row, semantics, LEGACY_EVENT_ID),
+                period_link_source=_optional_text(row, semantics, PERIOD_LINK_SOURCE),
+                period_link_confidence=_optional_text(row, semantics, PERIOD_LINK_CONFIDENCE),
+                total_fine=_optional_float(row, semantics, DECISION_TOTAL_FINE),
+                has_fine=_optional_boolean(row, semantics, HAS_FINE),
+                has_suspension=_optional_boolean(row, semantics, HAS_SUSPENSION),
+                has_warning=_optional_boolean(row, semantics, HAS_WARNING),
+                has_remedy=_optional_boolean(row, semantics, HAS_REMEDY),
+                source_ref=_source_ref(row, semantics, SOURCE_FILE, SOURCE_ROW),
+            )
+        )
+    return result
 
 
 def _adjustment_rows(
@@ -455,6 +570,37 @@ def _optional_text(row: dict[str, object], semantics: dict[str, Any], name: str)
     if value is None or not str(value).strip():
         return None
     return str(value).strip()
+
+
+def _optional_int(row: dict[str, object], semantics: dict[str, Any], name: str) -> int | None:
+    value = _optional_text(row, semantics, name)
+    return None if value is None else int(float(value))
+
+
+def _optional_datetime(
+    row: dict[str, object], semantics: dict[str, Any], name: str
+) -> datetime | None:
+    column = semantics.get(name)
+    if not isinstance(column, str):
+        return None
+    value = row.get(column)
+    if value is None or not str(value).strip():
+        return None
+    return _datetime(value)
+
+
+def _optional_float(row: dict[str, object], semantics: dict[str, Any], name: str) -> float | None:
+    column = semantics.get(name)
+    if not isinstance(column, str):
+        return None
+    return _float_or_none(row.get(column))
+
+
+def _optional_boolean(row: dict[str, object], semantics: dict[str, Any], name: str) -> bool | None:
+    column = semantics.get(name)
+    if not isinstance(column, str):
+        return None
+    return _boolean(row.get(column))
 
 
 def _derived_event_id(

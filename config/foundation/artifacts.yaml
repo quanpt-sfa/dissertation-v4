@@ -210,6 +210,16 @@ artifacts:
     immutability: immutable
     aggregation_behavior: singleton
     checkpoint_role: none
+  sanction_decision_ledger:
+    producer_step: P03
+    path_template: P03/sanction_decision_ledger.parquet
+    schema_id: sanction_decision_ledger_frame
+    format: parquet
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
   lag_decomposition:
     producer_step: P03
     path_template: P03/lag_decomposition.json

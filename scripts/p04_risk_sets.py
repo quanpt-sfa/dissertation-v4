@@ -58,6 +58,36 @@ def main() -> int:
             int(value)
             for value in sequence(horizons.get("sensitivity"), "study horizon sensitivities")
         ],
+        sanction_complete_through_year=int(
+            mapping(
+                mapping(loaded.registry.get("s3_taxonomy"), "s3_taxonomy").get(
+                    "sanction_source_completeness"
+                ),
+                "s3_taxonomy.sanction_source_completeness",
+            )["complete_through_year"]
+        ),
+        sanction_incomplete_years={
+            int(value)
+            for value in sequence(
+                mapping(
+                    mapping(loaded.registry.get("s3_taxonomy"), "s3_taxonomy").get(
+                        "sanction_source_completeness"
+                    ),
+                    "s3_taxonomy.sanction_source_completeness",
+                ).get("incomplete_years"),
+                "s3_taxonomy.sanction_source_completeness.incomplete_years",
+            )
+        },
+        primary_target_id=(
+            str(value)
+            if (
+                value := mapping(loaded.registry.get("measurement"), "measurement").get(
+                    "primary_target_id"
+                )
+            )
+            is not None
+            else None
+        ),
     )
     if args.validate_only:
         return 0

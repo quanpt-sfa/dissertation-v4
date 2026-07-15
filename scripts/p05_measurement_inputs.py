@@ -66,6 +66,20 @@ def main() -> int:
     reasons = sequence(vocabulary.get("reason_codes"), "reason_codes")
     if "INSUFFICIENT_CHANNELS" not in reasons:
         raise ValueError("INSUFFICIENT_CHANNELS reason is not registered")
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    candidate_registry = mapping(
+        measurement.get("candidate_targets"), "measurement.candidate_targets"
+    )
+    candidate_targets = {
+        str(target_id): [
+            str(value)
+            for value in sequence(
+                mapping(raw, f"measurement.candidate_targets.{target_id}").get("sources"),
+                f"measurement.candidate_targets.{target_id}.sources",
+            )
+        ]
+        for target_id, raw in candidate_registry.items()
+    }
     result = build_measurement_inputs(
         risk_sets=risk_sets,
         evidence=evidence,
@@ -80,16 +94,17 @@ def main() -> int:
         source_temporal_roles=source_temporal_roles,
         explicit_negative_allowed=explicit_negative_allowed,
         l2_scoring=mapping(
-            mapping(loaded.registry.get("measurement"), "measurement").get("l2_scoring"),
+            measurement.get("l2_scoring"),
             "measurement.l2_scoring",
         ),
+        candidate_targets=candidate_targets,
     )
     _execute_l3_pilot(
         matrices=result.matrices,
         capability=result.l3_capability,
         source_channels=expected_sources,
         source_profiles=source_profiles,
-        measurement=mapping(loaded.registry.get("measurement"), "measurement"),
+        measurement=measurement,
         initial_outer_year=int(
             mapping(loaded.registry.get("folds"), "folds")["initial_outer_year"]
         ),
@@ -126,7 +141,7 @@ def main() -> int:
         raise ValueError("sensitivity positive-count range requires two values")
     fold_eligibility = summarize_fold_eligibility(
         sealed_outcomes=result.sealed_outcomes,
-        risk_sets=risk_sets,
+        target_maturity=result.target_maturity,
         initial_outer_year=int(folds["initial_outer_year"]),
         confirmatory_years=nested,
         prospective_year=int(folds["prospective_year"]),

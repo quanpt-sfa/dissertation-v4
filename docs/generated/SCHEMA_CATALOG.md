@@ -32,7 +32,7 @@ Version: 1
 
 ## evidence_ledger_frame
 
-Version: 5
+Version: 6
 
 ## feature_panel_frame
 
@@ -68,7 +68,7 @@ Version: 1
 
 ## l0_l1_inputs_frame
 
-Version: 2
+Version: 3
 
 ## markdown_document
 
@@ -108,6 +108,10 @@ Version: 1
 
 ## risk_sets_frame
 
+Version: 2
+
+## sanction_decision_ledger_frame
+
 Version: 1
 
 ## schema_catalog_schema
@@ -120,7 +124,7 @@ Version: 1
 
 ## sealed_outcome_frame
 
-Version: 1
+Version: 2
 
 ## simulation_batch_frame
 

@@ -4,19 +4,31 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from core.semantic_keys import OUTER_FOLD
+from core.semantic_keys import OUTER_FOLD, TARGET_ID
+
+
+def require_primary_target(measurement: object, stage_id: str) -> str:
+    if not isinstance(measurement, dict):
+        raise RuntimeError(f"{stage_id}_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_NOT_LOCKED")
+    primary = cast(dict[str, Any], measurement).get("primary_target_id")
+    if not isinstance(primary, str) or not primary.strip():
+        raise RuntimeError(f"{stage_id}_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_NOT_LOCKED")
+    return primary.strip()
 
 
 def confirmatory_fold_blockers(
     fold_eligibility: object,
     outer_fold: str,
+    target_id: str | None = None,
 ) -> list[str]:
     if not isinstance(fold_eligibility, list):
         return ["FOLD_ELIGIBILITY_ARTIFACT_INVALID"]
     matches = [
         cast(dict[str, Any], row)
         for row in cast(list[object], fold_eligibility)
-        if isinstance(row, dict) and str(cast(dict[str, Any], row).get(OUTER_FOLD)) == outer_fold
+        if isinstance(row, dict)
+        and str(cast(dict[str, Any], row).get(OUTER_FOLD)) == outer_fold
+        and (target_id is None or str(cast(dict[str, Any], row).get(TARGET_ID)) == target_id)
     ]
     if len(matches) != 1:
         return ["FOLD_ELIGIBILITY_BINDING_MISSING"]
@@ -36,8 +48,13 @@ def confirmatory_fold_blockers(
     return sorted(set(blockers))
 
 
-def require_confirmatory_fold(fold_eligibility: object, outer_fold: str, stage_id: str) -> None:
-    blockers = confirmatory_fold_blockers(fold_eligibility, outer_fold)
+def require_confirmatory_fold(
+    fold_eligibility: object,
+    outer_fold: str,
+    stage_id: str,
+    target_id: str | None = None,
+) -> None:
+    blockers = confirmatory_fold_blockers(fold_eligibility, outer_fold, target_id)
     if blockers:
         raise RuntimeError(
             f"{stage_id}_FOLD_NOT_CONFIRMATORY: fold={outer_fold} blockers={','.join(blockers)}"
@@ -50,8 +67,9 @@ def production_path_blockers(
     outer_fold: str,
     feature_registry: object,
     mcse_report: object,
+    target_id: str | None = None,
 ) -> list[str]:
-    blockers = confirmatory_fold_blockers(fold_eligibility, outer_fold)
+    blockers = confirmatory_fold_blockers(fold_eligibility, outer_fold, target_id)
     if not isinstance(feature_registry, list) or not feature_registry:
         blockers.append("FEATURE_REGISTRY_EMPTY")
     if not isinstance(mcse_report, dict):

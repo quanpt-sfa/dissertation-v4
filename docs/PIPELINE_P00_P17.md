@@ -197,24 +197,29 @@ Script: `scripts/p03_evidence_ledger.py`.
 
 Mục tiêu:
 
-- đọc các source có `role: evidence` và P01 PASS;
-- link event đến firm-year chuẩn;
-- giữ `source_id`, `channel_id`, availability và outcome riêng;
-- deduplicate theo upstream event cluster;
-- tính report lag, detection lag và total lag.
+- giữ nguyên S1/S2 tại common annual anchor;
+- dùng `document_id` làm khóa quyết định S3 và giữ `decision_number` làm provenance;
+- gắn quyết định S3 năm `y` cho firm-year `y-1`, độc lập với vị trí ngày so với 31/3;
+- giữ decision-level ledger riêng và tạo source-result theo firm-year cho bốn endpoint
+  `S3_BROAD`, `S3_REPORTING`, `S3_CONTENT`, `S3_TIMELINESS` trong cùng channel S3;
+- chỉ dùng normalized taxonomy registry, không phân loại bằng keyword văn bản tự do;
+- giữ delayed-event lag decomposition chỉ cho endpoint sensitivity được đăng ký riêng.
 
 Reads: `firm_year_panel`, `raw_audit` và source spec đã khóa.
 
 Writes:
 
 - `evidence_ledger.parquet`;
+- `sanction_decision_ledger.parquet`;
 - `availability_registry.json`;
 - `lag_decomposition.json`.
 
 Hàng rào:
 
-- missing evidence không chuyển thành `False`;
-- duplicate upstream event chỉ được tính một lần;
+- S3 source year complete và không có quyết định endpoint mới tạo explicit `False`;
+- S3 source year incomplete, ngoài universe hoặc taxonomy không đủ vẫn là unknown;
+- cùng `document_id` cho nhiều firm giữ nhiều firm mappings nhưng decision count vẫn theo
+  unique `document_id`;
 - event không link được ghi `UNLINKED_FIRM_YEAR`, không ép vào endpoint;
 - lag identity phải đúng trong tolerance từ `evidence.yaml`;
 - delisting/merger không tự động là negative.
@@ -225,8 +230,10 @@ Script: `scripts/p04_risk_sets.py`.
 
 Mục tiêu:
 
-- áp dụng `τ + h ≤ Tcut`;
-- phân loại mature và prospective;
+- phân loại riêng `annual_measurement_mature` cho S1/S2;
+- phân loại `s3_next_year_mature` theo completeness của sanction year `t+1`;
+- giữ `required_sanction_year` và `source_year_complete` trong risk-set contract;
+- chỉ tạo cột `mature` chung từ `primary_target_id` đã khóa;
 - tạo retrospective risk set;
 - ghi censoring classification mà không tạo false negative.
 
@@ -244,7 +251,9 @@ khóa. Repo để `null` thay vì tự đoán ngày.
 
 Hàng rào:
 
-- immature không phải negative;
+- khi `primary_target_id` còn null, production path fail-closed với
+  `PRIMARY_TARGET_NOT_LOCKED`;
+- incomplete source year không phải negative;
 - prospective rows không vào retrospective evaluation;
 - exit/code change không tự gán outcome;
 - P04 chỉ phân loại maturity, không dùng positive count để làm đẹp fold role.
@@ -256,7 +265,9 @@ Script: `scripts/p05_measurement_inputs.py`.
 Mục tiêu:
 
 - tạo source binary matrix và channel matrix;
-- xây L0 theo source và L1 union có bảo toàn missingness;
+- xây L0 theo source và các candidate target config-driven;
+- giữ `L1_ANNUAL` độc lập S3, đồng thời đăng ký các S3 endpoint,
+  `L1_REPORTING` và `L1_CONTENT_STRICT`;
 - tính L2 theo `g_c(S,T,Q)` khi công thức, quality theo profile và delay half-life
   đã được khóa; nếu chưa khóa thì giữ `EMPIRICALLY_PENDING`, không dùng proxy;
 - chạy pilot fixed-π L3 bằng MCMC với Se/Sp theo source, random effect theo channel,
@@ -266,7 +277,7 @@ Mục tiêu:
   dùng thay cho fold-local target của P10;
 - đánh giá channel/anchor/L3 capability;
 - chỉ công bố positive count aggregate theo fold;
-- niêm phong row-level L1 outcomes.
+- niêm phong row-level outcomes theo khóa `firm_id × fiscal_year × target_id`.
 
 Reads: `risk_sets`, `evidence_ledger`.
 
@@ -282,13 +293,15 @@ Writes:
 
 Hàng rào:
 
-- L1: có ít nhất một positive thì `True`; toàn bộ observed false mới `False`;
+- mỗi candidate target: có ít nhất một required source positive thì `True`; mọi required
+  source có opportunity và false mới `False`; còn required source unknown thì target unknown;
   còn missing/false hỗn hợp là unknown;
 - L2 chuẩn hóa trên observed channels, lưu `observed_channel_count`, quality/delay
   components và không dùng tổng số channel cố định;
 - content predictor không được vào label model;
 - hierarchical-π không được trở thành Gate 1 candidate;
-- `fold_eligibility` chỉ chứa aggregate count, không lộ row-level outer labels.
+- `fold_eligibility` tính riêng theo `target_id` và chỉ chứa aggregate count;
+- P10/P11/P12 không tự chọn target có kết quả tốt nhất khi `primary_target_id` còn null.
 
 ## 11. P06 — Observability và verification registry
 

@@ -36,10 +36,16 @@ def build_observability_registry(
             if isinstance(evidence_mapping, dict)
             else None
         )
+        source_mature_count = sum(
+            row.get(ELIGIBLE, True) is True
+            and isinstance(row.get("source_maturity"), dict)
+            and cast(dict[str, Any], row["source_maturity"]).get(source_id) is True
+            for row in rows
+        )
         source_entry = _empty_observability_entry(
             eligible_count=eligible_count,
-            mature_count=mature_count,
-            prospective_count=prospective_count,
+            mature_count=source_mature_count,
+            prospective_count=eligible_count - source_mature_count,
             verification=verification,
         )
         source_entry.update(
@@ -85,11 +91,21 @@ def build_observability_registry(
         if row.get(ELIGIBLE, True) is not True:
             continue
         is_mature = row.get(MATURE, True) is True
+        source_maturity_raw = row.get("source_maturity")
+        source_maturity = (
+            cast(dict[str, Any], source_maturity_raw)
+            if isinstance(source_maturity_raw, dict)
+            else {}
+        )
         source_outcomes = row.get("source_outcomes")
         if isinstance(source_outcomes, dict):
             for source_id, value in cast(dict[str, Any], source_outcomes).items():
                 if source_id in sources:
-                    _count_outcome(sources[source_id], value, mature=is_mature)
+                    _count_outcome(
+                        sources[source_id],
+                        value,
+                        mature=bool(source_maturity.get(source_id, is_mature)),
+                    )
         source_opportunities = row.get("source_opportunities")
         if isinstance(source_opportunities, dict):
             for source_id, value in cast(dict[str, Any], source_opportunities).items():
@@ -99,7 +115,12 @@ def build_observability_registry(
         if isinstance(channel_outcomes, dict):
             for channel_id, value in cast(dict[str, Any], channel_outcomes).items():
                 if channel_id in channels:
-                    _count_outcome(channels[channel_id], value, mature=is_mature)
+                    channel_sources = cast(list[str], channels[channel_id]["source_ids"])
+                    channel_mature = all(
+                        bool(source_maturity.get(source_id, is_mature))
+                        for source_id in channel_sources
+                    )
+                    _count_outcome(channels[channel_id], value, mature=channel_mature)
         channel_opportunities = row.get("channel_opportunities")
         if isinstance(channel_opportunities, dict):
             for channel_id, value in cast(dict[str, Any], channel_opportunities).items():

@@ -11,6 +11,7 @@ from .errors import (
     MethodologicalInvariantError,
     UnknownReferenceError,
 )
+from .semantic_keys import CHANNEL_ID
 
 StringMap = dict[str, Any]
 
@@ -207,7 +208,9 @@ def validate_methodology(
     inference = _mapping(registry, "inference")
     known = _mapping(registry, "known_cases")
     simulation = _mapping(registry, "simulation")
+    s3_taxonomy = _mapping(registry, "s3_taxonomy")
     _validate_p02_configuration(sources, entity_resolution)
+    _validate_s3_configuration(s3_taxonomy)
 
     horizons = _entry(
         study.get("horizons_months"),
@@ -268,8 +271,9 @@ def validate_methodology(
             "D04 anchor grid differs",
         ),
         (
-            measurement.get("track_a_primary_endpoint") == "L1",
-            "D05 primary endpoint must be L1",
+            _candidate_target_sources_valid(measurement.get("candidate_targets"))
+            and _primary_target_valid(measurement),
+            "D05 primary target must be null or explicitly reference a registered candidate",
         ),
         (
             review_budget.get("primary_fraction") == 0.05,
@@ -360,6 +364,85 @@ def validate_methodology(
     failures = [message for passed, message in required if not passed]
     if failures:
         raise MethodologicalInvariantError("; ".join(failures))
+
+
+def _candidate_target_sources_valid(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    candidates = cast(dict[object, object], value)
+    required = {
+        "L1_ANNUAL": [
+            "S1_profit_adjustment",
+            "S1_revenue_adjustment",
+            "S2_audit_opinion",
+        ],
+        "S3_BROAD": ["S3_BROAD"],
+        "S3_REPORTING": ["S3_REPORTING"],
+        "S3_CONTENT": ["S3_CONTENT"],
+        "S3_TIMELINESS": ["S3_TIMELINESS"],
+        "L1_REPORTING": [
+            "S1_profit_adjustment",
+            "S1_revenue_adjustment",
+            "S2_audit_opinion",
+            "S3_REPORTING",
+        ],
+        "L1_CONTENT_STRICT": [
+            "S1_profit_adjustment",
+            "S1_revenue_adjustment",
+            "S3_CONTENT",
+        ],
+    }
+    if set(candidates) != set(required):
+        return False
+    for target_id, expected_sources in required.items():
+        raw = candidates[target_id]
+        if not isinstance(raw, dict):
+            return False
+        sources = cast(dict[object, object], raw).get("sources")
+        if sources != expected_sources:
+            return False
+    return True
+
+
+def _primary_target_valid(measurement: dict[str, Any]) -> bool:
+    primary = measurement.get("primary_target_id")
+    if primary is None:
+        return True
+    candidates = measurement.get("candidate_targets")
+    return isinstance(primary, str) and isinstance(candidates, dict) and primary in candidates
+
+
+def _validate_s3_configuration(configuration: dict[str, Any]) -> None:
+    if configuration.get(CHANNEL_ID) != "S3":
+        raise MethodologicalInvariantError("S3 taxonomy must remain one S3 channel")
+    if configuration.get("target_year_rule") != "sanction_year_minus_one":
+        raise MethodologicalInvariantError("S3 target year must be sanction year minus one")
+    endpoints = _entry(configuration.get("endpoints"), "s3_taxonomy.endpoints")
+    required = {"S3_BROAD", "S3_REPORTING", "S3_CONTENT", "S3_TIMELINESS"}
+    if set(endpoints) != required:
+        raise MethodologicalInvariantError("S3 endpoint registry differs")
+    content = set(
+        _string_list(
+            _entry(endpoints["S3_CONTENT"], "S3_CONTENT").get("normalized_codes"),
+            "S3_CONTENT.normalized_codes",
+        )
+    )
+    timeliness = set(
+        _string_list(
+            _entry(endpoints["S3_TIMELINESS"], "S3_TIMELINESS").get("normalized_codes"),
+            "S3_TIMELINESS.normalized_codes",
+        )
+    )
+    if content & timeliness:
+        raise MethodologicalInvariantError("S3 content and timeliness codes must be disjoint")
+    completeness = _entry(
+        configuration.get("sanction_source_completeness"),
+        "s3_taxonomy.sanction_source_completeness",
+    )
+    if completeness.get("complete_through_year") != 2025:
+        raise MethodologicalInvariantError("S3 source completeness must end at 2025")
+    if completeness.get("incomplete_years") != [2026]:
+        raise MethodologicalInvariantError("S3 source year 2026 must remain incomplete")
 
 
 def _validate_p02_configuration(

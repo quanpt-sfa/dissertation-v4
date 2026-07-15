@@ -1,4 +1,4 @@
-"""Regression tests for annual S1/S2 evidence and delayed S3 verification."""
+"""Regression tests for annual S1/S2 evidence and calendar-year S3 verification."""
 
 from __future__ import annotations
 
@@ -246,7 +246,7 @@ def test_s2_clean_missing_and_conflicting_opinions_preserve_three_states() -> No
     assert conflict.outcome_basis == reversed_conflict.outcome_basis == "S2_CONFLICTING_OPINIONS"
 
 
-def test_annual_anchor_is_included_but_same_day_s3_is_not_delayed_verification() -> None:
+def test_annual_anchor_and_s3_calendar_year_results_use_separate_temporal_semantics() -> None:
     columns = {
         FIRM_ID: "firm",
         FISCAL_YEAR: "year",
@@ -289,12 +289,12 @@ def test_annual_anchor_is_included_but_same_day_s3_is_not_delayed_verification()
             {
                 "firm": "F1",
                 "year": 2020,
-                "source": "S3_sanction_evidence",
+                "source": "S3_BROAD",
                 "channel": "S3",
-                "available": "2021-03-31",
+                "available": "2021-02-01",
                 "outcome": True,
-                "opportunity": None,
-                "temporal": "delayed_verification",
+                "opportunity": True,
+                "temporal": "next_calendar_year_regulatory_event",
             },
         ]
     )
@@ -304,31 +304,39 @@ def test_annual_anchor_is_included_but_same_day_s3_is_not_delayed_verification()
         expected_sources={
             "S1_profit_adjustment": "S1",
             "S2_audit_opinion": "S2",
-            "S3_sanction_evidence": "S3",
+            "S3_BROAD": "S3",
         },
         horizon_months=12,
         columns=columns,
         pending_status="EMPIRICALLY_PENDING",
         unavailable_status="UNAVAILABLE_BY_DESIGN",
         insufficient_channels_reason="INSUFFICIENT_CHANNELS",
-        anchor_source_ids=["S3_sanction_evidence"],
+        anchor_source_ids=["S3_BROAD"],
         source_temporal_roles={
             "S1_profit_adjustment": "annual_measurement_at_anchor",
             "S2_audit_opinion": "annual_measurement_at_anchor",
-            "S3_sanction_evidence": "delayed_verification",
+            "S3_BROAD": "next_calendar_year_regulatory_event",
         },
         explicit_negative_allowed={
             "S1_profit_adjustment": True,
             "S2_audit_opinion": True,
-            "S3_sanction_evidence": False,
+            "S3_BROAD": True,
+        },
+        candidate_targets={
+            "L1_ANNUAL": ["S1_profit_adjustment", "S2_audit_opinion"],
+            "S3_BROAD": ["S3_BROAD"],
         },
     )
     row = cast(list[dict[str, Any]], result.matrices["rows"])[0]
     outcomes = cast(dict[str, bool | None], row["source_outcomes"])
     assert outcomes["S1_profit_adjustment"] is False
     assert outcomes["S2_audit_opinion"] is False
-    assert outcomes["S3_sanction_evidence"] is None
+    assert outcomes["S3_BROAD"] is True
     assert row["l1"] is None
+    assert cast(dict[str, bool | None], row["candidate_outcomes"]) == {
+        "L1_ANNUAL": False,
+        "S3_BROAD": True,
+    }
 
 
 def test_l1_requires_all_opportunities_for_explicit_negative() -> None:
@@ -344,7 +352,7 @@ def test_l1_requires_all_opportunities_for_explicit_negative() -> None:
     )
 
 
-def test_annual_sources_are_excluded_from_delayed_maturity_curves() -> None:
+def test_annual_and_s3_calendar_sources_are_excluded_from_delayed_maturity_curves() -> None:
     columns = {
         FIRM_ID: "firm",
         FISCAL_YEAR: "year",
@@ -374,12 +382,12 @@ def test_annual_sources_are_excluded_from_delayed_maturity_curves() -> None:
             {
                 "firm": "F1",
                 "year": 2020,
-                "source": "S3_sanction_evidence",
+                "source": "S3_BROAD",
                 "channel": "S3",
                 "available": "2021-06-30",
-                "temporal": "delayed_verification",
-                "opportunity": None,
-                "availability_basis": "actual_publish_date",
+                "temporal": "next_calendar_year_regulatory_event",
+                "opportunity": True,
+                "availability_basis": "sanction_calendar_year",
             },
         ]
     )
@@ -389,10 +397,12 @@ def test_annual_sources_are_excluded_from_delayed_maturity_curves() -> None:
         horizon_months=12,
         columns=columns,
         evidence=evidence,
+        sanction_complete_through_year=2025,
+        sanction_incomplete_years={2026},
     )
     curves = cast(list[dict[str, Any]], result.maturity_audit["source_maturity_curves"])
     annual = cast(list[dict[str, Any]], result.maturity_audit["annual_measurement_availability"])
-    assert [row[SOURCE_ID] for row in curves] == ["S3_sanction_evidence"]
+    assert curves == []
     assert [row[SOURCE_ID] for row in annual] == ["S1_profit_adjustment"]
     assert annual[0]["included_in_delayed_maturity_curve"] is False
 

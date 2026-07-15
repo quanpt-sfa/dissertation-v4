@@ -96,6 +96,7 @@ Source: config/pipeline.yaml
     "required_receipts": [],
     "writes": [
       "evidence_ledger",
+      "sanction_decision_ledger",
       "availability_registry",
       "lag_decomposition",
       "annual_evidence_audit"

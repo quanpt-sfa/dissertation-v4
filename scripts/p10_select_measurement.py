@@ -9,7 +9,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from core.fold_control import production_path_blockers
+from core.fold_control import production_path_blockers, require_primary_target
 from core.pipeline import load_run, mapping, sequence
 from core.rng import generator
 from core.semantic_keys import CHANNEL_ID, OUTER_FOLD
@@ -30,6 +30,8 @@ def main() -> int:
         state="SPLIT",
         coordinates=coordinates,
     )
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    primary_target_id = require_primary_target(measurement, "P10")
     matrices = mapping(loaded.context.read("source_channel_matrices", {}), "source matrices")
     capability = mapping(loaded.context.read("l3_pilot_capability", {}), "L3 capability")
     loaded.context.read("temporal_split_registry", {})
@@ -49,12 +51,12 @@ def main() -> int:
         outer_fold=args.outer_fold,
         feature_registry=feature_registry,
         mcse_report=mcse,
+        target_id=primary_target_id,
     )
     if blockers:
         raise RuntimeError(
             f"P10_PRODUCTION_PATH_BLOCKED: fold={args.outer_fold} blockers={','.join(blockers)}"
         )
-    measurement = mapping(loaded.registry.get("measurement"), "measurement")
     raw_candidates = sequence(
         measurement.get("selection_candidates"), "measurement.selection_candidates"
     )

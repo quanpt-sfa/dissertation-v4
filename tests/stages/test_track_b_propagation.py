@@ -220,8 +220,11 @@ def test_anchor_pu_uses_only_anchor_positive_rows() -> None:
         },
         columns=columns,
         random_state=7,
+        evaluation_target_id="L1_ANNUAL",
     )
     rows = cast(list[dict[str, Any]], result.models["models"])
     assert rows[0]["training_mechanism"] == "bagging_pu"
     assert rows[0]["positive_rows"] == 2
     assert rows[0]["l1_union_used_as_clean_positive"] is False
+    assert rows[0][target] == "L1_ANNUAL"
+    assert set(result.outer_predictions[target]) == {"L1_ANNUAL"}

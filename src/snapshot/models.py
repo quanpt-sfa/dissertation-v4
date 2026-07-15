@@ -12,10 +12,23 @@ SourceFormat = Literal["csv", "tsv", "parquet", "json", "jsonl", "xlsx"]
 AvailabilityDateRule = Literal["physical_column", "fiscal_year_plus_one_month_day"]
 RowAggregation = Literal["one_row_per_firm_year", "firm_year_presence"]
 EvidenceOutcomeMode = Literal["direct_outcome", "positive_indicator"]
-EvidenceAbsencePolicy = Literal["unknown"]
-EvidenceProcessor = Literal["delayed_event", "audit_adjustment", "audit_opinion"]
-TemporalRole = Literal["annual_measurement_at_anchor", "delayed_verification"]
-EvidenceAvailabilityRule = Literal["common_annual_anchor", "actual_publish_date"]
+EvidenceAbsencePolicy = Literal["unknown", "explicit_false_when_complete_source_year"]
+EvidenceProcessor = Literal[
+    "delayed_event",
+    "audit_adjustment",
+    "audit_opinion",
+    "sanction_calendar_year",
+]
+TemporalRole = Literal[
+    "annual_measurement_at_anchor",
+    "delayed_verification",
+    "next_calendar_year_regulatory_event",
+]
+EvidenceAvailabilityRule = Literal[
+    "common_annual_anchor",
+    "actual_publish_date",
+    "sanction_calendar_year",
+]
 
 
 def _mapping(value: object, context: str) -> dict[str, Any]:
@@ -158,13 +171,26 @@ class EvidenceProfile:
     def from_mapping(cls, value: object, context: str) -> EvidenceProfile:
         raw = _mapping(value, context)
         processor = raw.get("processor")
-        if processor not in {"delayed_event", "audit_adjustment", "audit_opinion"}:
+        if processor not in {
+            "delayed_event",
+            "audit_adjustment",
+            "audit_opinion",
+            "sanction_calendar_year",
+        }:
             raise ValueError(f"{context}.processor: unsupported {processor}")
         temporal_role = raw.get("temporal_role")
-        if temporal_role not in {"annual_measurement_at_anchor", "delayed_verification"}:
+        if temporal_role not in {
+            "annual_measurement_at_anchor",
+            "delayed_verification",
+            "next_calendar_year_regulatory_event",
+        }:
             raise ValueError(f"{context}.temporal_role: unsupported {temporal_role}")
         availability_rule = raw.get("availability_rule")
-        if availability_rule not in {"common_annual_anchor", "actual_publish_date"}:
+        if availability_rule not in {
+            "common_annual_anchor",
+            "actual_publish_date",
+            "sanction_calendar_year",
+        }:
             raise ValueError(f"{context}.availability_rule: unsupported {availability_rule}")
         explicit_negative_allowed = raw.get("explicit_negative_allowed")
         if not isinstance(explicit_negative_allowed, bool):
@@ -187,8 +213,8 @@ class EvidenceProfile:
         if false_indicator_policy != "unknown":
             raise ValueError(f"{context}.false_indicator_policy must be unknown")
         absence_policy = raw.get("absence_policy")
-        if absence_policy != "unknown":
-            raise ValueError(f"{context}.absence_policy must be unknown")
+        if absence_policy not in {"unknown", "explicit_false_when_complete_source_year"}:
+            raise ValueError(f"{context}.absence_policy: unsupported {absence_policy}")
         opportunity = raw.get("opportunity_semantic")
         if opportunity is not None:
             opportunity = _string(opportunity, f"{context}.opportunity_semantic")
@@ -200,6 +226,7 @@ class EvidenceProfile:
             "delayed_event": "identical_signature_then_source_event_id",
             "audit_adjustment": "fail_on_duplicate_status_record",
             "audit_opinion": "identical_normalized_opinion_or_fail",
+            "sanction_calendar_year": "identical_signature_then_document_id_firm",
         }
         if duplicate_rule != expected_duplicate_rules[str(processor)]:
             raise ValueError(f"{context}.duplicate_representative_rule: unsupported rule")
@@ -228,13 +255,59 @@ class EvidenceProfile:
                 raise ValueError(f"{context}: delayed_event requires actual_publish_date")
             if explicit_negative_allowed is not False:
                 raise ValueError(f"{context}: delayed positive-indicator source cannot allow false")
-        else:
+        elif processor in {"audit_adjustment", "audit_opinion"}:
             if temporal_role != "annual_measurement_at_anchor":
                 raise ValueError(f"{context}: annual processor requires annual temporal role")
             if availability_rule != "common_annual_anchor":
                 raise ValueError(f"{context}: annual processor requires common annual anchor")
             if explicit_negative_allowed is not True:
                 raise ValueError(f"{context}: annual source must allow source-specific false")
+        else:
+            if temporal_role != "next_calendar_year_regulatory_event":
+                raise ValueError(
+                    f"{context}: sanction calendar processor requires next-year temporal role"
+                )
+            if availability_rule != "sanction_calendar_year":
+                raise ValueError(
+                    f"{context}: sanction calendar processor requires sanction-year availability"
+                )
+            if explicit_negative_allowed is not True:
+                raise ValueError(
+                    f"{context}: complete sanction source years must allow endpoint false"
+                )
+            if absence_policy != "explicit_false_when_complete_source_year":
+                raise ValueError(
+                    f"{context}: sanction absence is false only after source-year completeness"
+                )
+            required_pairs = {
+                "target_year_rule": "sanction_year_minus_one",
+                "decision_key_semantic": "document_id",
+                "decision_provenance_semantic": "decision_number",
+                "affected_fiscal_year_role": "sensitivity_provenance_only",
+                "taxonomy_registry": "s3_taxonomy",
+            }
+            for field_name, expected in required_pairs.items():
+                if raw.get(field_name) != expected:
+                    raise ValueError(f"{context}.{field_name}: must equal {expected}")
+            if raw.get("sanction_year_precedence") != [
+                "sanction_year",
+                "decision_date",
+                "publish_date",
+            ]:
+                raise ValueError(f"{context}.sanction_year_precedence: unsupported order")
+            if raw.get("label_known_date_precedence") != [
+                "label_known_date",
+                "publish_date",
+                "decision_date",
+            ]:
+                raise ValueError(f"{context}.label_known_date_precedence: unsupported order")
+            if {str(item["source_id"]) for item in logical_sources} != {
+                "S3_BROAD",
+                "S3_REPORTING",
+                "S3_CONTENT",
+                "S3_TIMELINESS",
+            }:
+                raise ValueError(f"{context}.logical_sources: four S3 endpoints required")
         if processor == "audit_adjustment":
             adjustment = _mapping(raw.get("audit_adjustment"), f"{context}.audit_adjustment")
             for name in ("unaudited_status", "audited_status", "expected_unit", "expected_scope"):

@@ -12,6 +12,10 @@ from core.semantic_keys import (
     AVAILABILITY_BASIS,
     AVAILABILITY_DATE,
     CHANNEL_ID,
+    DECISION_COUNT,
+    DECISION_NUMBERS,
+    DECISION_TOTAL_FINE,
+    DOCUMENT_IDS,
     EVENT_CLUSTER_ID,
     EVENT_ID,
     EVIDENCE_CATEGORY,
@@ -19,17 +23,27 @@ from core.semantic_keys import (
     EVIDENCE_RECORD_KIND,
     EVIDENCE_VALUE,
     FIRM_ID,
+    FIRST_LABEL_KNOWN_DATE,
     FISCAL_YEAR,
+    HAS_FINE,
+    HAS_REMEDY,
+    HAS_SUSPENSION,
+    HAS_WARNING,
+    LAST_LABEL_KNOWN_DATE,
     OPPORTUNITY_BASIS,
     OUTCOME,
     OUTCOME_BASIS,
     PERIOD_LINK_CONFIDENCE,
     PERIOD_LINK_SOURCE,
     PREDICTION_TIME,
+    SANCTION_YEAR,
     SOURCE_ID,
     SOURCE_OPPORTUNITY,
     SOURCE_PROFILE_ID,
     SOURCE_RECORD_REFS,
+    TARGET_FISCAL_YEAR,
+    TAXONOMY_CODES,
+    TAXONOMY_REASON_CODE,
     TEMPORAL_ROLE,
 )
 
@@ -40,7 +54,7 @@ class EvidenceRecord:
     channel_id: str
     firm_id: str
     fiscal_year: int
-    availability_date: datetime
+    availability_date: datetime | None
     outcome: bool | None
     event_id: str | None
     event_cluster_id: str | None
@@ -59,6 +73,20 @@ class EvidenceRecord:
     outcome_basis: str = "direct_source_outcome"
     row_included: bool = True
     duplicate_representative_rule: str = "identical_signature_then_source_event_id"
+    sanction_year: int | None = None
+    target_fiscal_year: int | None = None
+    decision_count: int | None = None
+    document_ids: str | None = None
+    decision_numbers: str | None = None
+    total_fine: float | None = None
+    has_fine: bool | None = None
+    has_suspension: bool | None = None
+    has_warning: bool | None = None
+    has_remedy: bool | None = None
+    first_label_known_date: datetime | None = None
+    last_label_known_date: datetime | None = None
+    taxonomy_codes: str | None = None
+    taxonomy_reason_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -124,7 +152,7 @@ def build_evidence_ledger(
         ),
     )
     linked_groups: dict[tuple[str, int, str], list[EvidenceRecord]] = {}
-    annual_records: dict[tuple[str, str], EvidenceRecord] = {}
+    result_records: dict[tuple[str, str], EvidenceRecord] = {}
     for record in ordered_records:
         if not record.row_included:
             availability_rows.append(_availability_row(record, "EXCLUDED_BY_SOURCE_RULE"))
@@ -152,14 +180,38 @@ def build_evidence_ledger(
                     f"source={record.source_id}: annual availability must equal prediction anchor"
                 )
             annual_key = (record.source_id, record.evidence_record_id)
-            previous = annual_records.get(annual_key)
+            previous = result_records.get(annual_key)
             if previous is not None:
                 availability_rows.append(
                     _availability_row(record, "DUPLICATE_ANNUAL_SOURCE_RESULT")
                 )
                 raise ValueError(f"duplicate annual source result={annual_key}")
-            annual_records[annual_key] = record
+            result_records[annual_key] = record
             availability_rows.append(_availability_row(record, "ACCEPTED_ANNUAL_MEASUREMENT"))
+            accepted.append((record, panel_times[key]))
+            continue
+        if record.evidence_record_kind == "firm_year_endpoint_result":
+            if record.temporal_role != "next_calendar_year_regulatory_event":
+                raise ValueError(
+                    f"source={record.source_id}: S3 endpoint result requires next-year temporal role"
+                )
+            if record.availability_basis != "sanction_calendar_year":
+                raise ValueError(
+                    f"source={record.source_id}: S3 endpoint result requires sanction-year basis"
+                )
+            if record.event_id is not None or record.event_cluster_id is not None:
+                raise ValueError("S3 firm-year result must not manufacture event identifiers")
+            if not record.evidence_record_id:
+                raise ValueError("S3 firm-year result requires evidence_record_id")
+            if record.target_fiscal_year != record.fiscal_year:
+                raise ValueError("S3 endpoint target year must equal record fiscal year")
+            if record.sanction_year != record.fiscal_year + 1:
+                raise ValueError("S3 endpoint sanction year must equal target fiscal year plus one")
+            endpoint_key = (record.source_id, record.evidence_record_id)
+            if endpoint_key in result_records:
+                raise ValueError(f"duplicate firm-year endpoint result={endpoint_key}")
+            result_records[endpoint_key] = record
+            availability_rows.append(_availability_row(record, "ACCEPTED_S3_ENDPOINT_RESULT"))
             accepted.append((record, panel_times[key]))
             continue
         if record.evidence_record_kind != "delayed_event":
@@ -171,6 +223,8 @@ def build_evidence_ledger(
             raise ValueError(f"source={record.source_id}: delayed event temporal role required")
         if record.availability_basis != "actual_publish_date":
             raise ValueError(f"source={record.source_id}: actual publish date required")
+        if record.availability_date is None:
+            raise ValueError(f"source={record.source_id}: delayed event requires availability date")
         if not record.event_id or not record.event_cluster_id:
             raise ValueError("delayed event requires event_id and event_cluster_id")
         cluster_key = (record.firm_id, record.fiscal_year, record.event_cluster_id)
@@ -197,10 +251,13 @@ def build_evidence_ledger(
         key = (cluster_key[0], cluster_key[1])
         prediction_time = panel_times[key]
         accepted.append((representative, prediction_time))
+        representative_availability = representative.availability_date
+        if representative_availability is None:
+            raise ValueError("delayed representative requires availability date")
         year_end = _fiscal_year_end(representative.fiscal_year, fiscal_year_end_month_day)
         report_lag = (prediction_time.date() - year_end).days
-        detection_lag = (representative.availability_date.date() - prediction_time.date()).days
-        total_lag = (representative.availability_date.date() - year_end).days
+        detection_lag = (representative_availability.date() - prediction_time.date()).days
+        total_lag = (representative_availability.date() - year_end).days
         identity_error = total_lag - report_lag - detection_lag
         if abs(identity_error) > lag_tolerance_days:
             raise ValueError(
@@ -241,6 +298,26 @@ def build_evidence_ledger(
                 columns[EVIDENCE_VALUE]: record.evidence_value,
                 columns[EVIDENCE_CATEGORY]: record.evidence_category,
                 columns[SOURCE_RECORD_REFS]: record.source_record_refs,
+                columns.get(SANCTION_YEAR, SANCTION_YEAR): record.sanction_year,
+                columns.get(TARGET_FISCAL_YEAR, TARGET_FISCAL_YEAR): record.target_fiscal_year,
+                columns.get(DECISION_COUNT, DECISION_COUNT): record.decision_count,
+                columns.get(DOCUMENT_IDS, DOCUMENT_IDS): record.document_ids,
+                columns.get(DECISION_NUMBERS, DECISION_NUMBERS): record.decision_numbers,
+                columns.get(DECISION_TOTAL_FINE, DECISION_TOTAL_FINE): record.total_fine,
+                columns.get(HAS_FINE, HAS_FINE): record.has_fine,
+                columns.get(HAS_SUSPENSION, HAS_SUSPENSION): record.has_suspension,
+                columns.get(HAS_WARNING, HAS_WARNING): record.has_warning,
+                columns.get(HAS_REMEDY, HAS_REMEDY): record.has_remedy,
+                columns.get(FIRST_LABEL_KNOWN_DATE, FIRST_LABEL_KNOWN_DATE): (
+                    record.first_label_known_date
+                ),
+                columns.get(LAST_LABEL_KNOWN_DATE, LAST_LABEL_KNOWN_DATE): (
+                    record.last_label_known_date
+                ),
+                columns.get(TAXONOMY_CODES, TAXONOMY_CODES): record.taxonomy_codes,
+                columns.get(TAXONOMY_REASON_CODE, TAXONOMY_REASON_CODE): (
+                    record.taxonomy_reason_code
+                ),
                 columns[PERIOD_LINK_SOURCE]: record.period_link_source,
                 columns[PERIOD_LINK_CONFIDENCE]: record.period_link_confidence,
                 columns[OUTCOME_BASIS]: record.outcome_basis,
@@ -267,6 +344,20 @@ def build_evidence_ledger(
             columns[EVIDENCE_VALUE],
             columns[EVIDENCE_CATEGORY],
             columns[SOURCE_RECORD_REFS],
+            columns.get(SANCTION_YEAR, SANCTION_YEAR),
+            columns.get(TARGET_FISCAL_YEAR, TARGET_FISCAL_YEAR),
+            columns.get(DECISION_COUNT, DECISION_COUNT),
+            columns.get(DOCUMENT_IDS, DOCUMENT_IDS),
+            columns.get(DECISION_NUMBERS, DECISION_NUMBERS),
+            columns.get(DECISION_TOTAL_FINE, DECISION_TOTAL_FINE),
+            columns.get(HAS_FINE, HAS_FINE),
+            columns.get(HAS_SUSPENSION, HAS_SUSPENSION),
+            columns.get(HAS_WARNING, HAS_WARNING),
+            columns.get(HAS_REMEDY, HAS_REMEDY),
+            columns.get(FIRST_LABEL_KNOWN_DATE, FIRST_LABEL_KNOWN_DATE),
+            columns.get(LAST_LABEL_KNOWN_DATE, LAST_LABEL_KNOWN_DATE),
+            columns.get(TAXONOMY_CODES, TAXONOMY_CODES),
+            columns.get(TAXONOMY_REASON_CODE, TAXONOMY_REASON_CODE),
             columns[PERIOD_LINK_SOURCE],
             columns[PERIOD_LINK_CONFIDENCE],
             columns[OUTCOME_BASIS],
@@ -293,6 +384,28 @@ def build_evidence_ledger(
         ledger[columns[EVIDENCE_VALUE]] = ledger[columns[EVIDENCE_VALUE]].astype("float64")
         ledger[columns[EVIDENCE_CATEGORY]] = ledger[columns[EVIDENCE_CATEGORY]].astype("string")
         ledger[columns[SOURCE_RECORD_REFS]] = ledger[columns[SOURCE_RECORD_REFS]].astype("string")
+        sanction_year_column = columns.get(SANCTION_YEAR, SANCTION_YEAR)
+        target_year_column = columns.get(TARGET_FISCAL_YEAR, TARGET_FISCAL_YEAR)
+        decision_count_column = columns.get(DECISION_COUNT, DECISION_COUNT)
+        document_ids_column = columns.get(DOCUMENT_IDS, DOCUMENT_IDS)
+        decision_numbers_column = columns.get(DECISION_NUMBERS, DECISION_NUMBERS)
+        total_fine_column = columns.get(DECISION_TOTAL_FINE, DECISION_TOTAL_FINE)
+        ledger[sanction_year_column] = ledger[sanction_year_column].astype("Int16")
+        ledger[target_year_column] = ledger[target_year_column].astype("Int16")
+        ledger[decision_count_column] = ledger[decision_count_column].astype("Int64")
+        ledger[document_ids_column] = ledger[document_ids_column].astype("string")
+        ledger[decision_numbers_column] = ledger[decision_numbers_column].astype("string")
+        ledger[total_fine_column] = ledger[total_fine_column].astype("float64")
+        for name in (HAS_FINE, HAS_SUSPENSION, HAS_WARNING, HAS_REMEDY):
+            physical = columns.get(name, name)
+            ledger[physical] = ledger[physical].astype("boolean")
+        for name in (FIRST_LABEL_KNOWN_DATE, LAST_LABEL_KNOWN_DATE):
+            physical = columns.get(name, name)
+            ledger[physical] = pd.to_datetime(ledger[physical]).astype("datetime64[ns]")
+        taxonomy_codes_column = columns.get(TAXONOMY_CODES, TAXONOMY_CODES)
+        taxonomy_reason_column = columns.get(TAXONOMY_REASON_CODE, TAXONOMY_REASON_CODE)
+        ledger[taxonomy_codes_column] = ledger[taxonomy_codes_column].astype("string")
+        ledger[taxonomy_reason_column] = ledger[taxonomy_reason_column].astype("string")
         ledger[columns[PERIOD_LINK_SOURCE]] = ledger[columns[PERIOD_LINK_SOURCE]].astype("string")
         ledger[columns[PERIOD_LINK_CONFIDENCE]] = ledger[columns[PERIOD_LINK_CONFIDENCE]].astype(
             "string"
@@ -309,7 +422,14 @@ def build_evidence_ledger(
             "records": lag_rows,
             "accepted_event_count": len(lag_rows),
             "accepted_delayed_event_count": len(lag_rows),
-            "accepted_annual_measurement_count": len(annual_records),
+            "accepted_annual_measurement_count": sum(
+                record.evidence_record_kind == "annual_source_result"
+                for record in result_records.values()
+            ),
+            "accepted_s3_endpoint_result_count": sum(
+                record.evidence_record_kind == "firm_year_endpoint_result"
+                for record in result_records.values()
+            ),
             "deduplicated_event_count": sum(
                 row["status"] == "DUPLICATE_UPSTREAM_EVENT" for row in availability_rows
             ),
@@ -343,7 +463,9 @@ def _availability_row(record: EvidenceRecord, status: str) -> dict[str, object]:
         EVIDENCE_VALUE: record.evidence_value,
         EVIDENCE_CATEGORY: record.evidence_category,
         SOURCE_RECORD_REFS: record.source_record_refs,
-        AVAILABILITY_DATE: record.availability_date.isoformat(),
+        AVAILABILITY_DATE: (
+            record.availability_date.isoformat() if record.availability_date is not None else None
+        ),
         OUTCOME: record.outcome,
         OUTCOME_BASIS: record.outcome_basis,
         PERIOD_LINK_SOURCE: record.period_link_source,

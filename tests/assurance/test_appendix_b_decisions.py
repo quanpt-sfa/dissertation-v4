@@ -55,7 +55,32 @@ def test_T004_anchor_source(registry: dict[str, Any]) -> None:
 
 def test_T005_primary_outcome(registry: dict[str, Any]) -> None:
     canonical(registry, "D05", "Outcome chính")
-    assert get(registry, "measurement.track_a_primary_endpoint") == "L1"
+    assert get(registry, "measurement.primary_target_id") is None
+    assert set(get(registry, "measurement.candidate_targets")) == {
+        "L1_ANNUAL",
+        "S3_BROAD",
+        "S3_REPORTING",
+        "S3_CONTENT",
+        "S3_TIMELINESS",
+        "L1_REPORTING",
+        "L1_CONTENT_STRICT",
+    }
+    assert get(registry, "measurement.candidate_targets.L1_ANNUAL.sources") == [
+        "S1_profit_adjustment",
+        "S1_revenue_adjustment",
+        "S2_audit_opinion",
+    ]
+    assert get(registry, "measurement.candidate_targets.L1_REPORTING.sources") == [
+        "S1_profit_adjustment",
+        "S1_revenue_adjustment",
+        "S2_audit_opinion",
+        "S3_REPORTING",
+    ]
+    assert get(registry, "measurement.candidate_targets.L1_CONTENT_STRICT.sources") == [
+        "S1_profit_adjustment",
+        "S1_revenue_adjustment",
+        "S3_CONTENT",
+    ]
     assert get(registry, "measurement.roles.L3") == "measurement_sensitivity"
 
 
@@ -117,7 +142,7 @@ def test_T014_measurement_roles(registry: dict[str, Any]) -> None:
     canonical(registry, "D14", "Vai trò L0–L3")
     assert get(registry, "measurement.roles") == {
         "L0": "single_source_benchmark",
-        "L1": "primary",
+        "L1": "candidate_binary_aggregation",
         "L2": "alternative_aggregation",
         "L3": "measurement_sensitivity",
     }

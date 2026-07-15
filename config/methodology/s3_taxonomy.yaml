@@ -1,0 +1,58 @@
+s3_taxonomy:
+  channel_id: S3
+  processor: sanction_calendar_year
+  temporal_role: next_calendar_year_regulatory_event
+  availability_rule: sanction_calendar_year
+  target_year_rule: sanction_year_minus_one
+  decision_key: document_id
+  decision_provenance_field: decision_number
+  sanction_year_precedence: [sanction_year, decision_date, publish_date]
+  label_known_date_precedence: [label_known_date, publish_date, decision_date]
+  affected_fiscal_year_role: sensitivity_provenance_only
+  source_universe: firm_year_panel
+  sanction_source_completeness:
+    complete_through_year: 2025
+    incomplete_years: [2026]
+    source_year_close_date: null
+  taxonomy_fields:
+    level_1: primary_violation_l1
+    level_2: primary_violation_l2
+    construct_family: construct_family
+    construct_target: construct_target
+    normalized_code: normalized_violation_code
+  endpoints:
+    S3_BROAD:
+      include_all_eligible_decisions: true
+      construct: next-year regulatory sanction event
+    S3_REPORTING:
+      level_1_values: [FIN_REPORTING, DISCLOSURE, AUDIT_ASSURANCE]
+      normalized_codes: []
+      construct: next-year reporting regulatory sanction event
+    S3_CONTENT:
+      normalized_codes: [FS_FALSE_MISLEADING, ACCOUNTING_RECORD_VIOLATION, FS_INCOMPLETE]
+      construct: next-year financial-report content regulatory sanction event
+    S3_TIMELINESS:
+      normalized_codes:
+      - LATE_PERIODIC_DISCLOSURE
+      - MISSING_PERIODIC_DISCLOSURE
+      - LATE_FINANCIAL_STATEMENT_FILING
+      - MISSING_FINANCIAL_STATEMENT_FILING
+      construct: next-year filing timeliness regulatory sanction event
+  broad_only_level_1_values:
+  - GOVERNANCE
+  - ISSUANCE_OFFERING
+  - LISTING_REGISTRATION
+  - INTERMEDIARY_COMPLIANCE
+  - BOND
+  - MARKET_CONDUCT
+  invariants:
+    content_subset_reporting: true
+    timeliness_subset_reporting: true
+    reporting_subset_broad: true
+    content_timeliness_disjoint: true
+  unmapped_policy:
+    broad: include
+    reporting: unknown
+    content: unknown
+    timeliness: unknown
+    reason_code: UNMAPPED_S3_TAXONOMY

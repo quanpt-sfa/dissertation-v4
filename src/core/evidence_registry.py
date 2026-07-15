@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
-from core.semantic_keys import CHANNEL_ID, SOURCE_ID, TEMPORAL_ROLE
+from core.semantic_keys import CHANNEL_ID, DOCUMENT_ID, SOURCE_ID, TEMPORAL_ROLE
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,8 @@ class LogicalEvidenceSource:
     opportunity_semantic: str | None
     logical_config: dict[str, Any]
     processor_config: dict[str, Any]
+    target_year_rule: str | None = None
+    decision_key_semantic: str | None = None
 
 
 def logical_evidence_sources(registry: dict[str, object]) -> dict[str, LogicalEvidenceSource]:
@@ -75,7 +77,23 @@ def logical_evidence_sources(registry: dict[str, object]) -> dict[str, LogicalEv
                 opportunity_semantic=opportunity,
                 logical_config=dict(logical),
                 processor_config=dict(evidence),
+                target_year_rule=(
+                    str(evidence["target_year_rule"])
+                    if isinstance(evidence.get("target_year_rule"), str)
+                    else None
+                ),
+                decision_key_semantic=(
+                    str(evidence["decision_key_semantic"])
+                    if isinstance(evidence.get("decision_key_semantic"), str)
+                    else None
+                ),
             )
+            if processor == "sanction_calendar_year":
+                registered = result[logical_source_id]
+                if registered.target_year_rule != "sanction_year_minus_one":
+                    raise ValueError("S3 target-year rule is not locked")
+                if registered.decision_key_semantic != DOCUMENT_ID:
+                    raise ValueError("S3 decision key must be document_id")
     if not result:
         raise ValueError("locked registry contains no logical evidence sources")
     return result

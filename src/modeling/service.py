@@ -53,6 +53,7 @@ def fit_anchor_pu_fold(
     settings: dict[str, Any],
     columns: dict[str, str],
     random_state: int,
+    evaluation_target_id: str = "L1",
 ) -> ModelFitResult:
     """Fit a bagging-PU benchmark using only the registered anchor as positive."""
     firm = columns[FIRM_ID]
@@ -96,8 +97,8 @@ def fit_anchor_pu_fold(
                     year=year,
                     outer_year=outer_year,
                     learner_id=model_id,
-                    measurement_id="L1",
-                    target_id="L1",
+                    measurement_id=evaluation_target_id,
+                    target_id=evaluation_target_id,
                     prediction=float(prediction_value),
                     columns=columns,
                 )
@@ -121,8 +122,8 @@ def fit_anchor_pu_fold(
                     year=year,
                     outer_year=outer_year,
                     learner_id=model_id,
-                    measurement_id="L1",
-                    target_id="L1",
+                    measurement_id=evaluation_target_id,
+                    target_id=evaluation_target_id,
                     prediction=float(prediction_value),
                     columns=columns,
                 )
@@ -138,6 +139,7 @@ def fit_anchor_pu_fold(
                 "training_mechanism": "bagging_pu",
                 "positive_source_id": anchor_source_id,
                 "positive_target_id": anchor_target,
+                TARGET_ID: evaluation_target_id,
                 "l1_union_used_as_clean_positive": False,
                 "unlabeled_rows": int((~development["_anchor_positive"]).sum()),
                 "positive_rows": int(development["_anchor_positive"].sum()),

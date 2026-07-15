@@ -8,6 +8,7 @@ from datetime import datetime
 import pandas as pd
 
 from core.semantic_keys import (
+    ANNUAL_MEASUREMENT_MATURE,
     AVAILABILITY_BASIS,
     AVAILABILITY_DATE,
     CHANNEL_ID,
@@ -15,9 +16,13 @@ from core.semantic_keys import (
     FIRM_ID,
     FISCAL_YEAR,
     MATURE,
+    MATURITY_STATUS,
     PREDICTION_TIME,
+    REQUIRED_SANCTION_YEAR,
+    S3_NEXT_YEAR_MATURE,
     SOURCE_ID,
     SOURCE_OPPORTUNITY,
+    SOURCE_YEAR_COMPLETE,
     TEMPORAL_ROLE,
 )
 
@@ -38,8 +43,11 @@ def build_risk_set(
     columns: dict[str, str],
     evidence: pd.DataFrame | None = None,
     sensitivity_horizons_months: list[int] | None = None,
+    sanction_complete_through_year: int = 0,
+    sanction_incomplete_years: set[int] | None = None,
+    primary_target_id: str | None = None,
 ) -> RiskSetResult:
-    """Classify maturity without converting immature observations to negatives."""
+    """Classify endpoint-specific maturity without converting immaturity to negatives."""
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
     prediction = columns[PREDICTION_TIME]
@@ -51,14 +59,53 @@ def build_risk_set(
         raise ValueError("horizon must be positive")
     result = panel.loc[:, required].copy()
     prediction_values = pd.to_datetime(result[prediction], errors="raise")
-    horizon_end = prediction_values + pd.DateOffset(months=horizon_months)
+    annual_mature_column = columns.get(ANNUAL_MEASUREMENT_MATURE, ANNUAL_MEASUREMENT_MATURE)
+    s3_mature_column = columns.get(S3_NEXT_YEAR_MATURE, S3_NEXT_YEAR_MATURE)
+    required_sanction_year_column = columns.get(REQUIRED_SANCTION_YEAR, REQUIRED_SANCTION_YEAR)
+    source_year_complete_column = columns.get(SOURCE_YEAR_COMPLETE, SOURCE_YEAR_COMPLETE)
+    maturity_status_column = columns.get(MATURITY_STATUS, MATURITY_STATUS)
     result[columns[ELIGIBLE]] = True
-    result[columns[MATURE]] = horizon_end <= pd.Timestamp(data_cutoff)
+    annual_mature = prediction_values <= pd.Timestamp(data_cutoff)
+    required_sanction_year = result[year].astype(int) + 1
+    incomplete = sanction_incomplete_years or set()
+    source_complete = required_sanction_year.map(
+        lambda value: value <= sanction_complete_through_year and value not in incomplete
+    )
+    result[annual_mature_column] = annual_mature
+    result[required_sanction_year_column] = required_sanction_year
+    result[source_year_complete_column] = source_complete
+    result[s3_mature_column] = source_complete
+    legacy_delayed_mode = sanction_complete_through_year == 0 and primary_target_id is None
+    if legacy_delayed_mode:
+        mature_values = prediction_values + pd.DateOffset(months=horizon_months) <= pd.Timestamp(
+            data_cutoff
+        )
+        maturity_status = pd.Series(
+            [
+                "LEGACY_DELAYED_MATURE" if bool(value) else "LEGACY_DELAYED_IMMATURE"
+                for value in mature_values
+            ],
+            index=result.index,
+            dtype="string",
+        )
+    else:
+        mature_values, maturity_status = _primary_maturity(
+            primary_target_id=primary_target_id,
+            annual_mature=annual_mature,
+            s3_mature=source_complete,
+        )
+    result[columns[MATURE]] = mature_values
+    result[maturity_status_column] = maturity_status
     result[firm] = result[firm].astype("string")
     result[year] = result[year].astype("int16")
     result[prediction] = prediction_values.astype("datetime64[ns]")
     result[columns[ELIGIBLE]] = result[columns[ELIGIBLE]].astype(bool)
     result[columns[MATURE]] = result[columns[MATURE]].astype(bool)
+    result[annual_mature_column] = result[annual_mature_column].astype(bool)
+    result[s3_mature_column] = result[s3_mature_column].astype(bool)
+    result[required_sanction_year_column] = result[required_sanction_year_column].astype("int16")
+    result[source_year_complete_column] = result[source_year_complete_column].astype(bool)
+    result[maturity_status_column] = result[maturity_status_column].astype("string")
     result = result.sort_values([firm, year], kind="stable").reset_index(drop=True)
     mature_count = int(result[columns[MATURE]].sum())
     prospective = result.loc[~result[columns[MATURE]]].copy().reset_index(drop=True)
@@ -68,7 +115,7 @@ def build_risk_set(
             FISCAL_YEAR: int(row[year]),
             "classification": "complete_mature_followup"
             if bool(row[columns[MATURE]])
-            else "prospective_immature",
+            else str(row[maturity_status_column]),
             "eligible_for_retrospective_evaluation": bool(row[columns[MATURE]]),
             "assigned_negative_due_to_exit_or_immaturity": False,
         }
@@ -107,12 +154,53 @@ def build_risk_set(
             "immature_assigned_negative_count": 0,
             "exit_or_code_change_assigned_negative_count": 0,
             "mature_count_by_horizon_months": maturity_counts,
+            "primary_target_id": primary_target_id,
+            "primary_target_status": (
+                "LOCKED" if primary_target_id is not None else "PRIMARY_TARGET_NOT_LOCKED"
+            ),
+            "annual_measurement_mature_count": int(annual_mature.sum()),
+            "s3_next_year_mature_count": int(source_complete.sum()),
+            "sanction_source_completeness": {
+                "complete_through_year": sanction_complete_through_year,
+                "incomplete_years": sorted(incomplete),
+            },
+            "s3_maturity_rule": "required_sanction_year_equals_fiscal_year_plus_one",
             "source_maturity_curves": source_curves,
             "delayed_verification_maturity_curves": source_curves,
             "annual_measurement_availability": annual_availability,
             "source_maturity_curves_executed": evidence is not None,
         },
     )
+
+
+def _primary_maturity(
+    *,
+    primary_target_id: str | None,
+    annual_mature: pd.Series,
+    s3_mature: pd.Series,
+) -> tuple[pd.Series, pd.Series]:
+    if primary_target_id is None:
+        return (
+            pd.Series(False, index=annual_mature.index, dtype=bool),
+            pd.Series("PRIMARY_TARGET_NOT_LOCKED", index=annual_mature.index, dtype="string"),
+        )
+    if primary_target_id == "L1_ANNUAL":
+        values = annual_mature.astype(bool)
+        rule = "ANNUAL_MEASUREMENT_MATURE"
+    elif primary_target_id in {"S3_BROAD", "S3_REPORTING", "S3_CONTENT", "S3_TIMELINESS"}:
+        values = s3_mature.astype(bool)
+        rule = "S3_NEXT_YEAR_MATURE"
+    elif primary_target_id in {"L1_REPORTING", "L1_CONTENT_STRICT"}:
+        values = annual_mature.astype(bool) & s3_mature.astype(bool)
+        rule = "ANNUAL_AND_S3_MATURE"
+    else:
+        raise ValueError(f"unknown primary target={primary_target_id}")
+    status = pd.Series(
+        [rule if bool(value) else f"{rule}_INCOMPLETE" for value in values],
+        index=values.index,
+        dtype="string",
+    )
+    return values, status
 
 
 def _source_maturity_curves(

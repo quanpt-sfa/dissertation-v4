@@ -66,6 +66,16 @@ def main() -> int:
             if item.get("role") == "observability"
             and item.get("available_before_verification", True) is True
         ],
+        primary_target_id=(
+            str(value)
+            if (
+                value := mapping(loaded.registry.get("measurement"), "measurement").get(
+                    "primary_target_id"
+                )
+            )
+            is not None
+            else None
+        ),
     )
     loaded.context.write("temporal_split_registry", result.splits, {})
     loaded.context.write("channel_time_split_registry", result.channel_splits, {})

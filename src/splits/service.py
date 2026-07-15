@@ -18,6 +18,7 @@ from core.semantic_keys import (
     FISCAL_YEAR,
     MATURE,
     OUTER_FOLD,
+    TARGET_ID,
     WEIGHT,
 )
 
@@ -44,6 +45,7 @@ def build_splits_and_weights(
     ess_absolute_minimum: float,
     columns: dict[str, str],
     verification_feature_ids: list[str] | None = None,
+    primary_target_id: str | None = None,
 ) -> SplitWeightResult:
     """Build strict rolling splits; no outer-year row enters a weight fit."""
     firm = columns[FIRM_ID]
@@ -58,7 +60,8 @@ def build_splits_and_weights(
         mature,
     }.issubset(risk_sets.columns):
         raise ValueError("P09 inputs do not satisfy firm-year contracts")
-    risk = risk_sets.loc[risk_sets[eligible] & risk_sets[mature], [firm, year]].copy()
+    maturity_mask = risk_sets[mature] if primary_target_id is not None else True
+    risk = risk_sets.loc[risk_sets[eligible] & maturity_mask, [firm, year]].copy()
     eligible_panel = feature_panel.merge(risk, on=[firm, year], how="inner", validate="1:1")
     verification_channels = _verification_channels(observability)
     verified_by_key = _verified_keys(matrices, verification_channels)
@@ -67,7 +70,9 @@ def build_splits_and_weights(
     splits: list[dict[str, Any]] = []
     channel_splits: list[dict[str, Any]] = []
     role_by_fold = {
-        str(item.get(OUTER_FOLD)): item.get("assigned_role") for item in fold_eligibility
+        str(item.get(OUTER_FOLD)): item.get("assigned_role")
+        for item in fold_eligibility
+        if primary_target_id is not None and item.get(TARGET_ID) == primary_target_id
     }
     for outer_year in outer_years:
         fold_id = str(outer_year)

@@ -47,6 +47,7 @@ def evaluate_outer_fold(
     confidence_level: float,
     columns: dict[str, str],
     rng: np.random.Generator,
+    target_id: str = "L1",
     oof_training_targets: list[dict[str, object]] | None = None,
     latent_risk_scenarios: dict[str, list[dict[str, float]]] | None = None,
 ) -> EvaluationResult:
@@ -55,7 +56,15 @@ def evaluate_outer_fold(
     learner = columns[LEARNER_ID]
     prediction = columns[PREDICTION]
     outcome = columns[OUTCOME]
-    observed = outcomes.loc[:, [firm, year, outcome]]
+    target = columns[TARGET_ID]
+    if target not in outcomes.columns:
+        if target_id != "L1":
+            raise ValueError("target-aware sealed outcomes are required")
+        observed = outcomes.loc[:, [firm, year, outcome]]
+    else:
+        observed = outcomes.loc[outcomes[target].eq(target_id), [firm, year, outcome]]
+    if observed.duplicated([firm, year]).any():
+        raise ValueError(f"target={target_id}: sealed outcomes are not unique by firm-year")
     development = oof_predictions.merge(observed, on=[firm, year], how="inner", validate="m:1")
     outer = outer_predictions.merge(observed, on=[firm, year], how="inner", validate="m:1")
     outer = outer.loc[outer[year] == outer_year].copy()

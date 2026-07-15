@@ -70,7 +70,8 @@ decisions:
     appendix_b_id: D05
     config_anchors:
     - measurement.roles
-    - measurement.track_a_primary_endpoint
+    - measurement.candidate_targets
+    - measurement.primary_target_id
     lock_stage: P05
     enforced_by_steps:
     - P05

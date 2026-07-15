@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
+from core.fold_control import require_primary_target
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.rng import generator
 from core.semantic_keys import OUTER_FOLD
@@ -31,6 +32,8 @@ def main() -> int:
         state="FROZEN",
         coordinates=coordinates,
     )
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    primary_target_id = require_primary_target(measurement, "P12")
     mcse = mapping(loaded.context.read("mcse_report", {}), "MCSE report")
     if mcse.get("status") != "PASS" or mcse.get("precision_target_met") is not True:
         raise RuntimeError(
@@ -96,6 +99,7 @@ def main() -> int:
             for item in sequence(models.get("oof_training_targets"), "OOF training targets")
         ],
         latent_risk_scenarios=latent_risk_scenarios,
+        target_id=primary_target_id,
     )
     loaded.context.write("calibration_outputs", result.calibration, coordinates)
     loaded.context.write("evaluation_metrics", result.metrics, coordinates)

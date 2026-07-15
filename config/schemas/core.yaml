@@ -227,7 +227,7 @@ schemas:
     compatibility_policy: strict
   evidence_ledger_frame:
     contract_type: dataframe
-    version: 5
+    version: 6
     columns:
     - column: firm_id
       dtype: string
@@ -277,6 +277,48 @@ schemas:
     - column: source_record_refs
       dtype: string
       nullable: true
+    - column: sanction_year
+      dtype: int16
+      nullable: true
+    - column: target_fiscal_year
+      dtype: int16
+      nullable: true
+    - column: decision_count
+      dtype: int64
+      nullable: true
+    - column: document_ids
+      dtype: string
+      nullable: true
+    - column: decision_numbers
+      dtype: string
+      nullable: true
+    - column: decision_total_fine
+      dtype: float64
+      nullable: true
+    - column: has_fine
+      dtype: boolean
+      nullable: true
+    - column: has_suspension
+      dtype: boolean
+      nullable: true
+    - column: has_warning
+      dtype: boolean
+      nullable: true
+    - column: has_remedy
+      dtype: boolean
+      nullable: true
+    - column: first_label_known_date
+      dtype: datetime64[ns]
+      nullable: true
+    - column: last_label_known_date
+      dtype: datetime64[ns]
+      nullable: true
+    - column: taxonomy_codes
+      dtype: string
+      nullable: true
+    - column: taxonomy_reason_code
+      dtype: string
+      nullable: true
     - column: period_link_source
       dtype: string
       nullable: true
@@ -288,7 +330,7 @@ schemas:
       nullable: false
     - column: availability_date
       dtype: datetime64[ns]
-      nullable: false
+      nullable: true
     - column: outcome
       dtype: boolean
       nullable: true
@@ -303,9 +345,105 @@ schemas:
     strict_columns: true
     coerce: false
     compatibility_policy: strict
-  risk_sets_frame:
+  sanction_decision_ledger_frame:
     contract_type: dataframe
     version: 1
+    columns:
+    - column: document_id
+      dtype: string
+      nullable: false
+    - column: firm_id
+      dtype: string
+      nullable: false
+    - column: sanction_year
+      dtype: int16
+      nullable: true
+    - column: target_fiscal_year
+      dtype: int16
+      nullable: true
+    - column: decision_number
+      dtype: string
+      nullable: true
+    - column: decision_date
+      dtype: datetime64[ns]
+      nullable: true
+    - column: publish_date
+      dtype: datetime64[ns]
+      nullable: true
+    - column: label_known_date
+      dtype: datetime64[ns]
+      nullable: true
+    - column: affected_fiscal_year
+      dtype: int16
+      nullable: true
+    - column: primary_violation_l1
+      dtype: string
+      nullable: true
+    - column: primary_violation_l2
+      dtype: string
+      nullable: true
+    - column: construct_family
+      dtype: string
+      nullable: true
+    - column: construct_target
+      dtype: string
+      nullable: true
+    - column: normalized_violation_code
+      dtype: string
+      nullable: true
+    - column: hard_positive
+      dtype: boolean
+      nullable: false
+    - column: row_inclusion
+      dtype: boolean
+      nullable: false
+    - column: legacy_event_id
+      dtype: string
+      nullable: true
+    - column: period_link_source
+      dtype: string
+      nullable: true
+    - column: period_link_confidence
+      dtype: string
+      nullable: true
+    - column: decision_total_fine
+      dtype: float64
+      nullable: true
+    - column: has_fine
+      dtype: boolean
+      nullable: true
+    - column: has_suspension
+      dtype: boolean
+      nullable: true
+    - column: has_warning
+      dtype: boolean
+      nullable: true
+    - column: has_remedy
+      dtype: boolean
+      nullable: true
+    - column: source_record_refs
+      dtype: string
+      nullable: false
+    - column: taxonomy_codes
+      dtype: string
+      nullable: false
+    - column: taxonomy_reason_code
+      dtype: string
+      nullable: true
+    primary_key:
+    - document_id
+    - firm_id
+    uniqueness_constraints:
+    - - document_id
+      - firm_id
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: true
+    coerce: false
+    compatibility_policy: strict
+  risk_sets_frame:
+    contract_type: dataframe
+    version: 2
     columns:
     - column: firm_id
       dtype: string
@@ -322,6 +460,21 @@ schemas:
     - column: mature
       dtype: bool
       nullable: false
+    - column: annual_measurement_mature
+      dtype: bool
+      nullable: false
+    - column: s3_next_year_mature
+      dtype: bool
+      nullable: false
+    - column: required_sanction_year
+      dtype: int16
+      nullable: false
+    - column: source_year_complete
+      dtype: bool
+      nullable: false
+    - column: maturity_status
+      dtype: string
+      nullable: false
     primary_key:
     - firm_id
     - fiscal_year
@@ -335,7 +488,7 @@ schemas:
     compatibility_policy: strict
   l0_l1_inputs_frame:
     contract_type: dataframe
-    version: 2
+    version: 3
     columns:
     - column: firm_id
       dtype: string
@@ -364,7 +517,7 @@ schemas:
     compatibility_policy: strict
   sealed_outcome_frame:
     contract_type: dataframe
-    version: 1
+    version: 2
     columns:
     - column: firm_id
       dtype: string
@@ -372,15 +525,20 @@ schemas:
     - column: fiscal_year
       dtype: int16
       nullable: false
+    - column: target_id
+      dtype: string
+      nullable: false
     - column: outcome
       dtype: bool
       nullable: false
     primary_key:
     - firm_id
     - fiscal_year
+    - target_id
     uniqueness_constraints:
     - - firm_id
       - fiscal_year
+      - target_id
     row_checks: []
     cross_column_checks: []
     strict_columns: true

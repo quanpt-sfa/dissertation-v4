@@ -87,6 +87,7 @@ Sau P00, script không đọc lại module YAML riêng lẻ. Tất cả stage ph
 - `risksets.yaml`: maturity, complete follow-up, cutoff và IPCW role.
 - `folds.yaml`: initial, fully nested và prospective years.
 - `measurement.yaml`: vai trò L0–L3 và Gate 1 selection.
+- `s3_taxonomy.yaml`: taxonomy endpoint, sanction-year mapping và source-year completeness của S3.
 - `features.yaml`: feature registry, role và preprocessing plan.
 - `calibration.yaml`: cross-fitted calibration policy.
 - `evaluation.yaml`: metrics, review budgets và Gate 2/Gate 3 criteria.

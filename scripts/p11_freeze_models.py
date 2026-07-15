@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
-from core.fold_control import require_confirmatory_fold
+from core.fold_control import require_confirmatory_fold, require_primary_target
 from core.pipeline import load_run, mapping, physical_columns, sequence, stable_hash
 from core.rng import derive_seed
 from core.semantic_keys import OUTER_FOLD
@@ -55,6 +55,8 @@ def main() -> int:
         state="SELECTED",
         coordinates=coordinates,
     )
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    primary = require_primary_target(measurement, "P11")
     selection = mapping(
         loaded.context.read("measurement_selection_registry", coordinates),
         "measurement selection",
@@ -73,7 +75,7 @@ def main() -> int:
     if not feature_registry:
         raise RuntimeError("P11_PRODUCTION_PATH_BLOCKED: FEATURE_REGISTRY_EMPTY")
     fold_eligibility = loaded.context.read("fold_eligibility", {})
-    require_confirmatory_fold(fold_eligibility, args.outer_fold, "P11")
+    require_confirmatory_fold(fold_eligibility, args.outer_fold, "P11", primary)
     inputs = loaded.context.read("l0_l1_inputs", {})
     weights = loaded.context.read("fold_aware_weights", {"fold_id": args.outer_fold})
     weight_diagnostics = mapping(
@@ -92,10 +94,6 @@ def main() -> int:
     )
     if not all(isinstance(value, pd.DataFrame) for value in (panel, inputs, weights)):
         raise ValueError("P11 tabular inputs must be DataFrames")
-    measurement = mapping(loaded.registry.get("measurement"), "measurement")
-    primary = measurement.get("track_a_primary_endpoint")
-    if not isinstance(primary, str):
-        raise ValueError("measurement.track_a_primary_endpoint required")
     selected = selection.get("selected_measurement")
     selected_measurement = str(selected) if selected not in {None, "none"} else None
     learners = mapping(loaded.registry.get("learners"), "learners")
@@ -206,6 +204,7 @@ def main() -> int:
                         f"anchor_pu:{anchor_source_id}",
                     )
                     % (2**32 - 1),
+                    evaluation_target_id=primary,
                 )
             )
     fits.extend(pu_results)
