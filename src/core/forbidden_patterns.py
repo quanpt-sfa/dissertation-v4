@@ -25,6 +25,18 @@ APPROVED_CORE_FILES = {
     "forbidden_patterns.py",
     "semantic_keys.py",
 }
+# P07A/P07B are explicitly non-production source-resolution audits.  They can
+# inspect external, researcher-supplied files but cannot consume runtime
+# artifacts, outcomes, or known cases.  Keeping this exception named and tiny
+# preserves the production-stage I/O firewall.
+NONPRODUCTION_AUDIT_SCRIPTS = {
+    "scripts/p07a_feature_definition_audit.py",
+    "scripts/p07b_literature_data_audit.py",
+}
+NONPRODUCTION_AUDIT_MODULES = {
+    "src/features/definition_audit.py",
+    "src/features/literature_audit.py",
+}
 
 StringMap = dict[str, Any]
 
@@ -38,7 +50,8 @@ def _mapping(value: object, context: str) -> StringMap:
 def _is_registered_data_boundary(root: Path, path: Path) -> bool:
     relative = path.relative_to(root).as_posix()
     return (
-        relative.startswith("src/p01/")
+        relative in (NONPRODUCTION_AUDIT_SCRIPTS | NONPRODUCTION_AUDIT_MODULES)
+        or relative.startswith("src/p01/")
         or relative.startswith("src/p02/")
         or relative.startswith("src/snapshot/")
         or relative
@@ -92,12 +105,14 @@ def validate_source_patterns(
             continue
 
         text = path.read_text(encoding="utf-8")
-        for pattern in (*FORBIDDEN_IO, *FORBIDDEN_APPEND):
-            if pattern in text:
-                raise ConfigurationError(
-                    f"source={path}: forbidden pattern {pattern}; "
-                    "use the registered raw-reader or core runtime layer"
-                )
+        relative = path.relative_to(root).as_posix()
+        if relative not in NONPRODUCTION_AUDIT_SCRIPTS:
+            for pattern in (*FORBIDDEN_IO, *FORBIDDEN_APPEND):
+                if pattern in text:
+                    raise ConfigurationError(
+                        f"source={path}: forbidden pattern {pattern}; "
+                        "use the registered raw-reader or core runtime layer"
+                    )
 
         try:
             tree = ast.parse(text, filename=str(path))
