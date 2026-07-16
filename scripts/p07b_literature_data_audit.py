@@ -548,7 +548,7 @@ def main() -> int:
         yaml.safe_dump(template, sort_keys=False), encoding="utf-8"
     )
     summary = {
-        "status": "PARTIALLY_SUFFICIENT_WITH_NAMED_GAPS",
+        "status": "AUDIT_INCOMPLETE",
         "run_id": args.run_id,
         "literature_bundle": str(args.literature_root.resolve()),
         "literature_hashes": literature[["study_id", "source_hash"]].to_dict("records"),
@@ -560,7 +560,7 @@ def main() -> int:
     }
     (out / "p07b_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (out / "P07B_LITERATURE_TO_DATA_AUDIT.md").write_text(
-        "# P07B Literature-to-Data Audit\n\n## Verdict\n\nPARTIALLY_SUFFICIENT_WITH_NAMED_GAPS\n\nThis immutable, non-supervised audit used the supplied literature bundle and authorised production accounting source only for coverage. The validation-only pre/post file is explicitly prohibited from production use. No outcomes, K1–K4, P07 operational registry, P10–P17, denominator floors, imputation, winsorisation, or target-based selection were used.\n",
+        "# P07B Literature-to-Data Audit\n\n## Verdict\n\nAUDIT_INCOMPLETE\n\nThis immutable, non-supervised audit used the supplied literature bundle and authorised production accounting source only for coverage. The validation-only pre/post file is explicitly prohibited from production use. No outcomes, K1–K4, P07 operational registry, P10–P17, denominator floors, imputation, winsorisation, or target-based selection were used. The Tran and Bui full-specification extraction remains incomplete, so this audit must not be used to lock a predictor library.\n",
         encoding="utf-8",
     )
     print(f"P07B status=PASS run_id={args.run_id} output={out}")
