@@ -99,7 +99,7 @@ source_catalog:
         row_inclusion: [train_include_flag]
         hard_positive: [is_direct_label]
         legacy_event_id: [firm_event_id]
-        affected_fiscal_year: [affected_fiscal_year, label_year]
+        affected_fiscal_year: [affected_fiscal_year]
         period_link_source: [label_year_source]
         period_link_confidence: [label_confidence]
         decision_total_fine: [total_fine, fine_amount]
