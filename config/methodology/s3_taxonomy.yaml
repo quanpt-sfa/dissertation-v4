@@ -9,6 +9,12 @@ s3_taxonomy:
   sanction_year_precedence: [sanction_year, decision_date, publish_date]
   label_known_date_precedence: [label_known_date, publish_date, decision_date]
   affected_fiscal_year_role: sensitivity_provenance_only
+  temporal_estimand:
+    temporal_estimand_id: next_calendar_year_regulatory_event
+    target_calendar_rule: fiscal_year_plus_one
+    maturity_basis: complete_next_calendar_year_source
+    horizon_applicable: false
+    horizon_months: null
   source_universe: firm_year_panel
   sanction_source_completeness:
     complete_through_year: 2025

@@ -1,5 +1,13 @@
 # Bản đồ repo cho AI agent
 
+## S3 temporal estimand
+
+S3 is a next-calendar-year regulatory-event target. For firm fiscal year `t`, the
+target is an eligible S3 endpoint decision in calendar year `t+1`. The engine maps
+`sanction_year` to `target_fiscal_year = sanction_year - 1`; decision and publish
+dates are provenance metadata, not target-year filters. S3 maturity requires source
+year `t+1` completeness. Only `delayed_verification` sources use date horizons.
+
 Tài liệu này là điểm định hướng cho agent trước khi đọc hoặc sửa code. Nó mô tả
 vị trí, quyền sở hữu cấu hình, luồng artifact và cách mở rộng repo mà không phá
 protocol.

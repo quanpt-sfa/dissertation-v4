@@ -1,7 +1,8 @@
 risksets:
   maturity_required: true
-  main_requires_tau_plus_h_le_tcut: true
+  delayed_verification_requires_tau_plus_h_le_tcut: true
   complete_followup_required: true
+  s3_maturity_basis: complete_next_calendar_year_source
   ipcw_role: sensitivity_only_when_diagnostics_pass
   data_cutoff_required: true
   data_cutoff: "2026-03-31"

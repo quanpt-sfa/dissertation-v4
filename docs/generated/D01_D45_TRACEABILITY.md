@@ -5,7 +5,7 @@ Source: config/pipeline.yaml
 | ID | Canonical decision | Main specification | Test | Evidence |
 |---|---|---|---|---|
 | D01 | Ngày dự báo τit | Ngày muộn nhất mà toàn bộ predictor lõi hợp lệ đã khả dụng; mặc định gắn với ngày BCTC kiểm toán công bố. | T001 | availability_registry, evidence_ledger |
-| D02 | Chân trời chính | 12 tháng sau τit. | T002 | risk_sets, evaluation_metrics |
+| D02 | Chân trời chính | Horizon 12 tháng chỉ áp dụng cho endpoint date-resolved/delayed-verification; S3 không dùng horizon này. | T002 | risk_sets, evaluation_metrics |
 | D03 | Tập nguồn J | Chỉ kênh có ngày khả dụng rõ và liên kết firm-year đủ tin cậy. | T003 | raw_audit, channel_measurement_selection |
 | D04 | Nguồn neo | Nguồn chính thức hoặc tư pháp có độ xác nhận cao theo tiêu chí. | T004 | raw_audit, l3_pilot_capability |
 | D05 | Outcome chính | L1: BJ_i,t,h đã trưởng thành và follow-up đầy đủ. | T005 | l0_l1_inputs, evaluation_metrics |
@@ -24,8 +24,8 @@ Source: config/pipeline.yaml
 | D18 | Xác minh chọn lọc | Diagnostic luôn chạy; stabilized IPW khi V quan sát và support đủ. | T018 | observability_registry, fold_aware_weights |
 | D19 | Firewall K1–K4 | Niêm phong; không dùng đặt prior, gate, nguồn hoặc tuning. | T019 | known_cases_seal, known_case_results |
 | D20 | Biến trong label model | Chỉ S, M, T, Q, ZM; không dùng content predictors. | T020 | feature_registry |
-| D21 | Maturity | Chỉ dùng cohort có τ + h ≤ Tcut và follow-up đầy đủ. | T021 | maturity_audit, risk_sets |
-| D22 | Horizon theo nguồn | Một horizon chung chính và maturity curve theo kênh. | T022 | maturity_audit, evaluation_metrics |
+| D21 | Maturity | Maturity theo target: S1/S2 dùng annual anchor; S3 mature khi source year fiscal_year+1 hoàn chỉnh; τ+h≤Tcut chỉ áp dụng cho delayed-verification. | T021 | maturity_audit, risk_sets |
+| D22 | Horizon theo nguồn | Tách annual anchor, next-calendar-year cohort và delayed-verification; S3 dự báo regulatory event trong năm dương lịch t+1 và horizon không áp dụng. | T022 | maturity_audit, evaluation_metrics |
 | D23 | Tiêu chí cổng | δNI = 5% AP tương đối; MMI = max{0,01; 0,10×APref}; robustness ≥ 80%; FWER α = 0,05; power mục tiêu ≥ 0,80. | T023 | mcse_report, gate2_verdict, gate3_verdict |
 | D24 | Interaction library | Hai threshold claims và pressure × monitoring block. | T024 | threshold_interaction_results |
 | D25 | Exit/competing events | Không tự động gán âm khi delisting hoặc merger. | T025 | evidence_ledger, risk_sets |

@@ -325,8 +325,9 @@ decisions:
   D21:
     appendix_b_id: D21
     config_anchors:
-    - risksets.main_requires_tau_plus_h_le_tcut
+    - risksets.delayed_verification_requires_tau_plus_h_le_tcut
     - risksets.complete_followup_required
+    - risksets.s3_maturity_basis
     lock_stage: P04
     enforced_by_steps:
     - P04
@@ -343,6 +344,7 @@ decisions:
     config_anchors:
     - study.horizons_months
     - study.source_maturity_curves_required
+    - study.temporal_estimands
     lock_stage: P04
     enforced_by_steps:
     - P04

@@ -443,7 +443,7 @@ schemas:
     compatibility_policy: strict
   risk_sets_frame:
     contract_type: dataframe
-    version: 2
+    version: 3
     columns:
     - column: firm_id
       dtype: string

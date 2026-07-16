@@ -10,6 +10,7 @@ Source: config/pipeline.yaml
 - Do not use raw physical column strings or direct artifact paths.
 - Do not use direct pandas artifact I/O outside the core I/O layer.
 - Missing source is not evidence zero; immature follow-up is not negative.
+- {'S3 is a next-calendar-year regulatory-event target': 'map sanction year y to fiscal year y-1, and do not use prediction-date or horizon filters to redefine it.'}
 - Content predictors cannot enter label models; hierarchical-pi is sensitivity only.
 - Outer outcomes and K1-K4 content remain sealed until their configured opening steps.
 - Notebooks do not write artifacts; run required tests before committing.

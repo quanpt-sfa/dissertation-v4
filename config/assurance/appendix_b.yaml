@@ -8,8 +8,8 @@ appendix_b:
     chapter_reference: Appendix B, Table B.1, D01
   D02:
     canonical_title: Chân trời chính
-    main_specification: 12 tháng sau τit.
-    sensitivity_or_rule: 24 tháng và đường cong trưởng thành theo nguồn.
+    main_specification: "Horizon 12 tháng chỉ áp dụng cho endpoint date-resolved/delayed-verification; S3 không dùng horizon này."
+    sensitivity_or_rule: "Horizon 24 tháng chỉ dùng cho nguồn delayed-verification; S3 dùng cohort năm dương lịch kế tiếp."
     lock_status: Khóa trước outer test
     chapter_reference: Appendix B, Table B.1, D02
   D03:
@@ -124,14 +124,14 @@ appendix_b:
     chapter_reference: Appendix B, Table B.1, D20
   D21:
     canonical_title: Maturity
-    main_specification: Chỉ dùng cohort có τ + h ≤ Tcut và follow-up đầy đủ.
-    sensitivity_or_rule: IPCW censoring là độ nhạy.
+    main_specification: "Maturity theo target: S1/S2 dùng annual anchor; S3 mature khi source year fiscal_year+1 hoàn chỉnh; τ+h≤Tcut chỉ áp dụng cho delayed-verification."
+    sensitivity_or_rule: "IPCW censoring chỉ là độ nhạy cho target date-resolved."
     lock_status: Khóa khi trích dữ liệu
     chapter_reference: Appendix B, Table B.1, D21
   D22:
     canonical_title: Horizon theo nguồn
-    main_specification: Một horizon chung chính và maturity curve theo kênh.
-    sensitivity_or_rule: Horizon 24 tháng và nhóm nguồn chậm.
+    main_specification: "Tách annual anchor, next-calendar-year cohort và delayed-verification; S3 dự báo regulatory event trong năm dương lịch t+1 và horizon không áp dụng."
+    sensitivity_or_rule: "Horizon 24 tháng và maturity curves chỉ cho nhóm delayed-verification."
     lock_status: Đã chốt
     chapter_reference: Appendix B, Table B.1, D22
   D23:

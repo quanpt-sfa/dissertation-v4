@@ -122,13 +122,13 @@ def build_risk_set(
         for row in result.to_dict(orient="records")
     ]
     horizons = [horizon_months, *(sensitivity_horizons_months or [])]
-    maturity_counts = {
+    delayed_maturity_counts = {
         str(value): int(
             (prediction_values + pd.DateOffset(months=value) <= pd.Timestamp(data_cutoff)).sum()
         )
         for value in sorted(set(horizons))
     }
-    source_curves = _source_maturity_curves(
+    delayed_source_curves = _delayed_verification_maturity_curves(
         panel=panel,
         evidence=evidence,
         horizons_months=sorted(set(horizons)),
@@ -153,7 +153,7 @@ def build_risk_set(
             "prospective_count": len(result) - mature_count,
             "immature_assigned_negative_count": 0,
             "exit_or_code_change_assigned_negative_count": 0,
-            "mature_count_by_horizon_months": maturity_counts,
+            "delayed_verification_mature_count_by_horizon_months": delayed_maturity_counts,
             "primary_target_id": primary_target_id,
             "primary_target_status": (
                 "LOCKED" if primary_target_id is not None else "PRIMARY_TARGET_NOT_LOCKED"
@@ -164,10 +164,22 @@ def build_risk_set(
                 "complete_through_year": sanction_complete_through_year,
                 "incomplete_years": sorted(incomplete),
             },
+            "s3_maturity_basis": "complete_next_calendar_year_source",
             "s3_maturity_rule": "required_sanction_year_equals_fiscal_year_plus_one",
-            "source_maturity_curves": source_curves,
-            "delayed_verification_maturity_curves": source_curves,
-            "annual_measurement_availability": annual_availability,
+            "source_maturity_curves": {
+                "annual_anchor_sources": annual_availability,
+                "next_calendar_year_sources": [
+                    {
+                        CHANNEL_ID: "S3",
+                        TEMPORAL_ROLE: "next_calendar_year_regulatory_event",
+                        "maturity_basis": "complete_next_calendar_year_source",
+                        "required_sanction_year_rule": "fiscal_year_plus_one",
+                        "mature_firm_year_count": int(source_complete.sum()),
+                        "immature_firm_year_count": int((~source_complete).sum()),
+                    }
+                ],
+                "delayed_verification_sources": delayed_source_curves,
+            },
             "source_maturity_curves_executed": evidence is not None,
         },
     )
@@ -203,7 +215,7 @@ def _primary_maturity(
     return values, status
 
 
-def _source_maturity_curves(
+def _delayed_verification_maturity_curves(
     *,
     panel: pd.DataFrame,
     evidence: pd.DataFrame | None,

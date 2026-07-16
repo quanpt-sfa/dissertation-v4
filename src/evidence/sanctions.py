@@ -125,6 +125,17 @@ def validate_s3_taxonomy(configuration: dict[str, Any]) -> None:
     for setting, expected in required_settings.items():
         if configuration.get(setting) != expected:
             raise ValueError(f"S3 taxonomy {setting} must equal {expected}")
+    temporal_estimand = _mapping(
+        configuration.get("temporal_estimand"), "s3_taxonomy.temporal_estimand"
+    )
+    if temporal_estimand != {
+        "temporal_estimand_id": "next_calendar_year_regulatory_event",
+        "target_calendar_rule": "fiscal_year_plus_one",
+        "maturity_basis": "complete_next_calendar_year_source",
+        "horizon_applicable": False,
+        "horizon_months": None,
+    }:
+        raise ValueError("S3 temporal estimand metadata differs from the locked annual rule")
     if configuration.get("sanction_year_precedence") != [
         SANCTION_YEAR,
         DECISION_DATE,

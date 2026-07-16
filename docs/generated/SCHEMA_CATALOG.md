@@ -108,7 +108,7 @@ Version: 1
 
 ## risk_sets_frame
 
-Version: 2
+Version: 3
 
 ## sanction_decision_ledger_frame
 

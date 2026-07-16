@@ -48,6 +48,7 @@ def evaluate_outer_fold(
     columns: dict[str, str],
     rng: np.random.Generator,
     target_id: str = "L1",
+    temporal_estimand_metadata: dict[str, object] | None = None,
     oof_training_targets: list[dict[str, object]] | None = None,
     latent_risk_scenarios: dict[str, list[dict[str, float]]] | None = None,
 ) -> EvaluationResult:
@@ -153,6 +154,7 @@ def evaluate_outer_fold(
         metrics={
             "status": "PASS",
             OUTER_FOLD: str(outer_year),
+            "temporal_estimand": temporal_estimand_metadata or {},
             "models": metric_rows,
             "comparisons": comparisons,
         },

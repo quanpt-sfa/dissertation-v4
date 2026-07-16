@@ -12,6 +12,7 @@ from core.fold_control import require_primary_target
 from core.pipeline import physical_columns
 from core.registry_compiler import compile_registry
 from core.semantic_keys import (
+    AFFECTED_FISCAL_YEAR,
     ANNUAL_MEASUREMENT_MATURE,
     AVAILABILITY_DATE,
     CHANNEL_ID,
@@ -68,6 +69,8 @@ def _decision(
     decision_date: datetime | None = None,
     publish_date: datetime | None = None,
     decision_number: str | None = None,
+    label_known_date: datetime | None = None,
+    affected_fiscal_year: int | None = None,
     level_1: str | None = "GOVERNANCE",
     code: str | None = None,
     source_ref: str | None = None,
@@ -81,6 +84,8 @@ def _decision(
         decision_date=decision_date,
         publish_date=publish_date,
         decision_number=decision_number,
+        label_known_date=label_known_date,
+        affected_fiscal_year=affected_fiscal_year,
         primary_violation_l1=level_1,
         normalized_violation_code=code,
         source_ref=source_ref,
@@ -130,6 +135,27 @@ def test_march_31_boundary_does_not_change_s3_target_year() -> None:
     on_anchor = _decision("ON", sanction_year=None, decision_date=datetime(2024, 3, 31))
     after = _decision("AFTER", sanction_year=None, decision_date=datetime(2024, 4, 1))
     assert {target_fiscal_year(row) for row in (before, on_anchor, after)} == {2023}
+
+
+def test_label_known_date_is_provenance_and_does_not_change_target_year() -> None:
+    early = _decision("EARLY", label_known_date=datetime(2024, 1, 1))
+    late = _decision("LATE", label_known_date=datetime(2025, 12, 31))
+    assert target_fiscal_year(early) == target_fiscal_year(late) == 2023
+
+
+def test_affected_fiscal_year_never_overrides_next_calendar_year_target() -> None:
+    row = _decision("DOC", affected_fiscal_year=2021)
+    ledger = cast(Any, _build([row])).decision_ledger
+    assert target_fiscal_year(row) == 2023
+    assert ledger.loc[0, _columns()[TARGET_FISCAL_YEAR]] == 2023
+    assert ledger.loc[0, _columns()[AFFECTED_FISCAL_YEAR]] == 2021
+
+
+def test_s3_target_does_not_apply_prediction_date_or_horizon_filter() -> None:
+    row = _decision("DOC", decision_date=datetime(2024, 2, 1))
+    result = _build([row], panel_keys={("F1", 2023)})
+    broad = _record_map(result)[("S3_BROAD", "F1", 2023)]
+    assert cast(Any, broad).outcome is True
 
 
 def test_document_id_is_the_decision_key_and_number_is_only_provenance() -> None:

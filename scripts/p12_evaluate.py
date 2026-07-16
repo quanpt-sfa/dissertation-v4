@@ -82,6 +82,7 @@ def main() -> int:
         scenarios=scenarios,
     )
     inference = mapping(loaded.registry.get("inference"), "inference")
+    s3_taxonomy = mapping(loaded.registry.get("s3_taxonomy"), "s3_taxonomy")
     bootstrap = mapping(inference.get("bootstrap"), "inference.bootstrap")
     result = evaluate_outer_fold(
         oof_predictions=cast(pd.DataFrame, oof),
@@ -100,6 +101,14 @@ def main() -> int:
         ],
         latent_risk_scenarios=latent_risk_scenarios,
         target_id=primary_target_id,
+        temporal_estimand_metadata=(
+            mapping(s3_taxonomy.get("temporal_estimand"), "s3 temporal estimand")
+            if primary_target_id.startswith("S3_")
+            else {
+                "temporal_estimand_id": "target_specific_composite_or_annual",
+                "horizon_applicable": primary_target_id not in {"L1_ANNUAL"},
+            }
+        ),
     )
     loaded.context.write("calibration_outputs", result.calibration, coordinates)
     loaded.context.write("evaluation_metrics", result.metrics, coordinates)

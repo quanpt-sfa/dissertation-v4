@@ -86,7 +86,7 @@ source_catalog:
         firm_id: [issuer_ticker]
         document_id: [document_id]
         decision_number: [decision_number]
-        sanction_year: [sanction_year]
+        sanction_year: [sanction_year, observed_year]
         decision_date: [decision_date]
         publish_date: [publish_date]
         target_fiscal_year: [target_fiscal_year]

@@ -1,5 +1,15 @@
 # Đặc tả pipeline P00–P17
 
+## S3 next-calendar-year estimand
+
+The firm-year unit is `(i, t)`. S1 and S2 are annual measurements at the common
+anchor. S3 predicts an endpoint in calendar year `t+1`, using
+`target_fiscal_year = sanction_year - 1`; a February, March, April, or October
+decision in the same sanction year has the same target fiscal year. Dates are kept
+for provenance and sensitivity only. The P04 audit separates annual-anchor,
+next-calendar-year, and delayed-verification maturity; no horizon filter is applied
+to S3.
+
 Tài liệu này mô tả implementation hiện tại trong repo. Các danh sách reads/writes
 chính xác được sinh từ registry tại `docs/generated/`; nếu tài liệu thủ công và
 generated catalog khác nhau, generated catalog cùng `config/pipeline.yaml` là

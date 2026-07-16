@@ -185,13 +185,15 @@ def test_T020_label_model_firewall(registry: dict[str, Any]) -> None:
 
 def test_T021_maturity(registry: dict[str, Any]) -> None:
     canonical(registry, "D21", "Maturity")
-    assert get(registry, "risksets.main_requires_tau_plus_h_le_tcut") is True
+    assert get(registry, "risksets.delayed_verification_requires_tau_plus_h_le_tcut") is True
     assert get(registry, "risksets.complete_followup_required") is True
+    assert get(registry, "risksets.s3_maturity_basis") == "complete_next_calendar_year_source"
 
 
 def test_T022_source_horizon(registry: dict[str, Any]) -> None:
     canonical(registry, "D22", "Horizon theo nguồn")
     assert get(registry, "study.source_maturity_curves_required") is True
+    assert get(registry, "s3_taxonomy.temporal_estimand.horizon_applicable") is False
 
 
 def test_T023_gate_thresholds(registry: dict[str, Any]) -> None:

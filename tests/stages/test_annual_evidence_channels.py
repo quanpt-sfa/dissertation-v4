@@ -400,9 +400,13 @@ def test_annual_and_s3_calendar_sources_are_excluded_from_delayed_maturity_curve
         sanction_complete_through_year=2025,
         sanction_incomplete_years={2026},
     )
-    curves = cast(list[dict[str, Any]], result.maturity_audit["source_maturity_curves"])
-    annual = cast(list[dict[str, Any]], result.maturity_audit["annual_measurement_availability"])
-    assert curves == []
+    curves = cast(dict[str, list[dict[str, Any]]], result.maturity_audit["source_maturity_curves"])
+    annual = curves["annual_anchor_sources"]
+    assert curves["delayed_verification_sources"] == []
+    assert (
+        curves["next_calendar_year_sources"][0]["maturity_basis"]
+        == "complete_next_calendar_year_source"
+    )
     assert [row[SOURCE_ID] for row in annual] == ["S1_profit_adjustment"]
     assert annual[0]["included_in_delayed_maturity_curve"] is False
 

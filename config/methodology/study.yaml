@@ -10,6 +10,17 @@ study:
     sensitivity:
     - 24
   source_maturity_curves_required: true
+  temporal_estimands:
+    annual_measurement_at_anchor:
+      horizon_applicable: false
+      maturity_basis: prediction_anchor_available_by_data_cutoff
+    delayed_verification:
+      horizon_applicable: true
+      maturity_basis: prediction_time_plus_horizon_not_after_data_cutoff
+    next_calendar_year_regulatory_event:
+      horizon_applicable: false
+      target_calendar_rule: fiscal_year_plus_one
+      maturity_basis: complete_next_calendar_year_source
   sample_fiscal_years:
     start: 2015
     end: 2026

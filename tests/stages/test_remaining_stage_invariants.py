@@ -505,7 +505,9 @@ def test_p04_source_maturity_excludes_pre_prediction_events_from_horizon_fractio
         columns=columns,
         evidence=evidence,
     )
-    curves = cast(list[dict[str, Any]], result.maturity_audit["source_maturity_curves"])
+    curves = cast(dict[str, list[dict[str, Any]]], result.maturity_audit["source_maturity_curves"])[
+        "delayed_verification_sources"
+    ]
     curve = curves[0]
     assert curve["negative_detection_lag_count"] == 1
     assert curve["future_detection_event_count"] == 1
@@ -534,7 +536,9 @@ def test_p04_event_after_cutoff_is_not_counted_inside_horizon() -> None:
             ]
         ),
     )
-    curve = cast(list[dict[str, Any]], result.maturity_audit["source_maturity_curves"])[0]
+    curve = cast(dict[str, list[dict[str, Any]]], result.maturity_audit["source_maturity_curves"])[
+        "delayed_verification_sources"
+    ][0]
     assert curve["post_data_cutoff_event_count"] == 1
     assert cast(dict[str, int], curve["in_horizon_event_count_by_months"])["24"] == 0
 

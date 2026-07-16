@@ -34,3 +34,13 @@ uv run ruff check .
 uv run pyright
 uv run pre-commit run --all-files
 ```
+
+## Temporal estimands
+
+The analysis unit is firm fiscal year `(i, t)`. S1 and S2 are annual measurements at
+the annual prediction anchor. S3 predicts a regulatory-event endpoint in calendar
+year `t+1` for firm fiscal year `t`: `R(i,t+1,c)`. S3 target assignment uses sanction
+year (then decision year, then publish year) and maps `sanction_year - 1`; decision
+and publication dates are provenance/sensitivity metadata only. S3 is not a
+post-prediction 12-month outcome, and its maturity requires a complete source year
+`t+1` rather than an anchor-plus-horizon calculation.
