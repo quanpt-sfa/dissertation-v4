@@ -106,6 +106,21 @@ def build_risk_set(
     result[required_sanction_year_column] = result[required_sanction_year_column].astype("int16")
     result[source_year_complete_column] = result[source_year_complete_column].astype(bool)
     result[maturity_status_column] = result[maturity_status_column].astype("string")
+    result = result.loc[
+        :,
+        [
+            firm,
+            year,
+            prediction,
+            columns[ELIGIBLE],
+            columns[MATURE],
+            annual_mature_column,
+            s3_mature_column,
+            required_sanction_year_column,
+            source_year_complete_column,
+            maturity_status_column,
+        ],
+    ]
     result = result.sort_values([firm, year], kind="stable").reset_index(drop=True)
     mature_count = int(result[columns[MATURE]].sum())
     prospective = result.loc[~result[columns[MATURE]]].copy().reset_index(drop=True)
