@@ -32,6 +32,7 @@ APPROVED_CORE_FILES = {
 NONPRODUCTION_AUDIT_SCRIPTS = {
     "scripts/p07a_feature_definition_audit.py",
     "scripts/p07b_literature_data_audit.py",
+    "scripts/p07c_feature_catalogue_audit.py",
 }
 NONPRODUCTION_AUDIT_MODULES = {
     "src/features/definition_audit.py",
