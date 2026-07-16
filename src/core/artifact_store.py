@@ -17,6 +17,11 @@ from .errors import ConfigurationError
 from .schema_registry import ContractRegistry
 
 
+def dataframe_to_csv(value: pd.DataFrame) -> str:
+    """Render a CSV sidecar through the approved core I/O boundary."""
+    return value.to_csv(index=False)
+
+
 class ArtifactStore:
     def __init__(
         self,
@@ -254,6 +259,10 @@ class ArtifactStore:
             if not isinstance(value, pd.DataFrame):
                 raise ConfigurationError("format=parquet: pandas DataFrame required")
             value.to_parquet(path, index=False, engine="pyarrow")
+        elif format_name == "csv":
+            if not isinstance(value, pd.DataFrame):
+                raise ConfigurationError("format=csv: pandas DataFrame required")
+            value.to_csv(path, index=False)
         else:
             raise ConfigurationError(f"format={format_name}: unsupported")
 
@@ -265,6 +274,8 @@ class ArtifactStore:
             return path.read_text(encoding="utf-8")
         if format_name == "parquet":
             return pd.read_parquet(path)
+        if format_name == "csv":
+            return pd.read_csv(path).convert_dtypes(dtype_backend="pyarrow")
         raise ConfigurationError(f"format={format_name}: unsupported")
 
 

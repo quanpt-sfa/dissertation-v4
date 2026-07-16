@@ -34,7 +34,27 @@ Version: 1
 
 Version: 6
 
+## feature_availability_audit_frame
+
+Version: 1
+
+## feature_lineage_frame
+
+Version: 1
+
+## feature_missingness_audit_frame
+
+Version: 1
+
 ## feature_panel_frame
+
+Version: 1
+
+## feature_registry_frame
+
+Version: 1
+
+## feature_view_matrix_frame
 
 Version: 1
 
@@ -69,6 +89,10 @@ Version: 1
 ## l0_l1_inputs_frame
 
 Version: 3
+
+## leakage_registry_frame
+
+Version: 1
 
 ## markdown_document
 

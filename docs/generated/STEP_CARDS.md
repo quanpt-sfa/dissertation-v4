@@ -78,7 +78,7 @@ Feature and leakage audit
 
 Reads: ['observability_registry', 'firm_year_panel', 'risk_sets', 'raw_audit']
 
-Writes: ['feature_panel', 'feature_registry', 'leakage_registry']
+Writes: ['feature_panel', 'feature_registry', 'leakage_registry', 'feature_registry_table', 'feature_registry_csv', 'feature_lineage_registry', 'leakage_registry_table', 'leakage_registry_csv', 'feature_views', 'feature_view_matrix', 'feature_availability_audit', 'feature_missingness_audit', 'feature_panel_schema', 'p07_summary', 'p07_decision_report']
 
 Required receipts: []
 

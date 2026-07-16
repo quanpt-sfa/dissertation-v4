@@ -68,7 +68,13 @@ def validate_source_patterns(
         physical_name = column.get("physical_name")
         if not isinstance(physical_name, str):
             raise ConfigurationError(f"column={column_id}: physical_name must be a string")
-        physical_names.add(physical_name)
+        # P07 registry labels are artifact metadata, not raw-data physical bindings.
+        if column.get("semantic_role") not in {
+            "feature_registry_key",
+            "feature_view_key",
+            "feature_lineage_source",
+        }:
+            physical_names.add(physical_name)
 
     for artifact_id, raw_artifact in artifacts.items():
         artifact = _mapping(raw_artifact, f"artifact={artifact_id}")

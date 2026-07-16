@@ -565,6 +565,99 @@ schemas:
     strict_columns: false
     coerce: false
     compatibility_policy: strict
+  feature_registry_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: [feature_id]
+    uniqueness_constraints: [[feature_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_lineage_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    - column: source_dataset
+      dtype: string
+      nullable: false
+    primary_key: [feature_id, source_dataset]
+    uniqueness_constraints: []
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  leakage_registry_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    - column: target_id
+      dtype: string
+      nullable: false
+    primary_key: [feature_id, target_id]
+    uniqueness_constraints: [[feature_id, target_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_view_matrix_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: view_id
+      dtype: string
+      nullable: false
+    - column: target_id
+      dtype: string
+      nullable: false
+    primary_key: [view_id, target_id]
+    uniqueness_constraints: [[view_id, target_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_availability_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: [feature_id]
+    uniqueness_constraints: [[feature_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_missingness_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: [feature_id]
+    uniqueness_constraints: [[feature_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
   fold_weights_frame:
     contract_type: dataframe
     version: 1

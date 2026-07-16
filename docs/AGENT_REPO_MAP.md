@@ -225,11 +225,13 @@ Xem đường dẫn chính xác ở `docs/generated/ARTIFACT_CATALOG.md`.
 
 ### Thêm feature
 
-1. Thêm binding trong `features.registry`.
-2. Khai báo `feature_id`, `physical_column`, `role`, `allowed_in_label_model`,
-   `availability_rule`, `theoretical_block` và domain metadata nếu có.
-3. Content feature bắt buộc có `allowed_in_label_model: false`.
-4. Không hard-code physical column trong Python.
+1. Thêm binding đã khóa trong `features.registry`; dùng `intended_registry` khi công thức,
+   mapping hoặc denominator còn cần quyết định nghiên cứu.
+2. Khai báo feature registry đầy đủ, lineage, availability, role và target/source flags.
+3. Content feature bắt buộc có `allowed_in_label_model: false`; unresolved feature không
+   được là confirmatory.
+4. Không hard-code physical column trong Python; P07 không đọc outer outcomes/K1–K4 và
+   không fit preprocessing.
 
 ### Thêm hoặc đổi nguồn
 

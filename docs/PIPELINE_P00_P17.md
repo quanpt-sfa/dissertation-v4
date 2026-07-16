@@ -339,29 +339,33 @@ Script: `scripts/p07_features.py`.
 
 Mục tiêu:
 
-- đọc feature definitions được đăng ký;
-- bind `feature_id` với physical column tồn tại trong panel;
-- lọc eligible firm-years;
-- kiểm tra role, theoretical block và availability rule;
-- tạo leakage audit, chưa fit preprocessing.
+- tạo raw panel một dòng `firm_id × fiscal_year`, gồm prediction anchor, eligibility và
+  maturity theo target family;
+- đăng ký feature, lineage và availability theo cấu hình; feature chưa có mapping/công thức
+  khóa được ghi `RESEARCH_DECISION_REQUIRED`, không được bịa hoặc đưa vào view xác nhận;
+- tạo leakage registry và views theo target (`full_eligible`, content/observability,
+  source-blind, target-component ablation, core confirmatory, robustness);
+- không đọc outcome outer, K1–K4 hay future event; không fit preprocessing.
 
 Reads: `observability_registry`, `firm_year_panel`, `risk_sets`, `raw_audit`.
 
 Writes:
 
-- `feature_panel.parquet`;
-- `feature_registry.json`;
-- `leakage_registry.json`.
+- `feature_panel.parquet`, `feature_registry.json`, `feature_registry.parquet/csv`;
+- `feature_lineage_registry.parquet`, `leakage_registry.json/parquet/csv`;
+- `feature_views.json`, view/missingness/availability audits, schema, summary và decision report.
 
-Điều kiện trước run thật: điền `features.registry`. Nếu registry rỗng, stage tạo
-artifact hợp lệ nhưng báo `SKIPPED/FEATURE_REGISTRY_EMPTY`; P11 không thể PASS.
+P07 có thể PASS với capability một phần khi feature chưa khóa được đăng ký rõ và bị chặn
+khỏi `core_confirmatory`. P11 vẫn không thể PASS nếu không có feature operational đã khóa.
 
 Hàng rào:
 
 - feature content bắt buộc `allowed_in_label_model: false`;
 - physical column chỉ xuất hiện trong binding config;
 - preprocessing fit tại inner-development fold ở P11, không fit ở P07;
-- không dùng future/outer availability.
+- S3 giữ next-calendar-year semantics: ngày quyết định trong năm `t+1` không thay đổi
+  predictor eligibility của firm-year `t`; delayed sources mới dùng date/horizon rules;
+- không dùng future/outer availability, target component hoặc known-case fields.
 
 ## 13. P08 — Mô phỏng phương pháp và adaptive MCSE
 

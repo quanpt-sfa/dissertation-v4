@@ -400,6 +400,126 @@ artifacts:
     immutability: immutable
     aggregation_behavior: singleton
     checkpoint_role: none
+  feature_registry_table:
+    producer_step: P07
+    path_template: P07/feature_registry.parquet
+    schema_id: feature_registry_frame
+    format: parquet
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_registry_csv:
+    producer_step: P07
+    path_template: P07/feature_registry.csv
+    schema_id: text_value
+    format: text
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_lineage_registry:
+    producer_step: P07
+    path_template: P07/feature_lineage_registry.parquet
+    schema_id: feature_lineage_frame
+    format: parquet
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  leakage_registry_table:
+    producer_step: P07
+    path_template: P07/leakage_registry.parquet
+    schema_id: leakage_registry_frame
+    format: parquet
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  leakage_registry_csv:
+    producer_step: P07
+    path_template: P07/leakage_registry.csv
+    schema_id: text_value
+    format: text
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_views:
+    producer_step: P07
+    path_template: P07/feature_views.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_view_matrix:
+    producer_step: P07
+    path_template: P07/feature_view_matrix.csv
+    schema_id: text_value
+    format: text
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_availability_audit:
+    producer_step: P07
+    path_template: P07/feature_availability_audit.csv
+    schema_id: text_value
+    format: text
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_missingness_audit:
+    producer_step: P07
+    path_template: P07/feature_missingness_audit.csv
+    schema_id: text_value
+    format: text
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_panel_schema:
+    producer_step: P07
+    path_template: P07/feature_panel_schema.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  p07_summary:
+    producer_step: P07
+    path_template: P07/p07_summary.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  p07_decision_report:
+    producer_step: P07
+    path_template: P07/p07_decision_report.md
+    schema_id: markdown_document
+    format: markdown
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
   simulation_scenario_registry:
     producer_step: P08
     path_template: P08/scenario_registry.json

@@ -215,6 +215,18 @@ steps:
     - feature_panel
     - feature_registry
     - leakage_registry
+    - feature_registry_table
+    - feature_registry_csv
+    - feature_lineage_registry
+    - leakage_registry_table
+    - leakage_registry_csv
+    - feature_views
+    - feature_view_matrix
+    - feature_availability_audit
+    - feature_missingness_audit
+    - feature_panel_schema
+    - p07_summary
+    - p07_decision_report
     outer_access: sealed
     known_case_access: none
     checkpoint_role: none

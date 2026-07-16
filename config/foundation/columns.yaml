@@ -1,4 +1,16 @@
 columns:
+  feature_id:
+    physical_name: feature_id
+    dtype: string
+    semantic_role: feature_registry_key
+  view_id:
+    physical_name: view_id
+    dtype: string
+    semantic_role: feature_view_key
+  source_dataset:
+    physical_name: source_dataset
+    dtype: string
+    semantic_role: feature_lineage_source
   firm_id:
     physical_name: firm_master_id
     dtype: string

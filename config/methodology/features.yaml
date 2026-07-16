@@ -7,6 +7,157 @@ features:
   - Q
   - Z_M
   registry: []
+  intended_registry:
+  - feature_id: audited_financial_indicator_set
+    canonical_name: audited_financial_indicator_set
+    display_name: Audited financial-statement indicator set
+    description: Placeholder for the locked 16 core audited accounting indicators.
+    theoretical_block: accounting_content
+    source_dataset: financial_statement_core_long
+    source_table_or_file: financial_statement_core_long.csv.gz
+    source_column_or_columns: unresolved
+    formula: unresolved
+    unit: unresolved
+    sign_convention: unresolved
+    fiscal_period_reference: fiscal_year_t
+    lag_structure: contemporaneous_at_annual_anchor
+    availability_rule: available_at_annual_anchor
+    availability_date_field: conventional_annual_anchor
+    temporal_role: annual_measurement_at_anchor
+    maximum_information_date: 31_march_fiscal_year_plus_one
+    expected_dtype: float64
+    allowed_missingness: unknown_pending_definition
+    missingness_interpretation: research_decision_required
+    content_observability_role: content
+    target_component_flag: false
+    source_specific_flag: false
+    source_channel: S1
+    model_eligibility: blocked_until_locked
+    allowed_in_label_model: false
+    confirmatory_status: blocked
+    research_decision_status: RESEARCH_DECISION_REQUIRED
+    availability_reason_code: CORE_INDICATOR_MAPPING_NOT_LOCKED
+    version: 1
+  - feature_id: pre_post_audit_difference_set
+    canonical_name: pre_post_audit_difference_set
+    display_name: Pre-audit versus post-audit indicator set
+    description: Placeholder for the locked ten pre-audit/post-audit indicators.
+    theoretical_block: accounting_content
+    source_dataset: financial_statement_core_long
+    source_table_or_file: financial_statement_core_long.csv.gz
+    source_column_or_columns: unresolved
+    formula: unresolved
+    unit: unresolved
+    sign_convention: unresolved
+    fiscal_period_reference: fiscal_year_t
+    lag_structure: contemporaneous_at_annual_anchor
+    availability_rule: available_at_annual_anchor
+    availability_date_field: conventional_annual_anchor
+    temporal_role: annual_measurement_at_anchor
+    maximum_information_date: 31_march_fiscal_year_plus_one
+    expected_dtype: float64
+    allowed_missingness: unknown_pending_definition
+    missingness_interpretation: research_decision_required
+    content_observability_role: content
+    target_component_flag: true
+    source_specific_flag: true
+    source_channel: S1
+    model_eligibility: blocked_until_target_component_lineage_locked
+    allowed_in_label_model: false
+    confirmatory_status: blocked
+    research_decision_status: RESEARCH_DECISION_REQUIRED
+    availability_reason_code: PRE_POST_FORMULA_NOT_LOCKED
+    version: 1
+  - feature_id: beneish_m_score
+    canonical_name: beneish_m_score
+    display_name: Beneish M-score
+    description: Intended Beneish-style score pending Vietnam-to-US item mappings and denominator rules.
+    theoretical_block: reporting_risk
+    source_dataset: financial_statement_core_long
+    source_table_or_file: financial_statement_core_long.csv.gz
+    source_column_or_columns: unresolved
+    formula: unresolved
+    unit: score
+    sign_convention: higher_is_reporting_risk
+    fiscal_period_reference: fiscal_year_t_and_t_minus_1
+    lag_structure: one_fiscal_year_history_required
+    availability_rule: available_at_annual_anchor
+    availability_date_field: conventional_annual_anchor
+    temporal_role: annual_measurement_at_anchor
+    maximum_information_date: 31_march_fiscal_year_plus_one
+    expected_dtype: float64
+    allowed_missingness: unknown_pending_mapping
+    missingness_interpretation: research_decision_required
+    content_observability_role: content
+    target_component_flag: false
+    source_specific_flag: false
+    source_channel: S1
+    model_eligibility: blocked_until_locked
+    allowed_in_label_model: false
+    confirmatory_status: blocked
+    research_decision_status: RESEARCH_DECISION_REQUIRED
+    availability_reason_code: BENEISH_MAPPING_NOT_LOCKED
+    version: 1
+  - feature_id: profitability_liquidity_ratio_set
+    canonical_name: profitability_liquidity_ratio_set
+    display_name: ROA and current-ratio set
+    description: Intended profitability and liquidity ratios pending item mappings and denominator floors.
+    theoretical_block: financial_condition
+    source_dataset: financial_statement_core_long
+    source_table_or_file: financial_statement_core_long.csv.gz
+    source_column_or_columns: unresolved
+    formula: unresolved
+    unit: ratio
+    sign_convention: unresolved
+    fiscal_period_reference: fiscal_year_t
+    lag_structure: contemporaneous_at_annual_anchor
+    availability_rule: available_at_annual_anchor
+    availability_date_field: conventional_annual_anchor
+    temporal_role: annual_measurement_at_anchor
+    maximum_information_date: 31_march_fiscal_year_plus_one
+    expected_dtype: float64
+    allowed_missingness: unknown_pending_denominator_policy
+    missingness_interpretation: research_decision_required
+    content_observability_role: content
+    target_component_flag: false
+    source_specific_flag: false
+    source_channel: S1
+    model_eligibility: blocked_until_locked
+    allowed_in_label_model: false
+    confirmatory_status: blocked
+    research_decision_status: RESEARCH_DECISION_REQUIRED
+    availability_reason_code: DENOMINATOR_RULE_NOT_LOCKED
+    version: 1
+  - feature_id: audit_firm_history
+    canonical_name: audit_firm_history
+    display_name: Audit-firm history
+    description: Intended prior audit-firm history pending normalization and availability rules.
+    theoretical_block: audit_observability
+    source_dataset: audit_annual_long
+    source_table_or_file: bctc_audit_annual_long.csv
+    source_column_or_columns: audit_firm_raw
+    formula: prior_fiscal_year_audit_firm
+    unit: category
+    sign_convention: not_applicable
+    fiscal_period_reference: fiscal_year_t_minus_1
+    lag_structure: one_fiscal_year_lag
+    availability_rule: available_from_prior_audit_history
+    availability_date_field: unresolved
+    temporal_role: annual_measurement_at_anchor
+    maximum_information_date: prediction_time
+    expected_dtype: string
+    allowed_missingness: unknown_pending_normalization
+    missingness_interpretation: research_decision_required
+    content_observability_role: observability
+    target_component_flag: false
+    source_specific_flag: true
+    source_channel: S2
+    model_eligibility: blocked_until_locked
+    allowed_in_label_model: true
+    confirmatory_status: blocked
+    research_decision_status: RESEARCH_DECISION_REQUIRED
+    availability_reason_code: AUDIT_FIRM_NORMALIZATION_NOT_LOCKED
+    version: 1
   label_derived_feature_firewall:
     same_firm_year_blocked_semantics:
     - audit_opinion

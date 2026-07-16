@@ -52,6 +52,7 @@ def validate_references(
     seen: dict[str, str] = {}
     format_contracts = {
         "parquet": {"dataframe"},
+        "csv": {"dataframe"},
         "json": {
             "json_object",
             "json_array",

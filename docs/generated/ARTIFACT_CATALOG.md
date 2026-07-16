@@ -27,8 +27,16 @@ Source: config/pipeline.yaml
 | environment_observation | P00 | environment_observation_schema | `P00/environment_observation.json` |
 | evaluation_metrics | P12 | json_object | `P12/metrics/{outer_fold}.json` |
 | evidence_ledger | P03 | evidence_ledger_frame | `P03/evidence_ledger.parquet` |
+| feature_availability_audit | P07 | text_value | `P07/feature_availability_audit.csv` |
+| feature_lineage_registry | P07 | feature_lineage_frame | `P07/feature_lineage_registry.parquet` |
+| feature_missingness_audit | P07 | text_value | `P07/feature_missingness_audit.csv` |
 | feature_panel | P07 | feature_panel_frame | `P07/feature_panel.parquet` |
+| feature_panel_schema | P07 | json_object | `P07/feature_panel_schema.json` |
 | feature_registry | P07 | json_array | `P07/feature_registry.json` |
+| feature_registry_csv | P07 | text_value | `P07/feature_registry.csv` |
+| feature_registry_table | P07 | feature_registry_frame | `P07/feature_registry.parquet` |
+| feature_view_matrix | P07 | text_value | `P07/feature_view_matrix.csv` |
+| feature_views | P07 | json_object | `P07/feature_views.json` |
 | final_artifact_manifest | P17 | json_object | `P17/final_artifact_manifest.json` |
 | final_audit_report | P17 | markdown_document | `P17/FINAL_AUDIT_REPORT.md` |
 | final_decision_log | P17 | json_array | `P17/final_decision_log.json` |
@@ -50,6 +58,8 @@ Source: config/pipeline.yaml
 | l3_pilot_capability | P05 | json_object | `P05/l3_pilot_capability.json` |
 | lag_decomposition | P03 | json_object | `P03/lag_decomposition.json` |
 | leakage_registry | P07 | json_object | `P07/leakage_registry.json` |
+| leakage_registry_csv | P07 | text_value | `P07/leakage_registry.csv` |
+| leakage_registry_table | P07 | leakage_registry_frame | `P07/leakage_registry.parquet` |
 | maturity_audit | P04 | json_object | `P04/maturity_audit.json` |
 | mcse_report | P08 | json_object | `P08/mcse_report.json` |
 | measurement_candidate_results | P10 | json_array | `P10/candidates/{outer_fold}.json` |
@@ -60,6 +70,8 @@ Source: config/pipeline.yaml
 | observability_registry | P06 | json_object | `P06/observability_registry.json` |
 | outer_open_receipt | P12 | outer_open_receipt_schema | `P12/outer_open/{outer_fold}.json` |
 | p00_audit_report | P00 | p00_audit_markdown | `P00/P00_AUDIT_REPORT.md` |
+| p07_decision_report | P07 | markdown_document | `P07/p07_decision_report.md` |
+| p07_summary | P07 | json_object | `P07/p07_summary.json` |
 | prospective_set | P04 | risk_sets_frame | `P04/prospective_set.parquet` |
 | protocol_hash | P00 | protocol_hash_schema | `P00/protocol_hash.txt` |
 | raw_audit | P01 | raw_audit_schema | `P01/raw_audit/{source_id}.json` |
