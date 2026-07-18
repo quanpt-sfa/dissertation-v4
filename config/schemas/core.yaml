@@ -980,3 +980,23 @@ schemas:
     - summary
     additional_properties: false
     compatibility_policy: strict
+  simulation_scenario_registry_schema:
+    contract_type: json_array
+    version: 1
+    item_type: object
+    compatibility_policy: strict
+  mcse_report_schema:
+    contract_type: json_object
+    version: 1
+    required_keys:
+    - status
+    - precision_target_met
+    - reason_code
+    - active_batch_count
+    - batch_artifact_count
+    - execution_profile
+    - mcse_status
+    - methodology_validation
+    - batch_coordinates
+    additional_properties: true
+    compatibility_policy: strict

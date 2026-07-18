@@ -1,6 +1,6 @@
 simulation:
   operational_scenarios:
-    - scenario_id: empirical_baseline_L1_CONTENT_STRICT
+    - scenario_id: empirical_baseline__target_L1_ANNUAL
       tier: semi_synthetic_development_covariates
       sample_design: p02_development_panel
       calibration_target_id: L1_ANNUAL

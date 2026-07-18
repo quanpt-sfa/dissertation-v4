@@ -44,57 +44,10 @@ from simulation.method_contract import (
     validate_batch_metric_presence,
 )
 from simulation.service import run_batch
+from simulation.scenario_contract import validate_scenario_target_identity
+from simulation.replication_contract import replication_plan as _replication_plan
 
-def _replication_plan(
-    simulation: dict[str, object],
-    method_spec: dict[str, object],
-) -> dict[str, int]:
-    family = str(method_spec[METHOD_FAMILY])
-    tier = str(method_spec[LEARNER_TIER])
-    training_cost = str(method_spec[TRAINING_COST_REGIME_ID])
-    imbalance_treatment = str(method_spec[IMBALANCE_TREATMENT_ID])
 
-    if family == "standalone_estimator":
-        settings = mapping(simulation.get("l3"), "simulation.l3")
-        return {
-            "minimum": int(settings["initial_replications"]),
-            "batch_size": int(settings["batch_size"]),
-            "maximum": int(settings["maximum_replications"]),
-        }
-    if imbalance_treatment not in {"none", "not_applicable"} or tier in {"extended", "methodological"}:
-        settings = mapping(
-            simulation.get("extended_replication"),
-            "simulation.extended_replication",
-        )
-        return {
-            "minimum": int(settings["minimum_replications"]),
-            "batch_size": int(settings["batch_size"]),
-            "maximum": int(settings["maximum_replications"]),
-        }
-
-    neutral_id = str(
-        mapping(
-            simulation.get("cost_sensitive"),
-            "simulation.cost_sensitive",
-        )["cost_neutral_regime_id"]
-    )
-    if training_cost != neutral_id:
-        settings = mapping(
-            simulation.get("cost_sensitive_replication"),
-            "simulation.cost_sensitive_replication",
-        )
-        return {
-            "minimum": int(settings["minimum_replications"]),
-            "batch_size": int(settings["batch_size"]),
-            "maximum": int(settings["maximum_replications"]),
-        }
-
-    settings = mapping(simulation.get("core"), "simulation.core")
-    return {
-        "minimum": int(settings["minimum_replications"]),
-        "batch_size": int(settings["batch_size"]),
-        "maximum": int(settings["maximum_replications"]),
-    }
 
 
 _REQUIRED_OUTPUT_COLUMNS = {
@@ -144,35 +97,63 @@ def main() -> int:
             f"scenario={args.scenario_id}: exactly one registered scenario required"
         )
     scenario = matches[0]
+    validate_scenario_target_identity(scenario)
 
     # Default require_active=True prevents accidental execution of a retained
     # future/exploratory method outside the config-locked profile.
     method_spec = method_by_id(scenario, args.method_id)
 
-    # DGP randomness intentionally excludes method_id. All active methods with
-    # the same scenario, batch, start, and count receive paired simulated samples.
-    data_coordinates = {
-        SCENARIO_ID: args.scenario_id,
-        "batch_id": args.batch_id,
-        "start": str(args.start),
-        "count": str(args.count),
-    }
+    plan = _replication_plan(simulation, method_spec)
+    batch_size = int(plan["batch_size"])
+
+    expected_batch_id = (
+        f"{args.start:06d}-"
+        f"{args.start + args.count - 1:06d}"
+    )
+
+    if args.batch_id != expected_batch_id:
+        raise ValueError(
+            f"batch_id={args.batch_id} differs from "
+            f"start/count-derived value={expected_batch_id}"
+        )
+
+    if args.start % batch_size != 0:
+        raise ValueError("batch start must align with the replication batch size")
+
+    if args.count > batch_size:
+        raise ValueError("batch count exceeds the locked batch size")
+
+    import numpy as np
+
+    def data_rng_factory(rep_id: int) -> np.random.Generator:
+        return generator(
+            loaded.protocol_hash,
+            "P08_REPLICATION_DATA",
+            {
+                SCENARIO_ID: args.scenario_id,
+                REPLICATION_ID: str(rep_id),
+            },
+            str(rep_id),
+        )
+
+    def model_rng_factory(rep_id: int) -> np.random.Generator:
+        return generator(
+            loaded.protocol_hash,
+            "P08_REPLICATION_MODEL",
+            {
+                SCENARIO_ID: args.scenario_id,
+                METHOD_ID: args.method_id,
+                REPLICATION_ID: str(rep_id),
+            },
+            str(rep_id),
+        )
+
     batch = run_batch(
         scenario,
         method_id=args.method_id,
         replications=range(args.start, args.start + args.count),
-        data_rng=generator(
-            loaded.protocol_hash,
-            "P08B_DATA",
-            data_coordinates,
-            args.batch_id,
-        ),
-        model_rng=generator(
-            loaded.protocol_hash,
-            "P08B_MODEL",
-            coordinates,
-            args.batch_id,
-        ),
+        data_rng_factory=data_rng_factory,
+        model_rng_factory=model_rng_factory,
     )
     if not isinstance(batch, pd.DataFrame) or batch.empty:
         raise ValueError("P08B run_batch must return a nonempty DataFrame")

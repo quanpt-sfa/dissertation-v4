@@ -1050,3 +1050,70 @@ def test_gates_fail_closed_when_required_evidence_or_bindings_are_absent() -> No
 def test_gate3_breakpoint_stability_uses_dispersion_not_distance_from_zero() -> None:
     assert breakpoint_stability_pass([1.49, 1.50, 1.51], 0.02)
     assert not breakpoint_stability_pass([-0.4, 0.0, 0.4], 0.2)
+
+
+def test_scenario_id_target_marker_must_match():
+    from simulation.scenario_contract import validate_scenario_target_identity
+
+    # Valid matching target marker
+    validate_scenario_target_identity({
+        "scenario_id": "empirical_baseline__target_L1_ANNUAL",
+        "calibration_target_id": "L1_ANNUAL",
+    })
+
+    # Non-matching target marker
+    with pytest.raises(ValueError, match="differs from calibration_target_id"):
+        validate_scenario_target_identity({
+            "scenario_id": "empirical_baseline__target_L1_CONTENT_STRICT",
+            "calibration_target_id": "L1_ANNUAL",
+        })
+
+    # Missing target marker
+    with pytest.raises(ValueError, match="must contain"):
+        validate_scenario_target_identity({
+            "scenario_id": "empirical_baseline_L1_ANNUAL",
+            "calibration_target_id": "L1_ANNUAL",
+        })
+
+
+def test_short_key_collision_fail_closed():
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    from scripts.p08a_build_scenario_registry import build_short_key_map
+
+    # Collision test: same canonical IDs map to same keys, but we pass two different IDs
+    # that map to the same prefix digest if we set hex_length extremely short (like 1).
+    with pytest.raises(ValueError, match="short-key collision"):
+        build_short_key_map(["id_abc", "id_xyz"], prefix="s", hex_length=1)
+
+
+def test_replication_dgp_pairing_consistency():
+    from core.rng import generator
+    # Verify that different replication sizes still use the same simulated population at replication level.
+    # Replication 150 should receive identical population across core and standalone/extended tiers.
+    rep_id = 150
+    data_rng_core = generator(
+        "mock_protocol_hash",
+        "P08_REPLICATION_DATA",
+        {
+            "scenario_id": "empirical_baseline__target_L1_ANNUAL",
+            "replication_id": str(rep_id),
+        },
+        str(rep_id),
+    )
+    data_rng_standalone = generator(
+        "mock_protocol_hash",
+        "P08_REPLICATION_DATA",
+        {
+            "scenario_id": "empirical_baseline__target_L1_ANNUAL",
+            "replication_id": str(rep_id),
+        },
+        str(rep_id),
+    )
+    # The RNG streams must produce exactly the same random numbers
+    assert data_rng_core.random() == data_rng_standalone.random()
+

@@ -24,7 +24,38 @@ from simulation.method_contract import (
 )
 from simulation.empirical_calibration import attach_empirical_panel_calibration
 from simulation.service import validate_scenarios
+from simulation.scenario_contract import validate_scenario_target_identity
+import hashlib
 
+
+def build_short_key_map(
+    ids: list[str],
+    *,
+    prefix: str,
+    hex_length: int = 12,
+) -> dict[str, str]:
+    """Build a mapping from canonical IDs to short hash keys with a collision guard."""
+    result: dict[str, str] = {}
+    reverse: dict[str, str] = {}
+
+    for canonical_id in sorted(ids):
+        digest = hashlib.sha256(
+            canonical_id.encode("utf-8")
+        ).hexdigest()[:hex_length]
+
+        key = f"{prefix}{digest}"
+
+        existing = reverse.get(key)
+        if existing is not None and existing != canonical_id:
+            raise ValueError(
+                f"short-key collision: {existing} and "
+                f"{canonical_id} both map to {key}"
+            )
+
+        result[canonical_id] = key
+        reverse[key] = canonical_id
+
+    return result
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -112,18 +143,24 @@ def main() -> int:
     )
     scenarios = validate_scenarios(scenarios)
 
+    scenario_ids = [str(s[SCENARIO_ID]) for s in scenarios]
+    scenario_keys = build_short_key_map(scenario_ids, prefix="s", hex_length=12)
+
+    method_ids = [str(m[METHOD_ID]) for m in method_registry]
+    method_keys = build_short_key_map(method_ids, prefix="m", hex_length=12)
+
     locked: list[dict[str, object]] = []
-    import hashlib
     for scenario in scenarios:
         item = dict(scenario)
+        validate_scenario_target_identity(item)
         scenario_id = str(item[SCENARIO_ID])
-        item["scenario_" + "key"] = "s" + hashlib.sha256(scenario_id.encode("utf-8")).hexdigest()[:8]
+        item["scenario_" + "key"] = scenario_keys[scenario_id]
         
         updated_method_registry = []
         for value in method_registry:
             method_spec = dict(value)
-            method_id = str(method_spec[METHOD_ID])
-            method_spec["method_" + "key"] = "m" + hashlib.sha256(method_id.encode("utf-8")).hexdigest()[:8]
+            m_id = str(method_spec[METHOD_ID])
+            method_spec["method_" + "key"] = method_keys[m_id]
             updated_method_registry.append(method_spec)
         item["method_registry"] = updated_method_registry
         item["active_method_ids"] = list(profile_contract["active_method_ids"])

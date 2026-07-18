@@ -24,6 +24,7 @@ from core.registry_compiler import (
 )
 from core.schema_registry import contract_registry
 from core.semantic_keys import SCENARIO_ID
+from simulation.scenario_contract import validate_scenario_target_identity
 
 
 P08_EMPIRICAL_ARCHITECTURE_VERSION = "p02-p05-p07-calibrated-v1"
@@ -144,8 +145,10 @@ def _validate_path_budgets(registry: dict[str, Any], output_root: Path | None, r
             if s_length > max_path_limit:
                 violations.append((artifact_id + " (staging)", str(stage_path), s_length))
 
-        except Exception:
-            pass
+        except Exception as exc:
+            raise ValueError(
+                f"artifact={artifact_id}: cannot render path for budget validation"
+            ) from exc
 
     if violations:
         details = "\n".join(
@@ -579,11 +582,8 @@ def _validate_operational_scenarios(
                 raise ValueError(
                     f"scenario={scenario_id}: sample_design must be p02_development_panel"
                 )
+            validate_scenario_target_identity(scenario)
             target_id = scenario.get("calibration_target_id")
-            if not isinstance(target_id, str) or not target_id:
-                raise ValueError(
-                    f"scenario={scenario_id}: explicit calibration_target_id is required"
-                )
             if target_id not in candidate_targets:
                 raise ValueError(
                     f"scenario={scenario_id}: calibration_target_id={target_id} is not registered "

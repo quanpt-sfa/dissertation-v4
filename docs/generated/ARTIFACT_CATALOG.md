@@ -72,7 +72,7 @@ Source: config/pipeline.yaml
 | leakage_registry_csv | P07 | text_value | `P07/leakage_registry.csv` |
 | leakage_registry_table | P07 | leakage_registry_frame | `P07/leakage_registry.parquet` |
 | maturity_audit | P04 | json_object | `P04/maturity_audit.json` |
-| mcse_report | P08 | json_object | `P08/mcse_report.json` |
+| mcse_report | P08 | mcse_report_schema | `P08/mcse_report.json` |
 | measurement_candidate_results | P10 | json_array | `P10/candidates/{outer_fold}.json` |
 | measurement_selection_registry | P10 | json_object | `P10/selection/{outer_fold}.json` |
 | measurement_variable_registry | P05 | json_array | `P05/measurement_variable_registry.json` |
@@ -94,7 +94,7 @@ Source: config/pipeline.yaml
 | schema_catalog | P00 | schema_catalog_schema | `P00/schema_catalog.json` |
 | sealed_outcome_store | P05 | sealed_outcome_frame | `P05/sealed_outcomes.parquet` |
 | simulation_batches | P08 | simulation_batch_frame | `P08/b/{scenario_key}/{method_key}/{batch_key}.pq` |
-| simulation_scenario_registry | P08 | json_array | `P08/scenario_registry.json` |
+| simulation_scenario_registry | P08 | simulation_scenario_registry_schema | `P08/scenario_registry.json` |
 | source_channel_matrices | P05 | json_object | `P05/source_channel_matrices.json` |
 | source_config_manifest | P00 | source_config_manifest_schema | `P00/source_config_manifest.json` |
 | source_sensitivity_outputs | P13 | json_object | `P13/source_sensitivity.json` |

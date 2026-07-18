@@ -653,7 +653,7 @@ artifacts:
   simulation_scenario_registry:
     producer_step: P08
     path_template: P08/scenario_registry.json
-    schema_id: json_array
+    schema_id: simulation_scenario_registry_schema
     format: json
     coordinates: []
     sensitivity_class: public
@@ -676,7 +676,7 @@ artifacts:
   mcse_report:
     producer_step: P08
     path_template: P08/mcse_report.json
-    schema_id: json_object
+    schema_id: mcse_report_schema
     format: json
     coordinates: []
     sensitivity_class: public

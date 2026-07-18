@@ -10,7 +10,9 @@ from __future__ import annotations
 import inspect
 import math
 from collections.abc import Mapping, Sequence
-from typing import Any, cast
+from typing import Any, Callable, cast
+
+from simulation.scenario_contract import validate_scenario_target_identity
 
 import numpy as np
 import pandas as pd
@@ -205,34 +207,46 @@ def run_batch(
     *,
     method_id: str,
     replications: range,
+    data_rng_factory: Callable[[int], np.random.Generator] | None = None,
+    model_rng_factory: Callable[[int], np.random.Generator] | None = None,
     data_rng: np.random.Generator | None = None,
     model_rng: np.random.Generator | None = None,
     rng: np.random.Generator | None = None,
 ) -> pd.DataFrame:
     """Run one registered scenario-method batch.
 
-    `data_rng` must be shared across methods for the same scenario/batch so
-    Monte Carlo comparisons are paired. `model_rng` remains method-specific.
-    The deprecated `rng` fallback is accepted only for local compatibility.
+    If data_rng_factory is provided, replication-level data RNG generators
+    are generated per replication_id, guaranteeing pairing across different tier sizes.
     """
-    if data_rng is None:
-        if rng is None:
-            raise ValueError("run_batch requires data_rng and model_rng")
-        data_rng = rng
-    if model_rng is None:
-        model_rng = rng if rng is not None else data_rng
+    if scenario.get("tier") == "semi_synthetic_development_covariates":
+        validate_scenario_target_identity(scenario)
 
     method_spec = method_by_id(scenario, method_id)
     family = str(method_spec[METHOD_FAMILY])
     rows: list[dict[str, object]] = []
+
     for replication_id in replications:
-        data = _generate_replication(scenario, data_rng)
+        if data_rng_factory is not None:
+            rep_data_rng = data_rng_factory(int(replication_id))
+        else:
+            rep_data_rng = data_rng if data_rng is not None else rng
+            if rep_data_rng is None:
+                raise ValueError("run_batch requires data_rng/data_rng_factory or rng")
+
+        if model_rng_factory is not None:
+            rep_model_rng = model_rng_factory(int(replication_id))
+        else:
+            rep_model_rng = model_rng if model_rng is not None else rng
+            if rep_model_rng is None:
+                rep_model_rng = rep_data_rng
+
+        data = _generate_replication(scenario, rep_data_rng)
         if family == "predictive":
             estimates = _run_predictive_method(
                 scenario=scenario,
                 method_spec=method_spec,
                 data=data,
-                rng=model_rng,
+                rng=rep_model_rng,
             )
         elif family == "standalone_estimator":
             estimates = _run_standalone_estimator(
@@ -732,7 +746,7 @@ def _fit_for_subset(
             ]
         ),
     )
-    scores, success = _fit_and_predict(
+    scores, success, diag = _fit_and_predict(
         learner_id,
         x_fit,
         y_fit,
@@ -740,6 +754,9 @@ def _fit_for_subset(
         cost_weights,
         rng,
     )
+    if success == 0.0:
+        import sys
+        print(f"Learner fit failure ({learner_id}): {diag}", file=sys.stderr, flush=True)
     success = min(float(success), float(resampling_success))
     stats = _weight_stats(cost_weights)
     return (
@@ -911,10 +928,14 @@ def _fit_and_predict(
     x_test: np.ndarray,
     sample_weight: np.ndarray | None,
     rng: np.random.Generator,
-) -> tuple[np.ndarray, float]:
+) -> tuple[np.ndarray, float, dict[str, str]]:
     fallback = float(np.average(y_train, weights=sample_weight)) if len(y_train) else 0.0
+    fallback_scores = np.full(len(x_test), fallback, dtype=float)
     if len(y_train) < 10 or len(np.unique(y_train)) < 2:
-        return np.full(len(x_test), fallback, dtype=float), 0.0
+        return fallback_scores, 0.0, {
+            "failure_type": "InsufficientData",
+            "failure_message": "len(y_train) < 10 or unique < 2",
+        }
     random_state = int(rng.integers(0, 2**31 - 1))
     try:
         estimator = _learner(learner_id, random_state)
@@ -928,9 +949,12 @@ def _fit_and_predict(
         scores = _predict_scores(estimator, x_test)
         if not np.all(np.isfinite(scores)):
             raise ValueError("non-finite predictions")
-        return np.clip(scores, 0.0, 1.0), 1.0
-    except Exception:
-        return np.full(len(x_test), fallback, dtype=float), 0.0
+        return np.clip(scores, 0.0, 1.0), 1.0, {}
+    except (ValueError, FloatingPointError) as exc:
+        return fallback_scores, 0.0, {
+            "failure_type": type(exc).__name__,
+            "failure_message": str(exc)[:500],
+        }
 
 
 def _fit_pu_ensemble_cost_sensitive(
@@ -985,7 +1009,7 @@ def _fit_pu_ensemble_cost_sensitive(
                 ]
             ),
         )
-        scores, success = _fit_and_predict(
+        scores, success, diag = _fit_and_predict(
             learner_id,
             x_train[indices],
             y,
@@ -993,6 +1017,9 @@ def _fit_pu_ensemble_cost_sensitive(
             weights,
             rng,
         )
+        if success == 0.0:
+            import sys
+            print(f"PU bag learner fit failure ({learner_id}): {diag}", file=sys.stderr, flush=True)
         if success == 1.0:
             bag_scores.append(scores)
             mean, maximum = _weight_stats(weights)

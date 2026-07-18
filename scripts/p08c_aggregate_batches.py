@@ -13,7 +13,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import pandas as pd
 
 from core.pipeline import load_run, mapping, sequence
-from core.semantic_keys import LEARNER_ID, METHOD_ID, METRIC_ID, REPLICATION_ID, SCENARIO_ID
+from core.semantic_keys import (
+    LEARNER_ID,
+    METHOD_ID,
+    METRIC_ID,
+    REPLICATION_ID,
+    SCENARIO_ID,
+    SCENARIO_KEY,
+    METHOD_KEY,
+    BATCH_KEY,
+)
 from simulation.method_contract import (
     ANALYSIS_ROLE,
     EXECUTION_PROFILE,
@@ -25,6 +34,7 @@ from simulation.method_contract import (
     required_metric_ids,
 )
 from simulation.service import summarize_mcse
+from simulation.replication_contract import replication_plan as _replication_plan
 
 
 def main() -> int:
@@ -58,6 +68,8 @@ def main() -> int:
 
     batches: list[pd.DataFrame] = []
     coordinates_seen: list[dict[str, str]] = []
+    simulation = mapping(loaded.registry.get("simulation"), "simulation")
+
     for item in loaded.context.store.inventory():
         if item.get("artifact_id") != "simulation_batches":
             continue
@@ -71,6 +83,57 @@ def main() -> int:
         value = loaded.context.read("simulation_batches", coordinates)
         if not isinstance(value, pd.DataFrame):
             raise ValueError("simulation_batches artifact must be a DataFrame")
+
+        if value.empty:
+            continue
+
+        scenario_ids = set(value[SCENARIO_ID].dropna().astype(str))
+        method_ids = set(value[METHOD_ID].dropna().astype(str))
+        if len(scenario_ids) != 1 or len(method_ids) != 1:
+            raise ValueError("Each simulation batch must contain exactly one scenario and method")
+
+        scenario_id = next(iter(scenario_ids))
+        method_id = next(iter(method_ids))
+
+        scenario = scenario_by_id.get(scenario_id)
+        if scenario is None:
+            raise ValueError(f"batch scenario_id={scenario_id} is not registered")
+
+        method_spec = next(
+            (m for m in scenario.get("method_registry", []) if m.get(METHOD_ID) == method_id),
+            None,
+        )
+        if method_spec is None:
+            raise ValueError(
+                f"batch method_id={method_id} is not registered under scenario={scenario_id}"
+            )
+
+        expected_scenario_key = str(scenario[SCENARIO_KEY])
+        expected_method_key = str(method_spec[METHOD_KEY])
+
+        if coordinates.get(SCENARIO_KEY) != expected_scenario_key:
+            raise ValueError(
+                f"batch scenario_key={coordinates.get(SCENARIO_KEY)} does not match "
+                f"scenario registry scenario_id={scenario_id}"
+            )
+
+        if coordinates.get(METHOD_KEY) != expected_method_key:
+            raise ValueError(
+                f"batch method_key={coordinates.get(METHOD_KEY)} does not match "
+                f"method registry method_id={method_id}"
+            )
+
+        plan = _replication_plan(simulation, method_spec)
+        batch_size = int(plan["batch_size"])
+        replication_ids = value[REPLICATION_ID].dropna().astype(int)
+        for r_id in replication_ids:
+            expected_batch_key = f"b{r_id // batch_size:04d}"
+            if coordinates.get(BATCH_KEY) != expected_batch_key:
+                raise ValueError(
+                    f"replication_id={r_id} in batch maps to batch_key={expected_batch_key}, "
+                    f"but coordinate is batch_key={coordinates.get(BATCH_KEY)}"
+                )
+
         batches.append(value)
         coordinates_seen.append(coordinates)
 
@@ -154,6 +217,23 @@ def main() -> int:
         report["reason_code"] = (
             "P08_ACTIVE_PROFILE_OR_COST_METRIC_CONTRACT_INCOMPLETE"
         )
+        if args.check_only:
+            print(f"P08_CONTROL_JSON={json.dumps(report, sort_keys=True)}")
+        else:
+            loaded.context.write("mcse_report", report, {})
+        return 2
+
+    if (
+        active_profile == "core"
+        and report.get("precision_target_met") is not True
+    ):
+        report["status"] = "FAIL"
+        report["reason_code"] = "CONFIRMATORY_MCSE_TARGET_NOT_MET"
+        if args.check_only:
+            print(f"P08_CONTROL_JSON={json.dumps(report, sort_keys=True)}")
+        else:
+            loaded.context.write("mcse_report", report, {})
+        return 3
 
     if args.check_only:
         print(f"P08_CONTROL_JSON={json.dumps(report, sort_keys=True)}")

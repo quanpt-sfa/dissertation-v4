@@ -134,6 +134,10 @@ Version: 1
 
 Version: 1
 
+## mcse_report_schema
+
+Version: 1
+
 ## model_freeze_receipt_schema
 
 Version: 1
@@ -191,6 +195,10 @@ Version: 1
 Version: 2
 
 ## simulation_batch_frame
+
+Version: 1
+
+## simulation_scenario_registry_schema
 
 Version: 1
 

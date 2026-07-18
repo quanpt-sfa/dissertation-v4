@@ -266,7 +266,7 @@ def main() -> int:
     p08_command = [
         python,
         "-W",
-        "ignore",
+        "ignore::FutureWarning",
         "scripts/p08_profiled_orchestrator.py",
         "--registry",
         str(registry_path),
@@ -287,6 +287,16 @@ def main() -> int:
         protocol_hash=protocol_hash,
         artifacts=[("mcse_report", {})],
     )
+
+    simulation_config = cast(dict[str, Any], registry.get("simulation", {}))
+    active_profile = simulation_config.get("active_profile")
+    if active_profile == "core":
+        report = json_object(run_root / "P08" / "mcse_report.json", "P08 report")
+        if report.get("precision_target_met") is not True:
+            raise RuntimeError(
+                "P08 confirmatory precision target was not met; P09 is blocked"
+            )
+
     if args.through == "P08":
         return 0
 
