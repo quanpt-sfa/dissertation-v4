@@ -223,21 +223,41 @@ def main() -> int:
             loaded.context.write("mcse_report", report, {})
         return 2
 
-    if (
-        active_profile == "core"
-        and report.get("precision_target_met") is not True
-    ):
-        report["status"] = "FAIL"
-        report["reason_code"] = "CONFIRMATORY_MCSE_TARGET_NOT_MET"
-        if args.check_only:
-            print(f"P08_CONTROL_JSON={json.dumps(report, sort_keys=True)}")
-        else:
-            loaded.context.write("mcse_report", report, {})
-        return 3
-
+    # Control polling must never fail merely because more replications are needed.
     if args.check_only:
         print(f"P08_CONTROL_JSON={json.dumps(report, sort_keys=True)}")
         return 0
+
+    # Only final aggregation applies the confirmatory terminal policy.
+    protocol_role = mapping(
+        simulation.get("protocol_role"),
+        "simulation.protocol_role",
+    )
+    must_complete = bool(
+        protocol_role.get("must_complete_before_outer_test")
+    )
+    confirmatory = False
+    for scenario in scenario_by_id.values():
+        if any(
+            str(item.get("analysis_role")) == "confirmatory"
+            for item in scenario.get("method_registry", [])
+            if item.get("is_active") is True
+        ):
+            confirmatory = True
+            break
+
+    if must_complete and confirmatory:
+        if report.get("mcse_status") == "CONTINUE":
+            raise RuntimeError(
+                "Final P08 aggregation reached while additional replications remain"
+            )
+
+        if report.get("precision_target_met") is not True:
+            report["status"] = "FAIL"
+            report["reason_code"] = "CONFIRMATORY_MCSE_TARGET_NOT_MET"
+            loaded.context.write("mcse_report", report, {})
+            return 3
+
     loaded.context.write("mcse_report", report, {})
     print(
         f"P08C aggregate status={report['status']} "

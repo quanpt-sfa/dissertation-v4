@@ -255,7 +255,8 @@ Source: config/pipeline.yaml
     "writes": [
       "simulation_scenario_registry",
       "simulation_batches",
-      "mcse_report"
+      "mcse_report",
+      "model_diagnostics"
     ]
   },
   "P09": {

@@ -982,8 +982,20 @@ schemas:
     compatibility_policy: strict
   simulation_scenario_registry_schema:
     contract_type: json_array
-    version: 1
+    version: 2
     item_type: object
+    min_items: 1
+    required_item_keys:
+    - scenario_id
+    - scenario_key
+    - tier
+    - sample_size
+    - prevalence
+    - fixed_pi
+    - method_registry
+    - active_method_ids
+    - execution_profile
+    - methodology_contract
     compatibility_policy: strict
   mcse_report_schema:
     contract_type: json_object

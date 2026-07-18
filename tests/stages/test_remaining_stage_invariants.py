@@ -1055,24 +1055,34 @@ def test_gate3_breakpoint_stability_uses_dispersion_not_distance_from_zero() -> 
 def test_scenario_id_target_marker_must_match():
     from simulation.scenario_contract import validate_scenario_target_identity
 
-    # Valid matching target marker
+    # Valid matching target marker for semi-synthetic tier
     validate_scenario_target_identity({
         "scenario_id": "empirical_baseline__target_L1_ANNUAL",
         "calibration_target_id": "L1_ANNUAL",
+        "tier": "semi_synthetic_development_covariates",
     })
 
-    # Non-matching target marker
+    # Fully synthetic scenarios skip validation
+    validate_scenario_target_identity({
+        "scenario_id": "fully_synthetic_no_target_marker",
+        "calibration_target_id": "L1_ANNUAL",
+        "tier": "fully_synthetic",
+    })
+
+    # Non-matching target marker for semi-synthetic tier
     with pytest.raises(ValueError, match="differs from calibration_target_id"):
         validate_scenario_target_identity({
             "scenario_id": "empirical_baseline__target_L1_CONTENT_STRICT",
             "calibration_target_id": "L1_ANNUAL",
+            "tier": "semi_synthetic_development_covariates",
         })
 
-    # Missing target marker
+    # Missing target marker for semi-synthetic tier
     with pytest.raises(ValueError, match="must contain"):
         validate_scenario_target_identity({
             "scenario_id": "empirical_baseline_L1_ANNUAL",
             "calibration_target_id": "L1_ANNUAL",
+            "tier": "semi_synthetic_development_covariates",
         })
 
 
@@ -1116,4 +1126,224 @@ def test_replication_dgp_pairing_consistency():
     )
     # The RNG streams must produce exactly the same random numbers
     assert data_rng_core.random() == data_rng_standalone.random()
+
+
+def test_p08c_exit_code_policies():
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    from unittest.mock import MagicMock, patch
+    import scripts.p08c_aggregate_batches as p08c
+
+    mock_loaded = MagicMock()
+    mock_loaded.registry = {
+        "simulation": {
+            "active_profile": "core",
+            "protocol_role": {
+                "must_complete_before_outer_test": True
+            },
+            "core": {
+                "minimum_replications": 10,
+                "maximum_replications": 50,
+                "pass_fail_mcse_max": 0.05,
+                "batch_size": 10
+            },
+            "l3": {
+                "initial_replications": 10,
+                "maximum_replications": 50,
+                "pass_fail_mcse_max": 0.05,
+                "batch_size": 10
+            },
+            "extended_replication": {
+                "minimum_replications": 10,
+                "maximum_replications": 50,
+                "pass_fail_mcse_max": 0.05,
+                "batch_size": 10
+            },
+            "cost_sensitive_replication": {
+                "minimum_replications": 10,
+                "maximum_replications": 50,
+                "pass_fail_mcse_max": 0.05,
+                "batch_size": 10
+            },
+            "cost_sensitive": {
+                "cost_mcse_relative_fraction": 0.1,
+                "cost_neutral_regime_id": "cost_neutral"
+            },
+            "continuous_metrics": {
+                "mcse_fraction_of_minimum_meaningful_improvement_max": 0.1
+            }
+        },
+        "evaluation": {
+            "gate2": {
+                "minimum_meaningful_improvement": {
+                    "absolute": 0.02
+                }
+            }
+        }
+    }
+    
+    # We patch argparse to return different values
+    mock_args = MagicMock()
+    mock_args.registry = Path("mock_registry.json")
+    mock_args.run_id = "mock-run"
+
+    @patch("scripts.p08c_aggregate_batches.load_run", return_value=mock_loaded)
+    @patch("scripts.p08c_aggregate_batches._validate_methodology", return_value={"status": "PASS"})
+    @patch("scripts.p08c_aggregate_batches._filter_active_batches", return_value=[MagicMock()])
+    @patch("scripts.p08c_aggregate_batches.argparse.ArgumentParser.parse_args")
+    def run_test(mock_parse, mock_filter, mock_val, mock_load, summarize_return, check_only):
+        mock_parse.return_value = mock_args
+        mock_args.check_only = check_only
+        
+        # Mock inventory to return one batches item to prevent empty loop
+        mock_loaded.context.store.inventory.return_value = [
+            {
+                "artifact_id": "simulation_batches",
+                "coordinates": {
+                    "scenario_key": "s1",
+                    "method_key": "m1",
+                    "batch_key": "b0000"
+                }
+            }
+        ]
+        
+        # Make load read return a dataframe
+        import pandas as pd
+        from core.semantic_keys import SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID
+        df = pd.DataFrame({
+            SCENARIO_ID: ["empirical_baseline__target_L1_ANNUAL"],
+            METHOD_ID: ["naive_observed_as_negative__multilayer_perceptron__train"],
+            REPLICATION_ID: [0],
+            METRIC_ID: ["primary_metric"],
+        })
+        mock_loaded.context.read.return_value = df
+        
+        # Scenarios mapping
+        mock_scenarios = [
+            {
+                "scenario_id": "empirical_baseline__target_L1_ANNUAL",
+                "scenario_key": "s1",
+                "tier": "semi_synthetic_development_covariates",
+                "execution_profile": "core",
+                "method_registry": [
+                    {
+                        "method_id": "naive_observed_as_negative__multilayer_perceptron__train",
+                        "method_key": "m1",
+                        "is_active": True,
+                        "analysis_role": "confirmatory",
+                        "method_family": "multilayer_perceptron",
+                        "learner_tier": "core",
+                        "training_cost_regime_id": "cost_neutral",
+                        "imbalance_treatment_id": "none"
+                    }
+                ]
+            }
+        ]
+        mock_loaded.context.read.side_effect = lambda artifact_id, *a, **k: mock_scenarios if artifact_id == "simulation_scenario_registry" else df
+
+        with patch("scripts.p08c_aggregate_batches.summarize_mcse", return_value=summarize_return):
+            return p08c.main()
+
+    # Case 1: check-only + CONTINUE -> exit 0
+    report_continue = {"status": "CONTINUE", "precision_target_met": False}
+    exit_code_1 = run_test(summarize_return=report_continue, check_only=True)
+    assert exit_code_1 == 0
+
+    # Case 2: final + PASS -> exit 0
+    report_pass = {"status": "PASS", "precision_target_met": True}
+    exit_code_2 = run_test(summarize_return=report_pass, check_only=False)
+    assert exit_code_2 == 0
+
+    # Case 3: final + MAXIMUM_REACHED/core -> exit 3
+    report_max = {"status": "MAXIMUM_REACHED", "precision_target_met": False}
+    exit_code_3 = run_test(summarize_return=report_max, check_only=False)
+    assert exit_code_3 == 3
+
+
+def test_run_batch_diagnostics_capture():
+    """
+    Verifies that DiagnosticCollector captures InsufficientData fit failures
+    when run_batch is called with the diagnostics argument.
+
+    Strategy: prevalence=0.0 guarantees all latent labels are False,
+    so unique(y_train) == 1 → InsufficientData is recorded without raising.
+    Uses simulation.yaml to build full cost_sensitive_settings (avoids missing
+    evaluation_regime_ids and other required config keys).
+    """
+    import yaml
+    from pathlib import Path
+    from simulation.service import run_batch
+    from simulation.method_contract import build_cost_sensitive_contract
+    import numpy as np
+
+    root = Path(__file__).resolve().parents[2]
+    simulation = yaml.safe_load(
+        (root / "config" / "execution" / "simulation.yaml").read_text(encoding="utf-8")
+    )["simulation"]
+    cost_contract = build_cost_sensitive_contract(simulation)
+
+    mock_scenario = {
+        "scenario_id": "diagnostics_capture_test",
+        "tier": "fully_synthetic",
+        "prevalence": 0.0,   # All latent labels False → unique(y_train)<2 → InsufficientData
+        "sample_size": 50,
+        "content_signal": 0.0,
+        "signal_structure": "linear",
+        "anchor_sensitivity": 0.8,
+        "anchor_false_positive": 0.0,   # No false positives so y_train stays all-zero
+        "weak_sensitivity": 0.5,
+        "weak_false_positive": 0.0,     # No false positives so y_train stays all-zero
+        "anchor_verification_probability": 1.0,
+        "weak_verification_probability": 1.0,
+        "selective_verification_strength": 0.0,
+        "detection_delay_mean_days": 30.0,
+        "horizon_days": 365.0,
+        "method_registry": [
+            {
+                "method_id": "naive_observed_as_negative__logistic_regression__traincost_symmetric",
+                "is_active": True,
+                "method_family": "predictive",
+                "label_strategy_id": "naive_observed_as_negative",
+                "learner_id": "logistic_regression",
+                "learner_tier": "core",
+                "training_cost_regime_id": "symmetric",
+                "imbalance_treatment_id": "none",
+            }
+        ],
+        "cost_regime_registry": [dict(v) for v in cost_contract["cost_regime_registry"]],
+        "review_budget_registry": [dict(v) for v in cost_contract["review_budget_registry"]],
+        "cost_sensitive_settings": {
+            k: v
+            for k, v in cost_contract.items()
+            if k not in {"cost_regime_registry", "review_budget_registry"}
+        },
+    }
+
+    rng = np.random.default_rng(42)
+    diagnostics: dict = {}
+
+    # run_batch must complete without raising (InsufficientData is non-fatal)
+    run_batch(
+        scenario=mock_scenario,
+        method_id="naive_observed_as_negative__logistic_regression__traincost_symmetric",
+        replications=[44],
+        rng=rng,
+        diagnostics=diagnostics,
+    )
+
+    assert "InsufficientData" in diagnostics.get("fit_failures", {}), (
+        f"Expected InsufficientData in fit_failures; got: {diagnostics}"
+    )
+    assert diagnostics["fit_failures"]["InsufficientData"] > 0
+    assert 44 in diagnostics.get("affected_replication_ids", []), (
+        f"Expected replication 44 in affected_replication_ids; got: {diagnostics}"
+    )
+
+
+
+
 

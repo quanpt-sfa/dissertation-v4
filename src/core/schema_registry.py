@@ -51,10 +51,28 @@ class ContractRegistry:
         elif kind == "json_array":
             if not isinstance(value, list):
                 raise ValueError(f"artifact={artifact_id}: JSON array required")
-            if spec.get("item_type") == "object" and not all(
-                isinstance(item, dict) for item in cast(list[object], value)
-            ):
-                raise ValueError(f"artifact={artifact_id}: every array item must be an object")
+            minimum_items = int(spec.get("min_items", 0))
+            if len(value) < minimum_items:
+                raise ValueError(
+                    f"artifact={artifact_id}: at least {minimum_items} items required"
+                )
+            required_item_keys = [
+                str(key) for key in spec.get("required_item_keys", [])
+            ]
+            for index, item in enumerate(value):
+                if spec.get("item_type") == "object" and not isinstance(item, dict):
+                    raise ValueError(
+                        f"artifact={artifact_id}: item={index} must be an object"
+                    )
+                if isinstance(item, dict):
+                    missing = [
+                        key for key in required_item_keys if key not in item
+                    ]
+                    if missing:
+                        raise ValueError(
+                            f"artifact={artifact_id}: item={index} "
+                            f"missing required keys={missing}"
+                        )
         elif kind == "text":
             if not isinstance(value, str) or len(value) < int(spec.get("min_length", 0)):
                 raise ValueError(f"artifact={artifact_id}: text constraint violated")

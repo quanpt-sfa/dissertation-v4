@@ -271,6 +271,7 @@ steps:
     - simulation_scenario_registry
     - simulation_batches
     - mcse_report
+    - model_diagnostics
     outer_access: sealed
     known_case_access: none
     checkpoint_role: adaptive_simulation

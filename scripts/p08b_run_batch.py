@@ -41,7 +41,7 @@ from simulation.method_contract import (
     PROTOCOL_STATUS,
     TRAINING_COST_REGIME_ID,
     method_by_id,
-    validate_batch_metric_presence,
+    required_metric_ids,
 )
 from simulation.service import run_batch
 from simulation.scenario_contract import validate_scenario_target_identity
@@ -148,12 +148,14 @@ def main() -> int:
             str(rep_id),
         )
 
+    diagnostics = {}
     batch = run_batch(
         scenario,
         method_id=args.method_id,
         replications=range(args.start, args.start + args.count),
         data_rng_factory=data_rng_factory,
         model_rng_factory=model_rng_factory,
+        diagnostics=diagnostics,
     )
     if not isinstance(batch, pd.DataFrame) or batch.empty:
         raise ValueError("P08B run_batch must return a nonempty DataFrame")
@@ -185,14 +187,35 @@ def main() -> int:
     batch[PROTOCOL_STATUS] = str(method_spec[PROTOCOL_STATUS])
     batch["method_contract_version"] = 6
 
-    missing_metrics = validate_batch_metric_presence(
-        metric_ids=set(batch[METRIC_ID].dropna().astype(str)),
-        method_spec=method_spec,
+    expected_replications = set(
+        range(args.start, args.start + args.count)
     )
-    if missing_metrics:
+    actual_replications = set(
+        batch[REPLICATION_ID].dropna().astype(int)
+    )
+
+    if actual_replications != expected_replications:
         raise ValueError(
-            f"P08B method={args.method_id}: missing metrics={missing_metrics}"
+            "P08B replication IDs differ from locked start/count; "
+            f"missing={sorted(expected_replications - actual_replications)}, "
+            f"unexpected={sorted(actual_replications - expected_replications)}"
         )
+
+    required_metrics = required_metric_ids(method_spec)
+
+    for replication_id, frame in batch.groupby(
+        REPLICATION_ID,
+        sort=False,
+    ):
+        actual_metrics = set(frame[METRIC_ID].astype(str))
+        missing = sorted(required_metrics - actual_metrics)
+        unexpected = sorted(actual_metrics - required_metrics)
+
+        if missing or unexpected:
+            raise ValueError(
+                f"P08B replication={replication_id}: "
+                f"missing_metrics={missing}, unexpected_metrics={unexpected}"
+            )
 
     scenario_key_str = "scenario_" + "key"
     method_key_str = "method_" + "key"
@@ -205,6 +228,7 @@ def main() -> int:
         batch_key_str: f"b{args.start // batch_size:04d}",
     }
     loaded.context.write("simulation_batches", batch, write_coordinates)
+    loaded.context.write("model_diagnostics", diagnostics, write_coordinates)
     print(
         f"P08B batch status=PASS scenario={args.scenario_id} "
         f"profile={method_spec[EXECUTION_PROFILE]} method={args.method_id} "

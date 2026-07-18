@@ -683,6 +683,19 @@ artifacts:
     immutability: immutable
     aggregation_behavior: singleton
     checkpoint_role: adaptive_simulation
+  model_diagnostics:
+    producer_step: P08
+    path_template: P08/model_diagnostics/{scenario_key}/{method_key}/{batch_key}.json
+    schema_id: json_object
+    format: json
+    coordinates:
+    - scenario_key
+    - method_key
+    - batch_key
+    sensitivity_class: public
+    immutability: immutable
+    aggregation_behavior: partitioned
+    checkpoint_role: adaptive_simulation
   temporal_split_registry:
     producer_step: P09
     path_template: P09/temporal_splits.json

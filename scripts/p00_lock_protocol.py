@@ -23,11 +23,16 @@ from core.registry_compiler import (
     source_manifest,
 )
 from core.schema_registry import contract_registry
-from core.semantic_keys import SCENARIO_ID
+from core.semantic_keys import SCENARIO_ID, SCENARIO_KEY, METHOD_KEY, BATCH_KEY
+from simulation.coordinate_contract import (
+    SCENARIO_KEY_PREFIX,
+    METHOD_KEY_PREFIX,
+    SHORT_KEY_HEX_LENGTH,
+)
 from simulation.scenario_contract import validate_scenario_target_identity
 
 
-P08_EMPIRICAL_ARCHITECTURE_VERSION = "p02-p05-p07-calibrated-v1"
+P08_EMPIRICAL_ARCHITECTURE_VERSION = "p02-p05-p07-calibrated-replication-paired-v2"
 P08_REQUIRED_READS = frozenset(
     {
         "firm_year_panel",
@@ -101,9 +106,9 @@ def _validate_path_budgets(registry: dict[str, Any], output_root: Path | None, r
     run_root = run_root.resolve()
 
     mock_values = {
-        "scenario_" + "key": "s" + "x" * 8,
-        "method_" + "key": "m" + "x" * 8,
-        "batch_" + "key": "b0000",
+        SCENARIO_KEY: SCENARIO_KEY_PREFIX + "x" * SHORT_KEY_HEX_LENGTH,
+        METHOD_KEY: METHOD_KEY_PREFIX + "x" * SHORT_KEY_HEX_LENGTH,
+        BATCH_KEY: "b0000",
         "source_" + "id": "firm_identity_master",
         "fold_" + "id": "fold_00",
         "outer_" + "fold": "fold_00",

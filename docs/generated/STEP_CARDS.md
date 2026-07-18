@@ -88,7 +88,7 @@ Method simulation
 
 Reads: ['firm_year_panel', 'feature_panel', 'feature_registry', 'source_channel_matrices', 'simulation_scenario_registry', 'simulation_batches']
 
-Writes: ['simulation_scenario_registry', 'simulation_batches', 'mcse_report']
+Writes: ['simulation_scenario_registry', 'simulation_batches', 'mcse_report', 'model_diagnostics']
 
 Required receipts: []
 

@@ -5,14 +5,20 @@ from typing import Any
 
 from core.semantic_keys import SCENARIO_ID
 
+SEMI_SYNTHETIC_TIER = "semi_synthetic_development_covariates"
+
 
 def validate_scenario_target_identity(
     scenario: Mapping[str, Any],
 ) -> None:
     """Validate that the scenario target identity matches its calibration target.
 
+    Only applies to semi_synthetic_development_covariates tier.
     Raises ValueError if incorrect.
     """
+    if scenario.get("tier") != SEMI_SYNTHETIC_TIER:
+        return
+
     scenario_id = scenario.get(SCENARIO_ID)
     target_id = scenario.get("calibration_target_id")
 

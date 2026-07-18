@@ -8,6 +8,8 @@ weights use feasible information only.
 from __future__ import annotations
 
 import inspect
+import threading
+from contextlib import contextmanager, nullcontext
 import math
 from collections.abc import Mapping, Sequence
 from typing import Any, Callable, cast
@@ -202,6 +204,51 @@ def attach_development_covariate_pools(
 
 
 
+class DiagnosticCollector:
+    def __init__(self) -> None:
+        self.fit_failures: dict[str, int] = {}
+        self.resampling_failures: dict[str, int] = {}
+        self.affected_replication_ids: set[int] = set()
+
+    def record_fit_failure(self, error_name: str, replication_id: int) -> None:
+        self.fit_failures[error_name] = self.fit_failures.get(error_name, 0) + 1
+        self.affected_replication_ids.add(replication_id)
+
+    def record_resampling_failure(self, error_name: str, replication_id: int) -> None:
+        self.resampling_failures[error_name] = self.resampling_failures.get(error_name, 0) + 1
+        self.affected_replication_ids.add(replication_id)
+
+
+_thread_local = threading.local()
+
+
+@contextmanager
+def diagnostic_capture(collector: DiagnosticCollector, rep_id: int):
+    old_collector = getattr(_thread_local, "collector", None)
+    old_rep_id = getattr(_thread_local, "_diag_rep_id", None)
+    _thread_local.collector = collector
+    _thread_local._diag_rep_id = rep_id
+    try:
+        yield
+    finally:
+        _thread_local.collector = old_collector
+        _thread_local._diag_rep_id = old_rep_id
+
+
+def record_fit_failure(error_name: str) -> None:
+    collector = getattr(_thread_local, "collector", None)
+    rep_id = getattr(_thread_local, "_diag_rep_id", None)
+    if collector is not None and rep_id is not None:
+        collector.record_fit_failure(error_name, rep_id)
+
+
+def record_resampling_failure(error_name: str) -> None:
+    collector = getattr(_thread_local, "collector", None)
+    rep_id = getattr(_thread_local, "_diag_rep_id", None)
+    if collector is not None and rep_id is not None:
+        collector.record_resampling_failure(error_name, rep_id)
+
+
 def run_batch(
     scenario: Mapping[str, Any],
     *,
@@ -212,6 +259,7 @@ def run_batch(
     data_rng: np.random.Generator | None = None,
     model_rng: np.random.Generator | None = None,
     rng: np.random.Generator | None = None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     """Run one registered scenario-method batch.
 
@@ -224,6 +272,8 @@ def run_batch(
     method_spec = method_by_id(scenario, method_id)
     family = str(method_spec[METHOD_FAMILY])
     rows: list[dict[str, object]] = []
+
+    collector = DiagnosticCollector() if diagnostics is not None else None
 
     for replication_id in replications:
         if data_rng_factory is not None:
@@ -240,22 +290,28 @@ def run_batch(
             if rep_model_rng is None:
                 rep_model_rng = rep_data_rng
 
-        data = _generate_replication(scenario, rep_data_rng)
-        if family == "predictive":
-            estimates = _run_predictive_method(
-                scenario=scenario,
-                method_spec=method_spec,
-                data=data,
-                rng=rep_model_rng,
-            )
-        elif family == "standalone_estimator":
-            estimates = _run_standalone_estimator(
-                scenario=scenario,
-                method_id=method_id,
-                data=data,
-            )
+        if collector is not None:
+            ctx = diagnostic_capture(collector, int(replication_id))
         else:
-            raise ValueError(f"method={method_id}: unsupported method family {family}")
+            ctx = nullcontext()
+
+        with ctx:
+            data = _generate_replication(scenario, rep_data_rng)
+            if family == "predictive":
+                estimates = _run_predictive_method(
+                    scenario=scenario,
+                    method_spec=method_spec,
+                    data=data,
+                    rng=rep_model_rng,
+                )
+            elif family == "standalone_estimator":
+                estimates = _run_standalone_estimator(
+                    scenario=scenario,
+                    method_id=method_id,
+                    data=data,
+                )
+            else:
+                raise ValueError(f"method={method_id}: unsupported method family {family}")
 
         for metric_id, estimate in estimates.items():
             rows.append(
@@ -268,6 +324,14 @@ def run_batch(
                     MCSE: None,
                 }
             )
+
+    if diagnostics is not None and collector is not None:
+        diagnostics.update({
+            "fit_failures": collector.fit_failures,
+            "resampling_failures": collector.resampling_failures,
+            "affected_replication_ids": sorted(list(collector.affected_replication_ids)),
+        })
+
     return pd.DataFrame(rows).astype(
         {
             SCENARIO_ID: "string",
@@ -799,6 +863,7 @@ def _apply_imbalance_treatment(
         raise ValueError("SMOTE/ADASYN cannot be combined with IPW selection weights")
     classes, counts = np.unique(y.astype(int), return_counts=True)
     if len(classes) != 2 or int(counts.min()) < 2:
+        record_resampling_failure("InsufficientMinorityClass")
         return x, y, selection_weights, neutral_stats, 0.0
 
     settings = scenario.get("imbalance_treatment_settings")
@@ -817,7 +882,8 @@ def _apply_imbalance_treatment(
 
             sampler = ADASYN(n_neighbors=neighbors, random_state=random_state)
         resampled_x, resampled_y = sampler.fit_resample(x, y.astype(int))
-    except Exception:
+    except Exception as exc:
+        record_resampling_failure(type(exc).__name__)
         return x, y, selection_weights, neutral_stats, 0.0
 
     resampled_y = np.asarray(resampled_y, dtype=int)
@@ -932,6 +998,7 @@ def _fit_and_predict(
     fallback = float(np.average(y_train, weights=sample_weight)) if len(y_train) else 0.0
     fallback_scores = np.full(len(x_test), fallback, dtype=float)
     if len(y_train) < 10 or len(np.unique(y_train)) < 2:
+        record_fit_failure("InsufficientData")
         return fallback_scores, 0.0, {
             "failure_type": "InsufficientData",
             "failure_message": "len(y_train) < 10 or unique < 2",
@@ -951,6 +1018,7 @@ def _fit_and_predict(
             raise ValueError("non-finite predictions")
         return np.clip(scores, 0.0, 1.0), 1.0, {}
     except (ValueError, FloatingPointError) as exc:
+        record_fit_failure(type(exc).__name__)
         return fallback_scores, 0.0, {
             "failure_type": type(exc).__name__,
             "failure_message": str(exc)[:500],
@@ -976,6 +1044,7 @@ def _fit_pu_ensemble_cost_sensitive(
         or bags < 1
         or unlabeled_to_positive_ratio <= 0
     ):
+        record_resampling_failure("InsufficientPUData")
         prior = len(positive_indices) / max(1, len(positive_indices) + len(unlabeled_indices))
         return np.full(len(predict_x), prior, dtype=float), 0.0, (1.0, 1.0)
 

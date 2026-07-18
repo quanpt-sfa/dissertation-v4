@@ -200,7 +200,7 @@ Version: 1
 
 ## simulation_scenario_registry_schema
 
-Version: 1
+Version: 2
 
 ## source_config_manifest_schema
 

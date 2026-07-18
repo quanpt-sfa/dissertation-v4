@@ -25,6 +25,11 @@ from simulation.method_contract import (
 from simulation.empirical_calibration import attach_empirical_panel_calibration
 from simulation.service import validate_scenarios
 from simulation.scenario_contract import validate_scenario_target_identity
+from simulation.coordinate_contract import (
+    SHORT_KEY_HEX_LENGTH,
+    SCENARIO_KEY_PREFIX,
+    METHOD_KEY_PREFIX,
+)
 import hashlib
 
 
@@ -32,7 +37,7 @@ def build_short_key_map(
     ids: list[str],
     *,
     prefix: str,
-    hex_length: int = 12,
+    hex_length: int = SHORT_KEY_HEX_LENGTH,
 ) -> dict[str, str]:
     """Build a mapping from canonical IDs to short hash keys with a collision guard."""
     result: dict[str, str] = {}
@@ -144,10 +149,18 @@ def main() -> int:
     scenarios = validate_scenarios(scenarios)
 
     scenario_ids = [str(s[SCENARIO_ID]) for s in scenarios]
-    scenario_keys = build_short_key_map(scenario_ids, prefix="s", hex_length=12)
+    scenario_keys = build_short_key_map(
+        scenario_ids,
+        prefix=SCENARIO_KEY_PREFIX,
+        hex_length=SHORT_KEY_HEX_LENGTH,
+    )
 
     method_ids = [str(m[METHOD_ID]) for m in method_registry]
-    method_keys = build_short_key_map(method_ids, prefix="m", hex_length=12)
+    method_keys = build_short_key_map(
+        method_ids,
+        prefix=METHOD_KEY_PREFIX,
+        hex_length=SHORT_KEY_HEX_LENGTH,
+    )
 
     locked: list[dict[str, object]] = []
     for scenario in scenarios:

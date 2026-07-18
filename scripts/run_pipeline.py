@@ -288,14 +288,12 @@ def main() -> int:
         artifacts=[("mcse_report", {})],
     )
 
-    simulation_config = cast(dict[str, Any], registry.get("simulation", {}))
-    active_profile = simulation_config.get("active_profile")
-    if active_profile == "core":
-        report = json_object(run_root / "P08" / "mcse_report.json", "P08 report")
-        if report.get("precision_target_met") is not True:
-            raise RuntimeError(
-                "P08 confirmatory precision target was not met; P09 is blocked"
-            )
+    report = json_object(run_root / "P08" / "mcse_report.json", "P08 report")
+    if report.get("status") == "FAIL":
+        reason = report.get("reason_code", "UNKNOWN_REASON")
+        raise RuntimeError(
+            f"P08 precision target or methodology contract was not met; P09 is blocked. Reason: {reason}"
+        )
 
     if args.through == "P08":
         return 0

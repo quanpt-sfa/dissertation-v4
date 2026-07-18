@@ -77,6 +77,7 @@ Source: config/pipeline.yaml
 | measurement_selection_registry | P10 | json_object | `P10/selection/{outer_fold}.json` |
 | measurement_variable_registry | P05 | json_array | `P05/measurement_variable_registry.json` |
 | model_artifacts | P11 | json_object | `P11/models/{outer_fold}.json` |
+| model_diagnostics | P08 | json_object | `P08/model_diagnostics/{scenario_key}/{method_key}/{batch_key}.json` |
 | model_freeze_receipt | P11 | model_freeze_receipt_schema | `P11/freeze/{outer_fold}.json` |
 | observability_registry | P06 | json_object | `P06/observability_registry.json` |
 | outer_open_receipt | P12 | outer_open_receipt_schema | `P12/outer_open/{outer_fold}.json` |
