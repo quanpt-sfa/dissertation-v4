@@ -17,24 +17,16 @@ ngoài catalog và không dùng bảng tích hợp hoặc bảng dẫn xuất l�
 ```text
 data/
 |-- source/                         # nguồn chính thức được discovery
-|   |-- identity/
-|   |   `-- firm_identity_master_augmented.csv
-|   |-- lifecycle/
-|   |   `-- listing_history_expanded_step31_vietstock_profile_timeline.csv
-|   |-- evidence/
-|   |   `-- firm_event_sanction_panel.csv
-|   |-- financial/
-|   |   `-- financial_statement_core_long.csv.gz
-|   |-- audit/
-|   |   `-- bctc_audit_annual_long.csv
-|   |-- industry/
-|   |   `-- bctc_industry_icb.csv
-|   |-- ownership/
-|   |   `-- ownership_year_latest_snapshot_long.csv.gz
-|   `-- macro/
-|       `-- macro_cpi_annual.csv
-|-- optional/
-|   `-- dividend_annual_long.csv.gz
+|   |-- firm_identity_master_augmented.csv
+|   |-- listing_history_expanded_step31_vietstock_profile_timeline.csv
+|   |-- firm_event_sanction_panel.csv
+|   |-- financial_statement_full_long.csv.gz
+|   |-- bctc_audit_annual_long.csv
+|   |-- bctc_industry_icb.csv
+|   |-- ownership_year_latest_snapshot_long.csv.gz
+|   |-- macro_cpi_annual.csv
+|   |-- dividend_annual_long.csv.gz
+|   `-- known_cases.csv
 |-- config_reference/
 |   `-- locked_data_assumptions.csv
 |-- validation_only/
@@ -42,23 +34,23 @@ data/
 |   |-- financial_statement_pre_post_pairs.csv.gz
 |   `-- state_ownership_inference.csv
 |-- README_START_INPUTS.md
-`-- manifest_sha256.csv
+|`-- manifest_sha256.csv
 ```
 
 ## Trạng thái discovery
 
 | Profile | File | Vai trò | Trạng thái mặc định |
 | --- | --- | --- | --- |
-| `firm_identity_master` | `data/source/identity/firm_identity_master_augmented.csv` | master định danh | bật, bắt buộc |
-| `listing_history` | `data/source/lifecycle/listing_history_expanded_step31_vietstock_profile_timeline.csv` | lịch sử niêm yết | bật, bắt buộc |
-| `sanction_evidence` | `data/source/evidence/firm_event_sanction_panel.csv` | evidence sự kiện | bật, bắt buộc |
-| `financial_statement_core_long` | `data/source/financial/financial_statement_core_long.csv.gz` | BCTC trước/sau kiểm toán | bật, bắt buộc |
-| `audit_annual_long` | `data/source/audit/bctc_audit_annual_long.csv` | ý kiến và công ty kiểm toán | bật, bắt buộc |
-| `industry_icb` | `data/source/industry/bctc_industry_icb.csv` | phân ngành | bật, bắt buộc |
-| `ownership_snapshots` | `data/source/ownership/ownership_year_latest_snapshot_long.csv.gz` | sở hữu | bật, bắt buộc |
-| `macro_cpi` | `data/source/macro/macro_cpi_annual.csv` | quy đổi danh nghĩa | tắt đến khi feature registry yêu cầu |
-| `dividend_annual_long` | `data/optional/dividend_annual_long.csv.gz` | chính sách cổ tức | tắt đến khi feature registry khóa |
-| `known_cases` | `data/source/known_cases/known_cases.csv` | K1–K4 niêm phong | tùy chọn; chỉ mở tại P15 |
+| `firm_identity_master` | `data/source/firm_identity_master_augmented.csv` | master định danh | bật, bắt buộc |
+| `listing_history` | `data/source/listing_history_expanded_step31_vietstock_profile_timeline.csv` | lịch sử niêm yết | bật, bắt buộc |
+| `sanction_evidence` | `data/source/firm_event_sanction_panel.csv` | evidence sự kiện | bật, bắt buộc |
+| `financial_statement_core_long` | `data/source/financial_statement_full_long.csv.gz` | BCTC trước/sau kiểm toán | bật, bắt buộc |
+| `audit_annual_long` | `data/source/bctc_audit_annual_long.csv` | ý kiến và công ty kiểm toán | bật, bắt buộc |
+| `industry_icb` | `data/source/bctc_industry_icb.csv` | phân ngành | bật, bắt buộc |
+| `ownership_snapshots` | `data/source/ownership_year_latest_snapshot_long.csv.gz` | sở hữu | bật, bắt buộc |
+| `macro_cpi` | `data/source/macro_cpi_annual.csv` | quy đổi danh nghĩa | tắt đến khi feature registry yêu cầu |
+| `dividend_annual_long` | `data/source/dividend_annual_long.csv.gz` | chính sách cổ tức | tắt đến khi feature registry khóa |
+| `known_cases` | `data/source/known_cases.csv` | K1–K4 niêm phong | tùy chọn; chỉ mở tại P15 |
 
 `config_reference/` không phải dữ liệu phân tích. Các rule đã khóa được chuyển vào module config
 tương ứng. `validation_only/` chỉ dùng cho golden comparison/regression test và không có glob trong

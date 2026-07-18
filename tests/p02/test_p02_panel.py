@@ -9,7 +9,7 @@ import pytest
 
 from p01.models import SourceSpec
 from p01.readers import hash_file
-from p02.builder import SourceInput, build_firm_panel
+from p02.builder import PanelBuildResult, SourceInput, build_firm_panel
 from p02.models import EntityResolutionSpec, PanelSourceSpec
 
 OUTPUT_COLUMNS = {
@@ -231,7 +231,7 @@ def test_builds_prediction_time_as_latest_core_availability(tmp_path: Path) -> N
     assert result.firm_year_panel.loc[0, "prediction_time"] == pd.Timestamp("2024-04-20")
 
 
-def test_registered_predictor_is_carried_into_the_as_of_panel(tmp_path: Path) -> None:
+def test_p07_registry_columns_are_not_materialized_by_p02(tmp_path: Path) -> None:
     source = _source_input(
         tmp_path,
         "source_a",
@@ -245,9 +245,44 @@ def test_registered_predictor_is_carried_into_the_as_of_panel(tmp_path: Path) ->
         sample_start=2015,
         sample_end=2025,
         output_columns=OUTPUT_COLUMNS,
-        registered_predictor_columns=["registered_predictor"],
     )
-    assert result.firm_year_panel.loc[0, "registered_predictor"] == pytest.approx(1.25)
+    assert list(result.firm_year_panel.columns) == [
+        "firm_master_id",
+        "fiscal_year",
+        "prediction_time",
+    ]
+    assert "registered_predictor" not in result.firm_year_panel.columns
+
+
+def test_p02_output_is_deterministic_and_feature_registry_independent(tmp_path: Path) -> None:
+    source = _source_input(
+        tmp_path,
+        "source_a",
+        [
+            _row("B", 2023, "2024-03-20", predictor=9.0),
+            _row("A", 2023, "2024-03-15", predictor=1.0),
+        ],
+    )
+
+    def build() -> PanelBuildResult:
+        return build_firm_panel(
+            run_id="run-independent",
+            protocol_hash="a" * 64,
+            source_inputs=[source],
+            entity_spec=_entity_spec(),
+            sample_start=2015,
+            sample_end=2025,
+            output_columns=OUTPUT_COLUMNS,
+        )
+
+    first = build()
+    second = build()
+    pd.testing.assert_frame_equal(first.firm_year_panel, second.firm_year_panel)
+    assert list(first.firm_year_panel.columns) == [
+        "firm_master_id",
+        "fiscal_year",
+        "prediction_time",
+    ]
 
 
 def test_incomplete_core_availability_is_excluded(tmp_path: Path) -> None:

@@ -97,6 +97,44 @@ class ContractRegistry:
         if not strict and list(value.columns)[: len(names)] != names:
             raise ValueError("contract: ordered required columns differ")
 
+        # Collect which columns the schema expects to be string dtype so we
+        # can normalise them to object before Pandera sees the DataFrame.
+        # pandas/PyArrow expose multiple StringDtype variants with identical
+        # repr but unequal __eq__ (StringDtype(na_value=nan) vs
+        # StringDtype(na_value=<NA>)), causing Pandera's strict dtype check to
+        # fail spuriously.  Casting to object is lossless for pure-string data
+        # and PA.String maps to object in pandera, so the check becomes exact.
+        _STRING_PROTOCOL_DTYPES = frozenset({"string", "string[python]", "string[pyarrow]"})
+        string_cols: set[str] = set()
+        for raw in entry_objects:
+            entry = _column_entry(raw)
+            if str(entry.get("dtype", "")) in _STRING_PROTOCOL_DTYPES:
+                string_cols.add(str(entry["physical_name"]))
+
+        # Normalise: cast any pandas/arrow string-backed variant to object so
+        # Pandera sees a single, unambiguous dtype.  Three distinct objects all
+        # represent "string" but require different detection strategies:
+        #   - pd.StringDtype(na_value=nan)  → str() gives "<StringDtype(...)>",
+        #     NOT "string"; must use isinstance(pd.StringDtype).
+        #   - pd.StringDtype(na_value=<NA>) → str() gives "string[pyarrow]";
+        #     also caught by isinstance(pd.StringDtype).
+        #   - pd.ArrowDtype(pa.string())    → str() gives "string[pyarrow]";
+        #     different class, NOT caught by isinstance(pd.StringDtype).
+        # Combining both checks handles all variants robustly.
+        df = cast(pd.DataFrame, value)
+        if string_cols:
+            cast_map = {
+                col: "object"
+                for col in string_cols
+                if col in df.columns
+                and (
+                    isinstance(df[col].dtype, pd.StringDtype)
+                    or str(df[col].dtype).startswith("string")
+                )
+            }
+            if cast_map:
+                df = df.astype(cast_map)
+
         columns: dict[str, Any] = {}
         for raw in entry_objects:
             entry = _column_entry(raw)
@@ -115,14 +153,14 @@ class ContractRegistry:
             if not isinstance(key, list):
                 raise ValueError("contract: uniqueness constraint must be a list")
             physical = [_physical(spec, logical) for logical in cast(list[object], key)]
-            if value.duplicated(physical).any():
+            if df.duplicated(physical).any():
                 raise ValueError(f"contract: uniqueness violated for {physical}")
         schema = PA.DataFrameSchema(
             columns,
             strict=strict,
             coerce=bool(spec.get("coerce", False)),
         )
-        schema.validate(value, lazy=True)
+        schema.validate(df, lazy=True)
 
 
 def _column_entry(value: object) -> dict[str, Any]:
@@ -167,8 +205,24 @@ def _physical(spec: Mapping[str, Any], logical: object) -> str:
 
 
 def _pandera_dtype(dtype: str) -> object:
+    """Map protocol dtypes to stable semantic Pandera dtypes.
+
+    Pandas/PyArrow can expose multiple internal StringDtype variants that
+    render identically as ``string[pyarrow]`` but compare as unequal when
+    one is pandas-native (StringDtype with na_value=nan, created by
+    pd.DataFrame(list_of_dicts)) and the other is the pyarrow-backed variant
+    (StringDtype with na_value=<NA>, created by pandas read_csv method with
+    dtype='string' or PA.String in pandera>=0.20).
+    """
     mapping: dict[str, object] = {
-        "string": PA.String,
+        # String columns are pre-cast to object dtype in _dataframe() before
+        # Pandera sees the DataFrame (to sidestep the string[pyarrow] storage-
+        # backend ambiguity).  PA.String in pandera>=0.20 resolves to
+        # string[pyarrow], which no longer matches object.  PA.Object
+        # (numpy dtype object) is the correct counterpart after the cast.
+        "string": PA.Object,
+        "string[python]": PA.Object,
+        "string[pyarrow]": PA.Object,
         "int16": PA.Int16,
         "int64": PA.Int64,
         "float64": PA.Float64,

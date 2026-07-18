@@ -6,7 +6,15 @@ Source: config/pipeline.yaml
 
 Version: 1
 
+## accounting_identity_audit_frame
+
+Version: 1
+
 ## artifact_catalog_schema
+
+Version: 1
+
+## audited_unaudited_adjustment_audit_frame
 
 Version: 1
 
@@ -50,7 +58,35 @@ Version: 1
 
 Version: 1
 
+## feature_redundancy_audit_frame
+
+Version: 1
+
 ## feature_registry_frame
+
+Version: 1
+
+## feature_store_availability_violation_frame
+
+Version: 1
+
+## feature_store_coverage_audit_frame
+
+Version: 1
+
+## feature_store_file_audit_frame
+
+Version: 1
+
+## feature_store_identifier_audit_frame
+
+Version: 1
+
+## feature_store_research_decision_audit_frame
+
+Version: 1
+
+## feature_value_diagnostic_frame
 
 Version: 1
 
@@ -118,6 +154,10 @@ Version: 1
 
 Version: 1
 
+## ratio_diagnostic_audit_frame
+
+Version: 1
+
 ## raw_audit_schema
 
 Version: 1
@@ -136,7 +176,7 @@ Version: 3
 
 ## sanction_decision_ledger_frame
 
-Version: 1
+Version: 2
 
 ## schema_catalog_schema
 
@@ -163,6 +203,10 @@ Version: 1
 Version: 1
 
 ## success_receipt_schema
+
+Version: 1
+
+## temporal_feature_audit_frame
 
 Version: 1
 

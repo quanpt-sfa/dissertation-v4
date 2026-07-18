@@ -13,8 +13,10 @@ import pandas as pd
 
 from core.artifact_store import dataframe_to_csv
 from core.pipeline import load_run, mapping, physical_columns, sequence
-from core.semantic_keys import FIRM_ID, FISCAL_YEAR, TARGET_ID
+from core.semantic_keys import FIRM_ID, FISCAL_YEAR, PREDICTION_TIME, TARGET_ID
+from features.diagnostics import build_feature_diagnostics
 from features.service import build_feature_panel
+from features.store import assemble_feature_input_panel
 
 
 def main() -> int:
@@ -43,11 +45,22 @@ def main() -> int:
     loaded.context.read("observability_registry", {})
     if not isinstance(panel, pd.DataFrame) or not isinstance(risk_sets, pd.DataFrame):
         raise ValueError("P07 panel inputs must be DataFrames")
+    columns = physical_columns(loaded.registry)
+    store_result = assemble_feature_input_panel(
+        base_panel=panel,
+        feature_definitions=cast(list[dict[str, object]], definitions),
+        intended_definitions=cast(list[dict[str, object]], intended),
+        features_config=features,
+        repository_root=Path(__file__).resolve().parents[1],
+        firm_column=columns[FIRM_ID],
+        year_column=columns[FISCAL_YEAR],
+        prediction_time_column=columns[PREDICTION_TIME],
+    )
     result = build_feature_panel(
-        firm_year_panel=panel,
+        firm_year_panel=store_result.panel,
         risk_sets=risk_sets,
         feature_definitions=cast(list[dict[str, object]], definitions),
-        columns=physical_columns(loaded.registry),
+        columns=columns,
         blocked_label_semantics=[
             str(value)
             for value in sequence(
@@ -73,6 +86,69 @@ def main() -> int:
     )
     if args.validate_only:
         return 0
+    diagnostics = build_feature_diagnostics(
+        panel=result.panel,
+        definitions=cast(list[dict[str, object]], definitions),
+        firm_column=columns[FIRM_ID],
+        year_column=columns[FISCAL_YEAR],
+    )
+    summary = {
+        **result.summary,
+        "feature_store": store_result.validation_report,
+        "identifier_mapping": {
+            "store_identifiers": int(
+                store_result.identifier_audit["feature_store_firm_id"].nunique()
+            ),
+            "matched_identifiers": int(
+                store_result.identifier_audit.loc[
+                    store_result.identifier_audit["mapping_status"] == "MATCHED",
+                    "feature_store_firm_id",
+                ].nunique()
+            ),
+            "unmatched_identifiers": int(
+                store_result.identifier_audit.loc[
+                    store_result.identifier_audit["mapping_status"] != "MATCHED",
+                    "feature_store_firm_id",
+                ].nunique()
+            ),
+            "ambiguous_identifiers": int(store_result.identifier_audit["ambiguity_flag"].sum()),
+        },
+        "accounting_identity_rows": len(diagnostics.accounting_identities),
+        "ratio_diagnostic_rows": len(diagnostics.ratios),
+        "redundancy_pairs": len(diagnostics.redundancy),
+    }
+    decision_report = _decision_report(result.decision_report, summary)
+    loaded.context.write(
+        "feature_store_manifest_validated",
+        {
+            **store_result.validation_report,
+            "manifest_validated": True,
+            "status_source": "compiled_registry_and_immutable_package",
+        },
+        {},
+    )
+    loaded.context.write("feature_store_validation_report", store_result.validation_report, {})
+    loaded.context.write("feature_store_file_audit", store_result.file_audit, {})
+    loaded.context.write(
+        "feature_store_identifier_crosswalk_audit", store_result.identifier_audit, {}
+    )
+    loaded.context.write(
+        "feature_store_availability_violations",
+        store_result.availability_violations,
+        {},
+    )
+    loaded.context.write("feature_store_coverage_audit", diagnostics.coverage, {})
+    loaded.context.write(
+        "feature_store_research_decision_audit",
+        store_result.research_decision_audit,
+        {},
+    )
+    loaded.context.write("feature_value_diagnostic_audit", diagnostics.value_scale, {})
+    loaded.context.write("accounting_identity_audit", diagnostics.accounting_identities, {})
+    loaded.context.write("audited_unaudited_adjustment_audit", diagnostics.audited_unaudited, {})
+    loaded.context.write("ratio_diagnostic_audit", diagnostics.ratios, {})
+    loaded.context.write("temporal_feature_audit", diagnostics.temporal, {})
+    loaded.context.write("feature_redundancy_audit", diagnostics.redundancy, {})
     loaded.context.write("feature_panel", result.panel, {})
     loaded.context.write("feature_registry", result.registry, {})
     loaded.context.write("leakage_registry", result.leakage_registry, {})
@@ -120,12 +196,32 @@ def main() -> int:
         },
         {},
     )
-    loaded.context.write("p07_summary", result.summary, {})
-    loaded.context.write("p07_decision_report", result.decision_report, {})
+    loaded.context.write("p07_summary", summary, {})
+    loaded.context.write("p07_decision_report", decision_report, {})
     print(
         f"P07 status=PASS features={len(result.registry)} operational={result.summary['panel_features']}"
     )
     return 0
+
+
+def _decision_report(base: str, summary: dict[str, object]) -> str:
+    store = cast(dict[str, object], summary["feature_store"])
+    identity = cast(dict[str, object], summary["identifier_mapping"])
+    return (
+        base
+        + "\n## Feature-store validation\n\n"
+        + f"- Package status: {store['status']}\n"
+        + f"- Validated files: {store['validated_feature_count']}\n"
+        + f"- Operational LOCKED features: {store['locked_feature_count']}\n"
+        + f"- Unresolved Beneish features: {store['unresolved_feature_count']}\n"
+        + f"- Matched identifiers: {identity['matched_identifiers']}\n"
+        + f"- Unmatched identifiers: {identity['unmatched_identifiers']}\n"
+        + "- Availability basis is a synthetic annual anchor, not an observed publication date.\n"
+        + "\n## Beneish decisions still required\n\n"
+        + "TATA construction; DEPI/depreciation mapping; receivables, sales and PPE definitions; "
+        + "current-asset/current-liability definitions; denominator and nonpositive-denominator "
+        + "rules; prior-year missingness; Vietnamese-to-original mapping; consolidated/audited scope.\n"
+    )
 
 
 def _target_temporal_role(target_id: object) -> str:

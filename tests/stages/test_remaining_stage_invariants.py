@@ -648,25 +648,55 @@ def test_p10_p11_reject_descriptive_and_prospective_fold_roles(role: str) -> Non
 
 
 def test_p08_batch_is_deterministic_for_same_registered_rng_seed() -> None:
+    from simulation.method_contract import (
+        build_cost_sensitive_contract,
+        build_full_method_registry,
+        build_execution_profile_contract,
+        apply_execution_profile,
+    )
+    import yaml
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    simulation = yaml.safe_load((root / "config" / "execution" / "simulation.yaml").read_text(encoding="utf-8"))["simulation"]
+    
+    cost_contract = build_cost_sensitive_contract(simulation)
+    full_registry = build_full_method_registry(simulation, cost_contract)
+    profile_contract = build_execution_profile_contract(simulation, full_registry)
+    active_profile = str(profile_contract["active_profile"])
+    method_registry = apply_execution_profile(full_registry, profile_contract)
+    
     scenario = {
         "scenario_id": "s1",
-        "sample_size": 40,
+        "sample_size": 50,
         "prevalence": 0.2,
         "anchor_sensitivity": 0.8,
         "anchor_false_positive": 0.05,
         "weak_sensitivity": 0.5,
         "weak_false_positive": 0.15,
         "content_signal": 0.7,
+        "tier": "fully_synthetic",
+        "signal_structure": "linear",
+        "method_registry": method_registry,
+        "active_method_ids": list(profile_contract["active_method_ids"]),
+        "execution_profile": active_profile,
+        "execution_profile_registry": [dict(value) for value in profile_contract["profiles"]],
+        "cost_regime_registry": [dict(value) for value in cost_contract["cost_regime_registry"]],
+        "review_budget_registry": [dict(value) for value in cost_contract["review_budget_registry"]],
+        "cost_sensitive_settings": {
+            key: value
+            for key, value in cost_contract.items()
+            if key not in {"cost_regime_registry", "review_budget_registry"}
+        },
     }
     first = run_batch(
         scenario,
-        method_id="full",
+        method_id="naive_observed_as_negative__logistic_regression__traincost_symmetric",
         replications=range(3),
         rng=np.random.default_rng(42),
     )
     second = run_batch(
         scenario,
-        method_id="full",
+        method_id="naive_observed_as_negative__logistic_regression__traincost_symmetric",
         replications=range(3),
         rng=np.random.default_rng(42),
     )
@@ -695,7 +725,7 @@ def test_p08_semi_synthetic_pool_uses_development_covariates_only() -> None:
     assert attached[0]["semi_synthetic_pool_rows"] == 2
     assert attached[0]["semi_synthetic_development_year_maximum"] == 2019
     assert attached[0]["outer_rows_used_in_pool"] == 0
-    assert attached[0]["semi_synthetic_content_pool"] == pytest.approx([-1.0, 1.0])
+    np.testing.assert_allclose(attached[0]["semi_synthetic_covariate_pool"], [[-1.0], [1.0]])
 
 
 def test_fixed_pi_l3_ignores_missing_sources_and_adaptive_mcse_reports_actual_status() -> None:

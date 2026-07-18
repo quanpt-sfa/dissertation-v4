@@ -347,7 +347,7 @@ schemas:
     compatibility_policy: strict
   sanction_decision_ledger_frame:
     contract_type: dataframe
-    version: 1
+    version: 2
     columns:
     - column: document_id
       dtype: string
@@ -355,25 +355,7 @@ schemas:
     - column: firm_id
       dtype: string
       nullable: false
-    - column: sanction_year
-      dtype: int16
-      nullable: true
     - column: target_fiscal_year
-      dtype: int16
-      nullable: true
-    - column: decision_number
-      dtype: string
-      nullable: true
-    - column: decision_date
-      dtype: datetime64[ns]
-      nullable: true
-    - column: publish_date
-      dtype: datetime64[ns]
-      nullable: true
-    - column: label_known_date
-      dtype: datetime64[ns]
-      nullable: true
-    - column: affected_fiscal_year
       dtype: int16
       nullable: true
     - column: primary_violation_l1
@@ -405,21 +387,6 @@ schemas:
       nullable: true
     - column: period_link_confidence
       dtype: string
-      nullable: true
-    - column: decision_total_fine
-      dtype: float64
-      nullable: true
-    - column: has_fine
-      dtype: boolean
-      nullable: true
-    - column: has_suspension
-      dtype: boolean
-      nullable: true
-    - column: has_warning
-      dtype: boolean
-      nullable: true
-    - column: has_remedy
-      dtype: boolean
       nullable: true
     - column: source_record_refs
       dtype: string
@@ -658,6 +625,160 @@ schemas:
     strict_columns: false
     coerce: false
     compatibility_policy: strict
+  feature_store_file_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: [feature_id]
+    uniqueness_constraints: [[feature_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_store_identifier_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: firm_id
+      dtype: string
+      nullable: false
+    primary_key: []
+    uniqueness_constraints: []
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_store_availability_violation_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: []
+    uniqueness_constraints: []
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_store_coverage_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: [feature_id]
+    uniqueness_constraints: [[feature_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_store_research_decision_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: [feature_id]
+    uniqueness_constraints: [[feature_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_value_diagnostic_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: [feature_id]
+    uniqueness_constraints: [[feature_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  accounting_identity_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: firm_id
+      dtype: string
+      nullable: false
+    primary_key: []
+    uniqueness_constraints: []
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  audited_unaudited_adjustment_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: []
+    uniqueness_constraints: []
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  ratio_diagnostic_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: []
+    uniqueness_constraints: []
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  temporal_feature_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: [feature_id]
+    uniqueness_constraints: [[feature_id]]
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
+  feature_redundancy_audit_frame:
+    contract_type: dataframe
+    version: 1
+    columns:
+    - column: feature_id
+      dtype: string
+      nullable: false
+    primary_key: []
+    uniqueness_constraints: []
+    row_checks: []
+    cross_column_checks: []
+    strict_columns: false
+    coerce: false
+    compatibility_policy: strict
   fold_weights_frame:
     contract_type: dataframe
     version: 1
@@ -823,7 +944,7 @@ schemas:
       check: greater_than_or_equal
       min: 0.0
     cross_column_checks: []
-    strict_columns: true
+    strict_columns: false
     coerce: false
     compatibility_policy: strict
   raw_audit_schema:

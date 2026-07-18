@@ -118,7 +118,6 @@ def test_sanction_year_2024_maps_to_target_fiscal_year_2023() -> None:
     row = _decision("DOC-1")
     assert target_fiscal_year(row) == 2023
     ledger = cast(Any, _build([row])).decision_ledger
-    assert ledger.loc[0, _columns()[SANCTION_YEAR]] == 2024
     assert ledger.loc[0, _columns()[TARGET_FISCAL_YEAR]] == 2023
 
 
@@ -148,7 +147,6 @@ def test_affected_fiscal_year_never_overrides_next_calendar_year_target() -> Non
     ledger = cast(Any, _build([row])).decision_ledger
     assert target_fiscal_year(row) == 2023
     assert ledger.loc[0, _columns()[TARGET_FISCAL_YEAR]] == 2023
-    assert ledger.loc[0, _columns()[AFFECTED_FISCAL_YEAR]] == 2021
 
 
 def test_s3_target_does_not_apply_prediction_date_or_horizon_filter() -> None:

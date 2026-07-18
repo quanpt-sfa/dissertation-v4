@@ -6,9 +6,11 @@ Source: config/pipeline.yaml
 |---|---|---|---|
 | ablation_results | P13 | json_array | `P13/ablations.json` |
 | access_matrix | P00 | access_matrix_schema | `P00/access_matrix.json` |
+| accounting_identity_audit | P07 | accounting_identity_audit_frame | `P07/accounting_identity_audit.csv` |
 | anchor_capability | P05 | json_object | `P05/anchor_capability.json` |
 | annual_evidence_audit | P03 | json_object | `P03/annual_evidence_audit.json` |
 | artifact_catalog | P00 | artifact_catalog_schema | `P00/artifact_catalog.json` |
+| audited_unaudited_adjustment_audit | P07 | audited_unaudited_adjustment_audit_frame | `P07/audited_unaudited_adjustment_audit.csv` |
 | availability_registry | P03 | json_array | `P03/availability_registry.json` |
 | bootstrap_batches | P12 | json_array | `P12/bootstrap/{outer_fold}.json` |
 | calibration_outputs | P12 | json_object | `P12/calibration/{outer_fold}.json` |
@@ -32,9 +34,18 @@ Source: config/pipeline.yaml
 | feature_missingness_audit | P07 | text_value | `P07/feature_missingness_audit.csv` |
 | feature_panel | P07 | feature_panel_frame | `P07/feature_panel.parquet` |
 | feature_panel_schema | P07 | json_object | `P07/feature_panel_schema.json` |
+| feature_redundancy_audit | P07 | feature_redundancy_audit_frame | `P07/feature_redundancy_audit.csv` |
 | feature_registry | P07 | json_array | `P07/feature_registry.json` |
 | feature_registry_csv | P07 | text_value | `P07/feature_registry.csv` |
 | feature_registry_table | P07 | feature_registry_frame | `P07/feature_registry.parquet` |
+| feature_store_availability_violations | P07 | feature_store_availability_violation_frame | `P07/feature_store_availability_violations.csv` |
+| feature_store_coverage_audit | P07 | feature_store_coverage_audit_frame | `P07/feature_store_coverage_audit.csv` |
+| feature_store_file_audit | P07 | feature_store_file_audit_frame | `P07/feature_store_file_audit.csv` |
+| feature_store_identifier_crosswalk_audit | P07 | feature_store_identifier_audit_frame | `P07/feature_store_identifier_crosswalk_audit.csv` |
+| feature_store_manifest_validated | P07 | json_object | `P07/feature_store_manifest_validated.json` |
+| feature_store_research_decision_audit | P07 | feature_store_research_decision_audit_frame | `P07/feature_store_research_decision_audit.csv` |
+| feature_store_validation_report | P07 | json_object | `P07/feature_store_validation_report.json` |
+| feature_value_diagnostic_audit | P07 | feature_value_diagnostic_frame | `P07/feature_value_diagnostic_audit.csv` |
 | feature_view_matrix | P07 | text_value | `P07/feature_view_matrix.csv` |
 | feature_views | P07 | json_object | `P07/feature_views.json` |
 | final_artifact_manifest | P17 | json_object | `P17/final_artifact_manifest.json` |
@@ -74,6 +85,7 @@ Source: config/pipeline.yaml
 | p07_summary | P07 | json_object | `P07/p07_summary.json` |
 | prospective_set | P04 | risk_sets_frame | `P04/prospective_set.parquet` |
 | protocol_hash | P00 | protocol_hash_schema | `P00/protocol_hash.txt` |
+| ratio_diagnostic_audit | P07 | ratio_diagnostic_audit_frame | `P07/ratio_diagnostic_audit.csv` |
 | raw_audit | P01 | raw_audit_schema | `P01/raw_audit/{source_id}.json` |
 | raw_outer_predictions | P11 | raw_outer_predictions_frame | `P11/predictions/{outer_fold}.parquet` |
 | registry_lock | P00 | registry_lock_schema | `P00/registry.lock.json` |
@@ -81,13 +93,14 @@ Source: config/pipeline.yaml
 | sanction_decision_ledger | P03 | sanction_decision_ledger_frame | `P03/sanction_decision_ledger.parquet` |
 | schema_catalog | P00 | schema_catalog_schema | `P00/schema_catalog.json` |
 | sealed_outcome_store | P05 | sealed_outcome_frame | `P05/sealed_outcomes.parquet` |
-| simulation_batches | P08 | simulation_batch_frame | `P08/batches/{scenario_id}/{method_id}/{batch_id}.parquet` |
+| simulation_batches | P08 | simulation_batch_frame | `P08/b/{scenario_key}/{method_key}/{batch_key}.pq` |
 | simulation_scenario_registry | P08 | json_array | `P08/scenario_registry.json` |
 | source_channel_matrices | P05 | json_object | `P05/source_channel_matrices.json` |
 | source_config_manifest | P00 | source_config_manifest_schema | `P00/source_config_manifest.json` |
 | source_sensitivity_outputs | P13 | json_object | `P13/source_sensitivity.json` |
 | step_catalog | P00 | step_catalog_schema | `P00/step_catalog.json` |
 | success_receipt | P00 | success_receipt_schema | `P00/_SUCCESS.json` |
+| temporal_feature_audit | P07 | temporal_feature_audit_frame | `P07/temporal_feature_audit.csv` |
 | temporal_split_registry | P09 | json_array | `P09/temporal_splits.json` |
 | threshold_interaction_results | P16 | json_object | `P16/threshold_interactions.json` |
 | utility_scenarios | P12 | json_array | `P12/utility/{outer_fold}.json` |

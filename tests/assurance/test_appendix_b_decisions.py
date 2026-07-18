@@ -106,7 +106,7 @@ def test_T008_learner_roster(registry: dict[str, Any]) -> None:
         "random_forest",
         "main_boosting",
     ]
-    assert get(registry, "learners.pu_branch") == ["anchor_pu"]
+    assert get(registry, "learners.pu_branch") == ["pu"]
 
 
 def test_T009_tuning_budget(registry: dict[str, Any]) -> None:
@@ -228,7 +228,7 @@ def test_T027_source_holdout(registry: dict[str, Any]) -> None:
 
 def test_T028_pu_positive_set(registry: dict[str, Any]) -> None:
     canonical(registry, "D28", "Tập dương PU")
-    assert get(registry, "learners.pu_branch") == ["anchor_pu"]
+    assert get(registry, "learners.pu_branch") == ["pu"]
     assert get(registry, "learners.sensitivity") == ["noisy_positive_pu"]
 
 
@@ -315,10 +315,12 @@ def test_T042_simulation_methods(registry: dict[str, Any]) -> None:
     canonical(registry, "D42", "Phương pháp mô phỏng")
     assert get(registry, "simulation.oracle_role") == "upper_benchmark_only"
     assert get(registry, "simulation.methods") == [
-        "observability_only",
-        "content_only",
-        "full",
-        "anchor_pu",
+        "naive_observed_as_negative",
+        "verified_only",
+        "ipw",
+        "pu",
+        "latent_bayesian",
+        "partial_identification",
     ]
 
 

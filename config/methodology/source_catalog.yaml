@@ -7,7 +7,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/source/identity/firm_identity_master_augmented.csv
+        - data/source/firm_identity_master_augmented.csv
         excludes: []
         cardinality: one
       format: csv
@@ -36,7 +36,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/source/lifecycle/listing_history_expanded_step31_vietstock_profile_timeline.csv
+        - data/source/listing_history_expanded_step31_vietstock_profile_timeline.csv
         excludes: []
         cardinality: one
       format: csv
@@ -67,7 +67,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/source/evidence/firm_event_sanction_panel.csv
+        - data/source/firm_event_sanction_panel.csv
         excludes: []
         cardinality: one
       format: csv
@@ -85,12 +85,7 @@ source_catalog:
       semantic_fields:
         firm_id: [issuer_ticker]
         document_id: [document_id]
-        decision_number: [decision_number]
-        sanction_year: [sanction_year, observed_year]
-        decision_date: [decision_date]
-        publish_date: [publish_date]
         target_fiscal_year: [target_fiscal_year]
-        label_known_date: [label_known_date]
         primary_violation_l1: [primary_violation_l1]
         primary_violation_l2: [primary_violation_l2]
         construct_family: [construct_family]
@@ -99,21 +94,15 @@ source_catalog:
         row_inclusion: [train_include_flag]
         hard_positive: [is_direct_label]
         legacy_event_id: [firm_event_id]
-        affected_fiscal_year: [affected_fiscal_year]
-        period_link_source: [label_year_source]
-        period_link_confidence: [label_confidence]
-        decision_total_fine: [total_fine, fine_amount]
-        has_fine: [has_fine]
-        has_suspension: [has_suspension]
-        has_warning: [has_warning]
-        has_remedy: [has_remedy]
+        period_link_source: [period_link_source]
+        period_link_confidence: [period_link_confidence]
       required_semantic_fields:
       - firm_id
       - document_id
       - row_inclusion
       - hard_positive
-      key_semantics: [document_id, firm_id]
-      date_semantics: [decision_date, publish_date, label_known_date]
+      key_semantics: []
+      date_semantics: []
       evidence_mapping:
         processor: sanction_calendar_year
         temporal_role: next_calendar_year_regulatory_event
@@ -148,7 +137,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/source/financial/financial_statement_core_long.csv.gz
+        - data/source/financial_statement_full_long.csv.gz
         excludes: []
         cardinality: one
       format: csv
@@ -161,7 +150,7 @@ source_catalog:
       original_unit: firm-year-audit-status-item
       role: evidence
       verification_status: observed_opportunity_only
-      coverage_dimensions: [fiscal_year, audit_status, statement_family, canonical_item]
+      coverage_dimensions: [fiscal_year, audit_status, statement_family, source_item_id]
       data_risks: [duplicate_item, scope_conflict, schema_drift, missing_pair]
       semantic_fields:
         firm_id: [issuer_ticker]
@@ -169,7 +158,7 @@ source_catalog:
         audit_status: [audit_status]
         statement_family: [statement_family]
         statement_scope: [scope]
-        item_id: [canonical_item]
+        item_id: [source_item_id]
         value: [value_numeric]
         unit: [unit]
         source_file: [source_file]
@@ -195,12 +184,12 @@ source_catalog:
         logical_sources:
         - source_id: S1_profit_adjustment
           endpoint_id: profit_adjustment
-          canonical_item: profit_after_tax
+          canonical_item: income_statement__18_loi_nhuan_sau_thue_thu_nhap_doanh_nghiep
           statement_family: income_statement
           materiality_threshold: null
         - source_id: S1_revenue_adjustment
           endpoint_id: revenue_adjustment
-          canonical_item: net_revenue
+          canonical_item: income_statement__3_doanh_thu_thuan
           statement_family: income_statement
           materiality_threshold: null
       panel_mapping:
@@ -216,7 +205,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/source/audit/bctc_audit_annual_long.csv
+        - data/source/bctc_audit_annual_long.csv
         excludes: []
         cardinality: one
       format: csv
@@ -277,7 +266,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/source/industry/bctc_industry_icb.csv
+        - data/source/bctc_industry_icb.csv
         excludes: []
         cardinality: one
       format: csv
@@ -310,7 +299,7 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/source/ownership/ownership_year_latest_snapshot_long.csv.gz
+        - data/source/ownership_year_latest_snapshot_long.csv.gz
         excludes: []
         cardinality: one
       format: csv
@@ -342,7 +331,7 @@ source_catalog:
       required: false
       discovery:
         globs:
-        - data/source/macro/macro_cpi_annual.csv
+        - data/source/macro_cpi_annual.csv
         excludes: []
         cardinality: one
       format: csv
@@ -371,7 +360,7 @@ source_catalog:
       required: false
       discovery:
         globs:
-        - data/optional/dividend_annual_long.csv.gz
+        - data/source/dividend_annual_long.csv.gz
         excludes: []
         cardinality: one
       format: csv
@@ -402,7 +391,7 @@ source_catalog:
       required: false
       discovery:
         globs:
-        - data/source/known_cases/known_cases.csv
+        - data/source/known_cases.csv
         excludes: []
         cardinality: one_or_none
       format: csv

@@ -337,6 +337,18 @@ Hàng rào:
 
 Script: `scripts/p07_features.py`.
 
+P07 loads the immutable one-file-per-feature store declared in the compiled
+`features.store` registry. P02 owns only the canonical firm-year spine and never
+reads or materializes P07 feature columns. The ingestion boundary validates the
+manifest, SHA-256, version, scalar schema, firm-year uniqueness, identifier
+crosswalk, and as-of availability before joining a LOCKED feature.
+
+The supplied store has 142 operational LOCKED features and nine technically
+materialized Beneish features that remain `RESEARCH_DECISION_REQUIRED`. Synthetic
+annual anchors are retained as synthetic timing metadata and are never described
+as observed filing dates. Direct S1 target components are governed separately for
+each target; they are not globally blocked for unaffected S3 targets.
+
 Mục tiêu:
 
 - tạo raw panel một dòng `firm_id × fiscal_year`, gồm prediction anchor, eligibility và
@@ -371,9 +383,9 @@ Hàng rào:
 
 Scripts:
 
-- `p08_build_scenario_registry.py`;
-- `p08_run_batch.py`;
-- `p08_aggregate_batches.py`.
+- `p08a_build_scenario_registry.py`;
+- `p08b_run_batch.py`;
+- `p08c_aggregate_batches.py`.
 
 Mục tiêu:
 

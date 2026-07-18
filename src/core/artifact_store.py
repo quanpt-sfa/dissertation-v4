@@ -85,7 +85,9 @@ class ArtifactStore:
         self._recover_or_reject_existing(target, manifest_path, item)
 
         target.parent.mkdir(parents=True, exist_ok=True)
-        stage_dir = Path(tempfile.mkdtemp(prefix=f".{target.name}.stage-", dir=target.parent))
+        stage_root = self.root / ".t"
+        stage_root.mkdir(exist_ok=True)
+        stage_dir = Path(tempfile.mkdtemp(prefix="s-", dir=stage_root))
         staged_artifact = stage_dir / target.name
         staged_manifest = stage_dir / manifest_path.name
         try:
@@ -105,8 +107,8 @@ class ArtifactStore:
             )
             _fsync_file(staged_artifact)
             _fsync_file(staged_manifest)
-            os.replace(staged_artifact, target)
-            os.replace(staged_manifest, manifest_path)
+            _safe_replace(staged_artifact, target)
+            _safe_replace(staged_manifest, manifest_path)
             _fsync_directory(target.parent)
             return manifest
         finally:
@@ -208,7 +210,7 @@ class ArtifactStore:
         for path in (target, manifest_path):
             if path.exists():
                 destination = quarantine / f"{path.name}.{os.getpid()}"
-                os.replace(path, destination)
+                _safe_replace(path, destination)
 
     @staticmethod
     def _manifest_path(target: Path) -> Path:
@@ -317,3 +319,15 @@ def _fsync_directory(path: Path) -> None:
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
+
+
+def _safe_replace(src: Path, dst: Path) -> None:
+    import time
+    for i in range(15):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if i == 14:
+                raise
+            time.sleep(0.1)

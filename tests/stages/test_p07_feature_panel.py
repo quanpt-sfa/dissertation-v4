@@ -148,3 +148,29 @@ def test_p07_unresolved_features_are_not_confirmatory() -> None:
         not item["included_feature_ids"]
         for item in cast(list[dict[str, object]], result.feature_views["views"])
     )
+
+
+def test_target_component_is_blocked_only_for_affected_target() -> None:
+    panel, risk = _inputs()
+    feature = _locked_feature(
+        feature_id="fs_aud_profit_after_tax",
+        target_component_flag=True,
+        source_semantics=["post_audit_profit_after_tax"],
+    )
+    result = build_feature_panel(
+        firm_year_panel=panel,
+        risk_sets=risk,
+        feature_definitions=[feature],
+        columns=_columns(),
+        target_ids=["L1_ANNUAL", "S3_BROAD"],
+    )
+    decisions = {
+        str(row.target_id): str(row.decision) for row in result.leakage_rows.itertuples(index=False)
+    }
+    assert decisions == {"L1_ANNUAL": "BLOCK", "S3_BROAD": "ALLOW"}
+    views = cast(list[dict[str, object]], result.feature_views["views"])
+    confirmatory = {
+        str(item["target_id"]): item for item in views if item["view_id"] == "core_confirmatory"
+    }
+    assert confirmatory["L1_ANNUAL"]["included_feature_ids"] == []
+    assert confirmatory["S3_BROAD"]["included_feature_ids"] == ["fs_aud_profit_after_tax"]

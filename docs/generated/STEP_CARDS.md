@@ -78,7 +78,7 @@ Feature and leakage audit
 
 Reads: ['observability_registry', 'firm_year_panel', 'risk_sets', 'raw_audit']
 
-Writes: ['feature_panel', 'feature_registry', 'leakage_registry', 'feature_registry_table', 'feature_registry_csv', 'feature_lineage_registry', 'leakage_registry_table', 'leakage_registry_csv', 'feature_views', 'feature_view_matrix', 'feature_availability_audit', 'feature_missingness_audit', 'feature_panel_schema', 'p07_summary', 'p07_decision_report']
+Writes: ['feature_panel', 'feature_registry', 'leakage_registry', 'feature_registry_table', 'feature_registry_csv', 'feature_lineage_registry', 'leakage_registry_table', 'leakage_registry_csv', 'feature_views', 'feature_view_matrix', 'feature_availability_audit', 'feature_missingness_audit', 'feature_panel_schema', 'p07_summary', 'p07_decision_report', 'feature_store_manifest_validated', 'feature_store_validation_report', 'feature_store_file_audit', 'feature_store_identifier_crosswalk_audit', 'feature_store_availability_violations', 'feature_store_coverage_audit', 'feature_store_research_decision_audit', 'feature_value_diagnostic_audit', 'accounting_identity_audit', 'audited_unaudited_adjustment_audit', 'ratio_diagnostic_audit', 'temporal_feature_audit', 'feature_redundancy_audit']
 
 Required receipts: []
 
@@ -86,7 +86,7 @@ Required receipts: []
 
 Method simulation
 
-Reads: ['feature_panel', 'feature_registry', 'source_channel_matrices', 'simulation_scenario_registry', 'simulation_batches']
+Reads: ['firm_year_panel', 'feature_panel', 'feature_registry', 'source_channel_matrices', 'simulation_scenario_registry', 'simulation_batches']
 
 Writes: ['simulation_scenario_registry', 'simulation_batches', 'mcse_report']
 

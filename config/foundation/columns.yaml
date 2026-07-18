@@ -291,3 +291,15 @@ columns:
     physical_name: mcse
     dtype: float64
     semantic_role: monte_carlo_error
+  scenario_key:
+    physical_name: scenario_key
+    dtype: string
+    semantic_role: filesystem_alias
+  method_key:
+    physical_name: method_key
+    dtype: string
+    semantic_role: filesystem_alias
+  batch_key:
+    physical_name: batch_key
+    dtype: string
+    semantic_role: filesystem_alias

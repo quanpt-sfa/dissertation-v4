@@ -520,6 +520,136 @@ artifacts:
     immutability: immutable
     aggregation_behavior: singleton
     checkpoint_role: none
+  feature_store_manifest_validated:
+    producer_step: P07
+    path_template: P07/feature_store_manifest_validated.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_store_validation_report:
+    producer_step: P07
+    path_template: P07/feature_store_validation_report.json
+    schema_id: json_object
+    format: json
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_store_file_audit:
+    producer_step: P07
+    path_template: P07/feature_store_file_audit.csv
+    schema_id: feature_store_file_audit_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_store_identifier_crosswalk_audit:
+    producer_step: P07
+    path_template: P07/feature_store_identifier_crosswalk_audit.csv
+    schema_id: feature_store_identifier_audit_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_store_availability_violations:
+    producer_step: P07
+    path_template: P07/feature_store_availability_violations.csv
+    schema_id: feature_store_availability_violation_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_store_coverage_audit:
+    producer_step: P07
+    path_template: P07/feature_store_coverage_audit.csv
+    schema_id: feature_store_coverage_audit_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_store_research_decision_audit:
+    producer_step: P07
+    path_template: P07/feature_store_research_decision_audit.csv
+    schema_id: feature_store_research_decision_audit_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_value_diagnostic_audit:
+    producer_step: P07
+    path_template: P07/feature_value_diagnostic_audit.csv
+    schema_id: feature_value_diagnostic_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  accounting_identity_audit:
+    producer_step: P07
+    path_template: P07/accounting_identity_audit.csv
+    schema_id: accounting_identity_audit_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  audited_unaudited_adjustment_audit:
+    producer_step: P07
+    path_template: P07/audited_unaudited_adjustment_audit.csv
+    schema_id: audited_unaudited_adjustment_audit_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  ratio_diagnostic_audit:
+    producer_step: P07
+    path_template: P07/ratio_diagnostic_audit.csv
+    schema_id: ratio_diagnostic_audit_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  temporal_feature_audit:
+    producer_step: P07
+    path_template: P07/temporal_feature_audit.csv
+    schema_id: temporal_feature_audit_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
+  feature_redundancy_audit:
+    producer_step: P07
+    path_template: P07/feature_redundancy_audit.csv
+    schema_id: feature_redundancy_audit_frame
+    format: csv
+    coordinates: []
+    sensitivity_class: restricted
+    immutability: immutable
+    aggregation_behavior: singleton
+    checkpoint_role: none
   simulation_scenario_registry:
     producer_step: P08
     path_template: P08/scenario_registry.json
@@ -532,13 +662,13 @@ artifacts:
     checkpoint_role: adaptive_simulation
   simulation_batches:
     producer_step: P08
-    path_template: P08/batches/{scenario_id}/{method_id}/{batch_id}.parquet
+    path_template: P08/b/{scenario_key}/{method_key}/{batch_key}.pq
     schema_id: simulation_batch_frame
     format: parquet
     coordinates:
-    - scenario_id
-    - method_id
-    - batch_id
+    - scenario_key
+    - method_key
+    - batch_key
     sensitivity_class: public
     immutability: immutable
     aggregation_behavior: partitioned

@@ -213,7 +213,20 @@ Source: config/pipeline.yaml
       "feature_missingness_audit",
       "feature_panel_schema",
       "p07_summary",
-      "p07_decision_report"
+      "p07_decision_report",
+      "feature_store_manifest_validated",
+      "feature_store_validation_report",
+      "feature_store_file_audit",
+      "feature_store_identifier_crosswalk_audit",
+      "feature_store_availability_violations",
+      "feature_store_coverage_audit",
+      "feature_store_research_decision_audit",
+      "feature_value_diagnostic_audit",
+      "accounting_identity_audit",
+      "audited_unaudited_adjustment_audit",
+      "ratio_diagnostic_audit",
+      "temporal_feature_audit",
+      "feature_redundancy_audit"
     ]
   },
   "P08": {
@@ -231,6 +244,7 @@ Source: config/pipeline.yaml
       "restricted"
     ],
     "reads": [
+      "firm_year_panel",
       "feature_panel",
       "feature_registry",
       "source_channel_matrices",

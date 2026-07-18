@@ -40,6 +40,7 @@ _VIEW_IDS = (
     "target_component_ablation",
     "core_confirmatory",
     "robustness_extended",
+    "target_reconstruction_diagnostic",
 )
 _FORBIDDEN_PANEL_TOKENS = (OUTCOME, "known_case", "sanction_event", "post_outcome")
 
@@ -93,7 +94,7 @@ def build_feature_panel(
         blocked_matches = set(
             cast(list[object], legacy_definition.get("source_semantics", []))
         ) & set(blocked_label_semantics or [])
-        if blocked_matches:
+        if blocked_matches and legacy_definition.get("allowed_in_label_model") is not False:
             raise ValueError(
                 f"feature={legacy_definition.get('feature_id')}: "
                 "label-derived same-year variable is prohibited"
@@ -130,7 +131,6 @@ def build_feature_panel(
         *_normalise_definitions(intended_definitions or [], operational=False),
     ]
     _validate_unique_ids(definitions)
-    blocked = set(blocked_label_semantics or [])
     operational: list[dict[str, object]] = []
     lineage_rows: list[dict[str, object]] = []
     availability_rows: list[dict[str, object]] = []
@@ -139,14 +139,6 @@ def build_feature_panel(
         feature_id = str(definition["feature_id"])
         column = definition.get("physical_column")
         status = str(definition["research_decision_status"])
-        source_semantics = {
-            str(value) for value in cast(list[object], definition.get("source_semantics", []))
-        }
-        blocked_semantics = sorted(source_semantics & blocked)
-        if blocked_semantics:
-            definition["confirmatory_status"] = "blocked"
-            definition["research_decision_status"] = "UNAVAILABLE"
-            definition["availability_reason_code"] = "LABEL_DERIVED_COMPONENT"
         if status == "LOCKED" and definition["research_decision_status"] == "LOCKED":
             if not isinstance(column, str) or not column or column not in base.columns:
                 raise ValueError(
@@ -154,7 +146,7 @@ def build_feature_panel(
                 )
             if not bool(definition.get("operational", False)):
                 raise ValueError(f"feature={feature_id}: locked feature must be operational")
-            panel[feature_id] = pd.to_numeric(base[column], errors="raise").astype("float64")
+            panel[feature_id] = _coerce_feature(base[column], definition)
             operational.append(definition)
         availability_rows.append(
             {
@@ -331,10 +323,11 @@ def _build_leakage_rows(
     for feature in registry:
         for target_id in target_ids:
             status = str(feature["research_decision_status"])
+            affected_targets = _target_component_targets(feature)
             if status != "LOCKED":
                 decision, reason = "RESEARCH_DECISION_REQUIRED", "FEATURE_NOT_LOCKED"
-            elif bool(feature["target_component_flag"]):
-                decision, reason = "ALLOW_WITH_ABLATION", "TARGET_COMPONENT_ABLATION"
+            elif target_id in affected_targets:
+                decision, reason = "BLOCK", "DIRECT_TARGET_COMPONENT"
             elif bool(feature["source_specific_flag"]):
                 decision, reason = "ALLOW_WITH_ABLATION", "SOURCE_BLIND_EXCLUSION"
             else:
@@ -344,8 +337,13 @@ def _build_leakage_rows(
                 {
                     "feature_id": feature["feature_id"],
                     target_column: target_id,
+                    temporal_role_column: temporal_role,
+                    "target_component_flag": bool(feature["target_component_flag"]),
+                    "source_specific_flag": bool(feature["source_specific_flag"]),
                     "temporal_leakage_status": "PASS",
-                    "target_component_status": "ABLATABLE"
+                    "target_component_status": "DIRECT_COMPONENT"
+                    if target_id in affected_targets
+                    else "ABLATABLE"
                     if bool(feature["target_component_flag"])
                     else "NONE",
                     "source_overlap_status": "SOURCE_SPECIFIC"
@@ -361,11 +359,17 @@ def _build_leakage_rows(
                     "reason": reason.replace("_", " ").lower(),
                     "required_action": "lock_definition"
                     if decision == "RESEARCH_DECISION_REQUIRED"
+                    else "exclude_from_confirmatory_prediction"
+                    if decision == "BLOCK"
                     else "none",
                     "review_status": "PASS"
                     if decision in {"ALLOW", "ALLOW_WITH_ABLATION"}
                     else "BLOCKED",
-                    f"target_{temporal_role_column}": temporal_role,
+                    "permitted_views": "target_reconstruction_diagnostic"
+                    if decision == "BLOCK"
+                    else "none"
+                    if decision == "RESEARCH_DECISION_REQUIRED"
+                    else "target_specific_registry_views",
                 }
             )
     return pd.DataFrame(rows)
@@ -413,6 +417,12 @@ def _build_views(
                         "confirmatory",
                         "robustness_only",
                     }
+                elif view_id == "target_reconstruction_diagnostic":
+                    allowed = (
+                        decision == "BLOCK"
+                        and str(row.iloc[0]["reason_code"] if not row.empty else "")
+                        == "DIRECT_TARGET_COMPONENT"
+                    )
                 if allowed:
                     included.append(feature_id)
                 else:
@@ -431,6 +441,43 @@ def _build_views(
                 }
             )
     return {"status": "PASS", "views": views, "preprocessing_fit_at_p07": False}
+
+
+def _target_component_targets(feature: dict[str, object]) -> set[str]:
+    if not bool(feature.get("target_component_flag")):
+        return set()
+    semantics = {
+        str(value).lower() for value in cast(list[object], feature.get("source_semantics", []))
+    }
+    feature_id = str(feature.get("feature_id", "")).lower()
+    if any("profit_after_tax" in value for value in semantics | {feature_id}) or any(
+        "net_revenue" in value for value in semantics | {feature_id}
+    ):
+        return {"L1_ANNUAL", "L1_REPORTING", "L1_CONTENT_STRICT"}
+    return set()
+
+
+def _coerce_feature(values: pd.Series, definition: dict[str, object]) -> pd.Series:
+    expected = str(definition["expected_dtype"])
+    if expected in {"float64", "float32", "int64", "int32", "int16"}:
+        numeric = pd.to_numeric(values, errors="raise")
+        if expected.startswith("int"):
+            if numeric.dropna().mod(1).ne(0).any():
+                raise ValueError(
+                    f"feature={definition['feature_id']}: non-integral value for {expected}"
+                )
+            if expected == "int16":
+                return numeric.astype("Int16")
+            if expected == "int32":
+                return numeric.astype("Int32")
+            return numeric.astype("Int64")
+        return numeric.astype("float32" if expected == "float32" else "float64")
+    if expected in {"string", "category"}:
+        result = values.astype("string")
+        return result.astype("category") if expected == "category" else result
+    if expected in {"bool", "boolean"}:
+        return values.astype("boolean")
+    raise ValueError(f"feature={definition['feature_id']}: unsupported expected dtype {expected}")
 
 
 def _missingness_audit(

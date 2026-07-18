@@ -31,13 +31,10 @@ APPROVED_CORE_FILES = {
 # preserves the production-stage I/O firewall.
 NONPRODUCTION_AUDIT_SCRIPTS = {
     "scripts/p07a_feature_definition_audit.py",
-    "scripts/p07b_literature_data_audit.py",
-    "scripts/p07c_feature_catalogue_audit.py",
-    "scripts/p07d_dataset_mapping_discovery.py",
 }
-NONPRODUCTION_AUDIT_MODULES = {
-    "src/features/definition_audit.py",
-    "src/features/literature_audit.py",
+NONPRODUCTION_AUDIT_MODULES: set[str] = set()
+PRODUCTION_DATA_BOUNDARIES = {
+    "src/features/store.py",
 }
 
 StringMap = dict[str, Any]
@@ -52,16 +49,15 @@ def _mapping(value: object, context: str) -> StringMap:
 def _is_registered_data_boundary(root: Path, path: Path) -> bool:
     relative = path.relative_to(root).as_posix()
     return (
-        relative in (NONPRODUCTION_AUDIT_SCRIPTS | NONPRODUCTION_AUDIT_MODULES)
+        relative
+        in (NONPRODUCTION_AUDIT_SCRIPTS | NONPRODUCTION_AUDIT_MODULES | PRODUCTION_DATA_BOUNDARIES)
         or relative.startswith("src/p01/")
         or relative.startswith("src/p02/")
         or relative.startswith("src/snapshot/")
         or relative
         in {
             "scripts/p01_audit_raw.py",
-            "scripts/p01_raw_audit.py",
             "scripts/p02_build_firm_panel.py",
-            "scripts/p02_panel.py",
             "scripts/create_data_snapshot.py",
             "scripts/run_pipeline.py",
         }
@@ -108,7 +104,8 @@ def validate_source_patterns(
 
         text = path.read_text(encoding="utf-8")
         relative = path.relative_to(root).as_posix()
-        if relative not in NONPRODUCTION_AUDIT_SCRIPTS:
+        registered_boundary = _is_registered_data_boundary(root, path)
+        if relative not in NONPRODUCTION_AUDIT_SCRIPTS and not registered_boundary:
             for pattern in (*FORBIDDEN_IO, *FORBIDDEN_APPEND):
                 if pattern in text:
                     raise ConfigurationError(
@@ -127,7 +124,7 @@ def validate_source_patterns(
             if isinstance(node, ast.Constant) and isinstance(node.value, str)
         }
 
-        if not _is_registered_data_boundary(root, path):
+        if not registered_boundary:
             copied_columns = sorted(physical_names & literals)
             if copied_columns:
                 raise ConfigurationError(

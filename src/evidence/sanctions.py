@@ -76,6 +76,7 @@ class SanctionDecisionInput:
     has_warning: bool | None = None
     has_remedy: bool | None = None
     source_ref: str | None = None
+    target_fiscal_year: int | None = None
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,8 @@ def resolve_sanction_year(row: SanctionDecisionInput) -> tuple[int | None, str]:
     """Apply the locked field/date precedence without consulting label year."""
     if row.sanction_year is not None:
         return int(row.sanction_year), SANCTION_YEAR
+    if row.target_fiscal_year is not None:
+        return int(row.target_fiscal_year) + 1, TARGET_FISCAL_YEAR
     if row.decision_date is not None:
         return row.decision_date.year, DECISION_DATE
     if row.publish_date is not None:
@@ -97,6 +100,8 @@ def resolve_sanction_year(row: SanctionDecisionInput) -> tuple[int | None, str]:
 
 
 def target_fiscal_year(row: SanctionDecisionInput) -> int | None:
+    if row.target_fiscal_year is not None:
+        return int(row.target_fiscal_year)
     year, _ = resolve_sanction_year(row)
     return None if year is None else year - 1
 
@@ -497,13 +502,7 @@ def _decision_ledger_row(
     return {
         columns[DOCUMENT_ID]: first.document_id,
         columns[FIRM_ID]: first.firm_id,
-        columns[SANCTION_YEAR]: sanction_year_value,
         columns[TARGET_FISCAL_YEAR]: target_year,
-        columns[DECISION_NUMBER]: first.decision_number,
-        columns[DECISION_DATE]: first.decision_date,
-        columns[PUBLISH_DATE]: first.publish_date,
-        columns[LABEL_KNOWN_DATE]: _known_date(first),
-        columns[AFFECTED_FISCAL_YEAR]: first.affected_fiscal_year,
         columns[PRIMARY_VIOLATION_L1]: first.primary_violation_l1,
         columns[PRIMARY_VIOLATION_L2]: first.primary_violation_l2,
         columns[CONSTRUCT_FAMILY]: first.construct_family,
@@ -514,11 +513,6 @@ def _decision_ledger_row(
         columns[LEGACY_EVENT_ID]: first.legacy_event_id,
         columns[PERIOD_LINK_SOURCE]: first.period_link_source,
         columns[PERIOD_LINK_CONFIDENCE]: first.period_link_confidence,
-        columns[DECISION_TOTAL_FINE]: metadata[DECISION_TOTAL_FINE],
-        columns[HAS_FINE]: metadata[HAS_FINE],
-        columns[HAS_SUSPENSION]: metadata[HAS_SUSPENSION],
-        columns[HAS_WARNING]: metadata[HAS_WARNING],
-        columns[HAS_REMEDY]: metadata[HAS_REMEDY],
         columns[SOURCE_RECORD_REFS]: _json(
             sorted({item.source_ref for item in group if item.source_ref})
         ),
@@ -537,7 +531,6 @@ def _unresolved_ledger_row(
         reason="SANCTION_YEAR_UNRESOLVED",
         columns=columns,
     )
-    row[columns[SANCTION_YEAR]] = None
     row[columns[TARGET_FISCAL_YEAR]] = None
     return row
 
@@ -548,13 +541,7 @@ def _decision_ledger_columns(columns: dict[str, str]) -> list[str]:
         for name in (
             DOCUMENT_ID,
             FIRM_ID,
-            SANCTION_YEAR,
             TARGET_FISCAL_YEAR,
-            DECISION_NUMBER,
-            DECISION_DATE,
-            PUBLISH_DATE,
-            LABEL_KNOWN_DATE,
-            AFFECTED_FISCAL_YEAR,
             PRIMARY_VIOLATION_L1,
             PRIMARY_VIOLATION_L2,
             CONSTRUCT_FAMILY,
@@ -565,11 +552,6 @@ def _decision_ledger_columns(columns: dict[str, str]) -> list[str]:
             LEGACY_EVENT_ID,
             PERIOD_LINK_SOURCE,
             PERIOD_LINK_CONFIDENCE,
-            DECISION_TOTAL_FINE,
-            HAS_FINE,
-            HAS_SUSPENSION,
-            HAS_WARNING,
-            HAS_REMEDY,
             SOURCE_RECORD_REFS,
             TAXONOMY_CODES,
             TAXONOMY_REASON_CODE,
@@ -583,7 +565,6 @@ def _coerce_decision_ledger(frame: pd.DataFrame, columns: dict[str, str]) -> Non
     string_fields = (
         DOCUMENT_ID,
         FIRM_ID,
-        DECISION_NUMBER,
         PRIMARY_VIOLATION_L1,
         PRIMARY_VIOLATION_L2,
         CONSTRUCT_FAMILY,
@@ -598,20 +579,13 @@ def _coerce_decision_ledger(frame: pd.DataFrame, columns: dict[str, str]) -> Non
     )
     for name in string_fields:
         frame[columns[name]] = frame[columns[name]].astype("string")
-    for name in (SANCTION_YEAR, TARGET_FISCAL_YEAR, AFFECTED_FISCAL_YEAR):
+    for name in (TARGET_FISCAL_YEAR,):
         frame[columns[name]] = frame[columns[name]].astype("Int16")
-    for name in (DECISION_DATE, PUBLISH_DATE, LABEL_KNOWN_DATE):
-        frame[columns[name]] = pd.to_datetime(frame[columns[name]]).astype("datetime64[ns]")
     for name in (
         HARD_POSITIVE,
         ROW_INCLUSION,
-        HAS_FINE,
-        HAS_SUSPENSION,
-        HAS_WARNING,
-        HAS_REMEDY,
     ):
         frame[columns[name]] = frame[columns[name]].astype("boolean")
-    frame[columns[DECISION_TOTAL_FINE]] = frame[columns[DECISION_TOTAL_FINE]].astype("float64")
 
 
 def _known_date(row: SanctionDecisionInput) -> datetime | None:

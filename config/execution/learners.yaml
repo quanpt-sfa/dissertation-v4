@@ -1,32 +1,129 @@
 learners:
   confirmatory:
-  - elastic_net_logistic
-  - random_forest
-  - main_boosting
+    - elastic_net_logistic
+    - random_forest
+    - main_boosting
+
+  algorithmic_robustness:
+    - logistic_regression
+    - decision_tree
+    - linear_svm
+    - rbf_svm
+    - k_nearest_neighbors
+    - gaussian_naive_bayes
+    - adaboost
+    - extra_trees
+    - xgboost
+    - lightgbm
+    - catboost
+    - multilayer_perceptron
+
+  available_library:
+    - logistic_regression
+    - elastic_net_logistic
+    - decision_tree
+    - random_forest
+    - main_boosting
+    - linear_svm
+    - rbf_svm
+    - k_nearest_neighbors
+    - gaussian_naive_bayes
+    - adaboost
+    - extra_trees
+    - xgboost
+    - lightgbm
+    - catboost
+    - multilayer_perceptron
+
   pu_branch:
-  - anchor_pu
+    - pu
+
   sensitivity:
-  - noisy_positive_pu
+    - noisy_positive_pu
+
   settings:
+    logistic_regression:
+      inverse_regularization: 1.0
+      maximum_iterations: 2000
     elastic_net_logistic:
       inverse_regularization: 1.0
       l1_ratio: 0.5
       maximum_iterations: 2000
+    decision_tree:
+      maximum_depth: 6
+      minimum_leaf_size: 5
     random_forest:
-      trees: 500
+      trees: 200
       minimum_leaf_size: 5
       maximum_features: sqrt
     main_boosting:
-      maximum_iterations: 200
+      maximum_iterations: 150
       learning_rate: 0.05
       maximum_leaf_nodes: 15
+    linear_svm:
+      kernel: linear
+      probability: false
+    rbf_svm:
+      kernel: rbf
+      probability: false
+    k_nearest_neighbors:
+      neighbors: 5
+      weights: distance
+    gaussian_naive_bayes:
+      variance_smoothing: 1.0e-9
+    adaboost:
+      estimators: 60
+      learning_rate: 0.05
+    extra_trees:
+      trees: 200
+      minimum_leaf_size: 5
+      maximum_features: sqrt
+    xgboost:
+      estimators: 100
+      maximum_depth: 4
+      learning_rate: 0.05
+      optional_dependency: xgboost
+    lightgbm:
+      estimators: 100
+      leaves: 15
+      learning_rate: 0.05
+      optional_dependency: lightgbm
+    catboost:
+      iterations: 100
+      depth: 5
+      learning_rate: 0.05
+      optional_dependency: catboost
+    multilayer_perceptron:
+      hidden_layers: [32, 16]
+      alpha: 0.001
+      early_stopping: true
+      maximum_iterations: 200
+    pu:
+      bags: 5
+      unlabeled_to_positive_ratio: 1.0
     anchor_pu:
       bags: 25
       unlabeled_to_positive_ratio: 1.0
       inverse_regularization: 1.0
       maximum_iterations: 2000
+
   tuning:
     max_valid_configurations_per_learner_inner_fold: 50
     equivalent_budget_allowed: true
     runtime_and_valid_configuration_count_reported: true
     search_spaces: {}
+
+  cost_sensitive_contract:
+    sample_weight_supported: use_native_sample_weight
+    sample_weight_unsupported: weighted_bootstrap
+    class_weight_rule: positive_equals_fn_cost_plus_tp_benefit
+    negative_weight_rule: negative_equals_fp_cost
+    ipw_combination: multiplicative_then_mean_normalize
+    pu_combination: bagging_pu_with_cost_weighted_base_learner
+    threshold_selection: development_validation_only
+    latent_truth_for_threshold_selection: forbidden
+
+  protocol_management:
+    implementation_availability_is_not_analysis_activation: true
+    inactive_method_status: AVAILABLE_NOT_ACTIVE
+    outer_test_model_selection_forbidden: true

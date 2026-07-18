@@ -43,7 +43,6 @@ class _Observation:
     raw_firm_id: str
     normalized_firm_id: str
     resolution_method: str
-    predictors: dict[str, float | None]
 
 
 def build_firm_panel(
@@ -55,7 +54,6 @@ def build_firm_panel(
     sample_start: int,
     sample_end: int,
     output_columns: dict[str, str],
-    registered_predictor_columns: list[str] | None = None,
 ) -> PanelBuildResult:
     if sample_start > sample_end:
         raise ValueError("sample fiscal-year range is inverted")
@@ -73,17 +71,6 @@ def build_firm_panel(
     exclusions: list[dict[str, object]] = []
     seen_source_keys: set[tuple[str, str, int]] = set()
     normalized_origins: defaultdict[str, set[tuple[str, str]]] = defaultdict(set)
-    predictor_columns = sorted(set(registered_predictor_columns or []))
-    presence_sources = {
-        item.panel_spec.source_id
-        for item in source_inputs
-        if item.panel_spec.row_aggregation == "firm_year_presence"
-    }
-    if presence_sources and predictor_columns:
-        raise ValueError(
-            "firm-year presence aggregation cannot materialize registered predictors; "
-            f"sources={sorted(presence_sources)}, predictors={predictor_columns}"
-        )
     collapsed_source_rows = 0
 
     for source_input in source_inputs:
@@ -198,13 +185,6 @@ def build_firm_panel(
                     raw_firm_id=raw_firm_id,
                     normalized_firm_id=normalized,
                     resolution_method=method,
-                    predictors={
-                        column: _parse_numeric_predictor(
-                            row.get(column), source_id=panel_spec.source_id, column=column
-                        )
-                        for column in predictor_columns
-                        if column in row
-                    },
                 )
             )
             resolution_counts[
@@ -234,21 +214,11 @@ def build_firm_panel(
         raise ValueError("P02 produced an empty firm master")
 
     availability_by_key: defaultdict[tuple[str, int], dict[str, datetime]] = defaultdict(dict)
-    predictors_by_key: defaultdict[tuple[str, int], dict[str, float | None]] = defaultdict(dict)
     for observation in observations:
         if observation.source_id in core_sources:
             availability_by_key[(observation.canonical_firm_id, observation.fiscal_year)][
                 observation.source_id
             ] = observation.availability_date
-            key = (observation.canonical_firm_id, observation.fiscal_year)
-            for column, value in observation.predictors.items():
-                existing = predictors_by_key[key].get(column)
-                if existing is not None and value is not None and existing != value:
-                    raise ValueError(
-                        f"conflicting registered predictor values: key={key}, column={column}"
-                    )
-                if column not in predictors_by_key[key] or existing is None:
-                    predictors_by_key[key][column] = value
 
     panel_rows: list[dict[str, object]] = []
     incomplete: list[dict[str, object]] = []
@@ -270,12 +240,6 @@ def build_firm_panel(
             output_columns["fiscal_year"]: fiscal_year,
             output_columns["prediction_time"]: max(source_dates.values()),
         }
-        row.update(
-            {
-                column: predictors_by_key[(firm_id, fiscal_year)].get(column)
-                for column in predictor_columns
-            }
-        )
         panel_rows.append(row)
 
     if not panel_rows:
@@ -287,15 +251,13 @@ def build_firm_panel(
     firm_master = pd.DataFrame({firm_column: pd.Series(master_ids, dtype="string")})
     panel = pd.DataFrame(
         panel_rows,
-        columns=[firm_column, year_column, prediction_column, *predictor_columns],
+        columns=[firm_column, year_column, prediction_column],
     )
     panel[firm_column] = panel[firm_column].astype("string")
     panel[year_column] = panel[year_column].astype("int16")
     panel[prediction_column] = (
         pd.to_datetime(panel[prediction_column]).dt.tz_localize(None).astype("datetime64[ns]")
     )
-    for column in predictor_columns:
-        panel[column] = pd.to_numeric(panel[column], errors="raise").astype("float64")
     panel = panel.sort_values([firm_column, year_column], kind="stable").reset_index(drop=True)
 
     resolution_entries = [
@@ -462,19 +424,6 @@ def _resolve_availability_date(
         raise ValueError(f"source={panel_spec.source_id}: availability month/day is not registered")
     month, day = (int(part) for part in panel_spec.availability_month_day.split("-"))
     return datetime(fiscal_year + 1, month, day)
-
-
-def _parse_numeric_predictor(value: object, *, source_id: str, column: str) -> float | None:
-    if _missing(value):
-        return None
-    if isinstance(value, bool):
-        return float(value)
-    try:
-        return float(str(value).strip())
-    except ValueError as exc:
-        raise ValueError(
-            f"source={source_id}, predictor={column}: registered predictor must be numeric"
-        ) from exc
 
 
 def _resolve_fiscal_year_end(
