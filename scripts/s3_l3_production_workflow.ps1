@@ -67,6 +67,7 @@ function Invoke-UvPythonDev {
 
 function Assert-HardeningApplied {
     $checks = @(
+        "scripts/repair_s3_l3_migration_checker.py",
         "scripts/apply_s3_l3_production_hardening.py",
         "scripts/finalize_s3_l3_production_hardening.py",
         "scripts/repair_s3_l3_hardening_regressions.py"
@@ -92,6 +93,9 @@ Push-Location $ProjectRoot
 try {
     switch ($Mode) {
         "Migrate" {
+            # Synchronize the one-time migration generator before asking it to
+            # validate a checkout that may already contain the compatibility repairs.
+            Invoke-UvPython scripts/repair_s3_l3_migration_checker.py --apply
             Write-Host "+ uv run python scripts/apply_s3_l3_production_hardening.py --check"
             & uv run python scripts/apply_s3_l3_production_hardening.py --check
             if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
