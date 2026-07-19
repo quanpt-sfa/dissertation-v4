@@ -90,12 +90,12 @@ def resolve_sanction_year(row: SanctionDecisionInput) -> tuple[int | None, str]:
     """Apply the locked field/date precedence without consulting label year."""
     if row.sanction_year is not None:
         return int(row.sanction_year), SANCTION_YEAR
-    if row.target_fiscal_year is not None:
-        return int(row.target_fiscal_year) + 1, TARGET_FISCAL_YEAR
     if row.decision_date is not None:
         return row.decision_date.year, DECISION_DATE
     if row.publish_date is not None:
         return row.publish_date.year, PUBLISH_DATE
+    if row.target_fiscal_year is not None:
+        return int(row.target_fiscal_year) + 1, TARGET_FISCAL_YEAR
     return None, "SANCTION_YEAR_UNRESOLVED"
 
 

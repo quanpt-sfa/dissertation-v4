@@ -99,6 +99,7 @@ source_catalog:
       required_semantic_fields:
       - firm_id
       - document_id
+      - target_fiscal_year
       - row_inclusion
       - hard_positive
       key_semantics: []

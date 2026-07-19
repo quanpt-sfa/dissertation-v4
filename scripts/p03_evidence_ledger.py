@@ -58,6 +58,7 @@ from core.semantic_keys import (
     SOURCE_ROW,
     STATEMENT_FAMILY,
     STATEMENT_SCOPE,
+    TARGET_FISCAL_YEAR,
     UNIT,
     VALUE,
 )
@@ -360,7 +361,13 @@ def _sanction_rows(
 
     if not isinstance(spec, SourceSpec):
         raise TypeError("locked source specification required")
-    required = {FIRM_ID, DOCUMENT_ID, ROW_INCLUSION, HARD_POSITIVE}
+    required = {
+        FIRM_ID,
+        DOCUMENT_ID,
+        ROW_INCLUSION,
+        HARD_POSITIVE,
+        TARGET_FISCAL_YEAR,
+    }
     if not required.issubset(semantics):
         raise ValueError(
             f"source={source_id}: unresolved S3 semantics {sorted(required - set(semantics))}"
@@ -402,6 +409,7 @@ def _sanction_rows(
                 has_warning=_optional_boolean(row, semantics, HAS_WARNING),
                 has_remedy=_optional_boolean(row, semantics, HAS_REMEDY),
                 source_ref=_source_ref(row, semantics, SOURCE_FILE, SOURCE_ROW),
+                target_fiscal_year=_optional_int(row, semantics, TARGET_FISCAL_YEAR),
             )
         )
     return result

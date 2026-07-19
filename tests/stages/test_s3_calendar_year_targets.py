@@ -38,6 +38,7 @@ from evidence.sanctions import (
     SanctionDecisionInput,
     build_s3_evidence,
     classify_s3_taxonomy,
+    resolve_sanction_year,
     target_fiscal_year,
 )
 from measurement.service import build_measurement_inputs, summarize_fold_eligibility
@@ -478,3 +479,169 @@ def test_fold_eligibility_counts_are_bound_to_target_id() -> None:
 def test_missing_primary_target_blocks_confirmatory_production() -> None:
     with pytest.raises(RuntimeError, match="PRIMARY_TARGET_NOT_LOCKED"):
         require_primary_target({"primary_target_id": None}, "P10")
+
+
+def test_resolve_sanction_year_precedence() -> None:
+    from core.semantic_keys import SANCTION_YEAR, DECISION_DATE, PUBLISH_DATE, TARGET_FISCAL_YEAR
+
+    # Case 1: All fields populated -> sanction_year
+    row1 = SanctionDecisionInput(
+        document_id="DOC-1",
+        firm_id="F1",
+        sanction_year=2020,
+        decision_date=datetime(2021, 5, 5),
+        publish_date=datetime(2022, 6, 6),
+        target_fiscal_year=2018,
+    )
+    val, source = resolve_sanction_year(row1)
+    assert val == 2020
+    assert source == SANCTION_YEAR
+
+    # Case 2: sanction_year is None, others populated -> decision_date
+    row2 = SanctionDecisionInput(
+        document_id="DOC-2",
+        firm_id="F1",
+        sanction_year=None,
+        decision_date=datetime(2021, 5, 5),
+        publish_date=datetime(2022, 6, 6),
+        target_fiscal_year=2018,
+    )
+    val, source = resolve_sanction_year(row2)
+    assert val == 2021
+    assert source == DECISION_DATE
+
+    # Case 3: sanction_year and decision_date are None, others populated -> publish_date
+    row3 = SanctionDecisionInput(
+        document_id="DOC-3",
+        firm_id="F1",
+        sanction_year=None,
+        decision_date=None,
+        publish_date=datetime(2022, 6, 6),
+        target_fiscal_year=2018,
+    )
+    val, source = resolve_sanction_year(row3)
+    assert val == 2022
+    assert source == PUBLISH_DATE
+
+    # Case 4: Only target_fiscal_year is populated -> target_fiscal_year + 1
+    row4 = SanctionDecisionInput(
+        document_id="DOC-4",
+        firm_id="F1",
+        sanction_year=None,
+        decision_date=None,
+        publish_date=None,
+        target_fiscal_year=2018,
+    )
+    val, source = resolve_sanction_year(row4)
+    assert val == 2019
+    assert source == TARGET_FISCAL_YEAR
+
+
+def test_sanction_rows_parser_with_target_fiscal_year(tmp_path: Path) -> None:
+    import importlib.util
+    from p01.models import SourceSpec
+    from p02.models import EntityResolutionSpec
+    from core.semantic_keys import (
+        FIRM_ID,
+        DOCUMENT_ID,
+        ROW_INCLUSION,
+        HARD_POSITIVE,
+        TARGET_FISCAL_YEAR,
+    )
+
+    path = ROOT / "scripts" / "p03_evidence_ledger.py"
+    spec_location = importlib.util.spec_from_file_location("test_p03_script", path)
+    assert spec_location is not None and spec_location.loader is not None
+    module = importlib.util.module_from_spec(spec_location)
+    spec_location.loader.exec_module(module)
+    _sanction_rows = getattr(module, "_sanction_rows")
+
+    # Write temporary CSV file
+    csv_file = tmp_path / "test_sanctions.csv"
+    csv_file.write_text(
+        "ticker,doc_id,include_flag,positive_flag,target_year\n"
+        "AAA,DOC-100,1,1,2019\n",
+        encoding="utf-8",
+    )
+
+    entity = EntityResolutionSpec.from_mapping(
+        {
+            "policy": "registered_only",
+            "allow_identity_mapping": True,
+            "collision_policy": "fail",
+            "normalization": {
+                "unicode_nfkc": True,
+                "trim": True,
+                "uppercase": True,
+                "collapse_internal_whitespace": True,
+            },
+            "aliases": {},
+            "reporting_calendar": {
+                "default_fiscal_year_end_month_day": "12-31",
+                "firm_exceptions": {},
+                "early_report_exceptions": [],
+            },
+        }
+    )
+
+    source_spec = SourceSpec.from_mapping(
+        "sanction_evidence",
+        {
+            "enabled": True,
+            "channel_id": "S3",
+            "source_type": "official",
+            "source_agency": "Agency",
+            "original_unit": "firm-year",
+            "related_period_field": None,
+            "availability_date_field": None,
+            "availability_date_source": "test",
+            "coverage_dimensions": [],
+            "role": "evidence",
+            "verification_status": "observed",
+            "data_risks": [],
+            "relative_path": "test_sanctions.csv",
+            "format": "csv",
+            "encoding": "utf-8",
+            "delimiter": ",",
+            "locked_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "schema": {
+                "required_columns": [
+                    "ticker",
+                    "doc_id",
+                    "include_flag",
+                    "positive_flag",
+                    "target_year",
+                ],
+                "optional_columns": [],
+                "key_columns": ["ticker", "doc_id"],
+                "date_columns": [],
+                "required_date_columns": [],
+                "numeric_columns": {},
+                "allow_extra_columns": True,
+                "key_unique": False,
+                "row_count_min": 1,
+            },
+        }
+    )
+
+    semantics = {
+        FIRM_ID: "ticker",
+        DOCUMENT_ID: "doc_id",
+        ROW_INCLUSION: "include_flag",
+        HARD_POSITIVE: "positive_flag",
+        TARGET_FISCAL_YEAR: "target_year",
+    }
+
+    parsed_list = _sanction_rows(
+        source_id="sanction_evidence",
+        path=csv_file,
+        spec=source_spec,
+        semantics=semantics,
+        entity=entity,
+    )
+
+    assert len(parsed_list) == 1
+    parsed = parsed_list[0]
+    assert parsed.target_fiscal_year == 2019
+    assert target_fiscal_year(parsed) == 2019
+
