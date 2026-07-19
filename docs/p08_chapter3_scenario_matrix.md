@@ -2,16 +2,23 @@
 
 ## Purpose
 
-This matrix implements the baseline-plus-locked-stress-block design in Chapter 3 without taking a full Cartesian product. The measurement-focused run holds the learner fixed at logistic regression and compares four feasible label strategies plus two standalone identification estimators. The existing `core` profile remains the separately locked learner-comparison run.
+This matrix implements the baseline-plus-locked-stress-block design in Chapter 3 without taking a full Cartesian product. The measurement-focused run holds the learner fixed at logistic regression and compares four feasible label strategies, two existing standalone identification estimators, and four explicitly specified L3 correct/misspecified variants. The existing `core` profile remains the separately locked learner-comparison run.
 
 ## Execution profiles
 
 | Profile | Role | Active methods |
 |---|---|---:|
-| `chapter3_measurement` | Confirmatory measurement simulation across all operational scenarios | 6 |
-| `core` | Confirmatory learner comparison on baseline scenarios in a separately locked run | 22 |
+| `chapter3_measurement` | Confirmatory measurement simulation across all operational scenarios | 10 |
+| `core` | Confirmatory learner comparison on baseline scenarios in a separately locked run | 26 |
 
 The active profile in this branch is `chapter3_measurement`.
+
+The four L3 variants are:
+
+- `l3_correct`: source accuracy, dependence, selective verification and maturity assumptions match the DGP;
+- `l3_ignore_dependence`: conditional independence is imposed;
+- `l3_wrong_fixed_pi`: prevalence is fixed at the locked scenario value plus 0.05, within the posterior grid;
+- `l3_clean_anchor`: anchor specificity is incorrectly fixed at 1.
 
 ## Operational scenarios
 
@@ -37,14 +44,26 @@ The active profile in this branch is `chapter3_measurement`.
 
 ## Computational size
 
-Under `chapter3_measurement`, each scenario activates four predictive methods and two standalone estimators. At the locked minimum replications this gives:
+Under `chapter3_measurement`, each scenario activates four predictive methods and six standalone estimators. At the locked minimum replications this gives:
 
 - predictive: 4 methods × 2,500 replications;
-- standalone: 2 methods × 1,000 replications;
-- 60 initial batch artifacts per scenario;
-- 1,020 initial batch artifacts across 17 scenarios.
+- standalone: 6 methods × 1,000 replications;
+- 100 initial batch artifacts per scenario;
+- 1,700 initial batch artifacts across 17 scenarios.
 
 Adaptive replication may extend methods that do not meet their MCSE target.
+
+## L3 outputs
+
+Every L3 variant reports:
+
+- prevalence fit success;
+- prevalence error and squared error;
+- 95% interval coverage and interval width;
+- signed excess squared-error regret relative to `l3_correct`;
+- the standard empirical-calibration descriptive metrics.
+
+All four variants use the same replication-level data RNG, so their differences are paired and attributable to the locked measurement assumptions.
 
 ## Deliberately deferred engine blocks
 
@@ -52,8 +71,7 @@ The following Chapter 3 commitments are not represented as operational scenarios
 
 1. S3 complete-next-calendar-year maturity distinct from generic delayed maturity;
 2. covariate shift, concept drift and label-policy drift (`shift_strength` is currently validated but not applied);
-3. Gate 1–3 selection error, type-I error, power and breakpoint recovery metrics;
-4. separate L3 correct and misspecified variants: ignore dependence, wrong fixed prevalence and clean-anchor assumption.
+3. Gate 1–3 selection error, type-I error, power and breakpoint recovery metrics.
 
 These blocks must be implemented in the simulation engine before being moved from `deferred_engine_blocks` into `operational_scenarios`. They must not be represented by inert YAML parameters.
 
