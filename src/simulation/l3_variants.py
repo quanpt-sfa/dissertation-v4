@@ -213,7 +213,7 @@ def estimate_l3_variant(
     correct_squared_error = (correct_estimate - true_prevalence) ** 2
     squared_error = (estimate - true_prevalence) ** 2
     return {
-        "estimate": estimate,
+        ESTIMATE: estimate,
         "lower": lower,
         "upper": upper,
         "correct_reference_estimate": correct_estimate,
@@ -253,7 +253,7 @@ def run_l3_variant_batch(
             observable_risk=observable_risk,
         )
         true_prevalence = float(scenario["prevalence"])
-        estimate = float(result["estimate"])
+        estimate = float(result[ESTIMATE])
         lower = float(result["lower"])
         upper = float(result["upper"])
 
