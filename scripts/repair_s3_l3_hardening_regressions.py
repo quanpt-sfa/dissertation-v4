@@ -40,6 +40,23 @@ def _replace_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]
     return text.replace(old, new, 1), True
 
 
+def _replace_remaining_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]:
+    """Replace one remaining bad block even when a fixed sibling block already exists.
+
+    The S3/L3 migration creates two similar ``source_profiles`` comprehensions.
+    One was already correct, so a whole-file ``new in text`` check incorrectly
+    reported the second, still-broken block as repaired. This helper keys only on
+    the remaining old block.
+    """
+
+    count = text.count(old)
+    if count == 0:
+        return text, False
+    if count != 1:
+        raise RepairError(f"{label}: expected at most one remaining repair anchor, found {count}")
+    return text.replace(old, new, 1), True
+
+
 def _repair_measurement_profiles(path: Path, *, apply: bool) -> bool:
     text = _read(path)
     old = '''        source_profiles={
@@ -53,7 +70,7 @@ def _repair_measurement_profiles(path: Path, *, apply: bool) -> bool:
             if source_id in (source_profiles or {})
         },
 '''
-    text, changed = _replace_once(
+    text, changed = _replace_remaining_once(
         text,
         old,
         new,
