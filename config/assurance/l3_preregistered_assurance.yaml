@@ -1,0 +1,28 @@
+l3_preregistered_assurance:
+  version: 1
+  decision_id: D06
+  decision:
+    appendix_b_id: D06
+    config_anchors:
+    - l3_scenarios
+    - measurement.prior_accuracy_domain
+    - measurement.l3_model
+    lock_stage: P00
+    enforced_by_steps:
+    - P00
+    - P05
+    - P10
+    test_ids:
+    - T006
+    output_evidence:
+    - l3_pilot_capability
+    - channel_measurement_selection
+    implementation_controls:
+    - IC001
+    - IC004
+  appendix_b:
+    canonical_title: Miền prior/accuracy
+    main_specification: Các kịch bản fixed-π và prior Beta theo profile nguồn được đăng ký trước trong l3_scenarios, đưa vào protocol hash và khóa tại P0; neutral_pi_03 là kịch bản chính.
+    sensitivity_or_rule: Chạy toàn bộ low_pi_01, neutral_pi_03 và high_pi_05; diagnostic loss chỉ dùng cho capability/reporting, không được thay thế kịch bản chính đã đăng ký; hierarchical π chỉ là độ nhạy.
+    lock_status: Khóa tại P0
+    chapter_reference: Appendix B, Table B.1, D06
