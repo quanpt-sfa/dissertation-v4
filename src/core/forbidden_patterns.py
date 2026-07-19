@@ -52,6 +52,14 @@ PRODUCTION_DATA_BOUNDARIES = {
     "scripts/report_measurement_calibration.py",
     "scripts/report_s3_year_audit.py",
 }
+# These exact files emit ``scenario_id`` as control-plane JSON metadata for the
+# preregistered L3 scenario registry. They do not bind or access a physical data
+# column. The exception is literal- and path-specific; all other registered
+# physical-column literals remain forbidden in these files.
+REGISTERED_METADATA_LITERAL_EXCEPTIONS = {
+    "scripts/p05_measurement_inputs.py": {"scenario_id"},
+    "src/selection/preregistered_l3.py": {"scenario_id"},
+}
 
 StringMap = dict[str, Any]
 
@@ -146,7 +154,8 @@ def validate_source_patterns(
         }
 
         if not registered_boundary:
-            copied_columns = sorted(physical_names & literals)
+            metadata_exceptions = REGISTERED_METADATA_LITERAL_EXCEPTIONS.get(relative, set())
+            copied_columns = sorted((physical_names & literals) - metadata_exceptions)
             if copied_columns:
                 raise ConfigurationError(
                     f"source={path}: registered physical columns "
