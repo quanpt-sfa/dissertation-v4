@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import numpy as np
 import pytest
 import yaml
-from pathlib import Path
 
 pytest.importorskip("core.metrics")
 pytest.importorskip("labels.service")
@@ -68,13 +70,27 @@ def _scenario():
 
 
 @pytest.mark.parametrize(
-    "method_id",
+    ("method_id", "optional_dependency"),
     [
-        "naive_observed_as_negative__logistic_regression__imbalance_smote__traincost_symmetric",
-        "verified_only__xgboost__imbalance_adasyn__traincost_symmetric",
+        (
+            "naive_observed_as_negative__logistic_regression__imbalance_smote__traincost_symmetric",
+            None,
+        ),
+        (
+            "verified_only__xgboost__imbalance_adasyn__traincost_symmetric",
+            "xgboost",
+        ),
     ],
 )
-def test_synthetic_imbalance_treatment_is_applied(method_id: str) -> None:
+def test_synthetic_imbalance_treatment_is_applied(
+    method_id: str,
+    optional_dependency: str | None,
+) -> None:
+    if optional_dependency and importlib.util.find_spec(optional_dependency) is None:
+        pytest.skip(
+            f"optional learner dependency {optional_dependency!r} is not installed"
+        )
+
     batch = run_batch(
         _scenario(),
         method_id=method_id,

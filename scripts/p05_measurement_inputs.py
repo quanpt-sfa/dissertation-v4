@@ -80,6 +80,7 @@ def main() -> int:
         ]
         for target_id, raw in candidate_registry.items()
     }
+    primary_measurement_sources = _primary_measurement_sources(measurement)
     result = build_measurement_inputs(
         risk_sets=risk_sets,
         evidence=evidence,
@@ -98,12 +99,19 @@ def main() -> int:
             "measurement.l2_scoring",
         ),
         candidate_targets=candidate_targets,
+        primary_measurement_sources=primary_measurement_sources,
     )
+    primary_expected_sources = {
+        source_id: expected_sources[source_id] for source_id in primary_measurement_sources
+    }
+    primary_source_profiles = {
+        source_id: source_profiles[source_id] for source_id in primary_measurement_sources
+    }
     _execute_l3_pilot(
         matrices=result.matrices,
         capability=result.l3_capability,
-        source_channels=expected_sources,
-        source_profiles=source_profiles,
+        source_channels=primary_expected_sources,
+        source_profiles=primary_source_profiles,
         measurement=measurement,
         initial_outer_year=int(
             mapping(loaded.registry.get("folds"), "folds")["initial_outer_year"]
@@ -159,6 +167,25 @@ def main() -> int:
         f"sealed_outcomes={len(result.sealed_outcomes)}"
     )
     return 0
+
+
+
+def _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:
+    source_set_id = measurement.get("primary_source_set_id")
+    if not isinstance(source_set_id, str) or not source_set_id:
+        raise ValueError("measurement.primary_source_set_id must be locked")
+    source_sets = mapping(measurement.get("source_sets"), "measurement.source_sets")
+    source_set = mapping(source_sets.get(source_set_id), f"measurement.source_sets.{source_set_id}")
+    sources = [
+        str(value)
+        for value in sequence(
+            source_set.get("sources"), f"measurement.source_sets.{source_set_id}.sources"
+        )
+    ]
+    s3_sources = sorted(source for source in sources if source.startswith("S3_"))
+    if s3_sources != ["S3_CONTENT"]:
+        raise ValueError("primary measurement source set must contain S3_CONTENT and no other S3 endpoint")
+    return sources
 
 
 def _evidence_sources(

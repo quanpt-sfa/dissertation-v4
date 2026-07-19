@@ -74,6 +74,7 @@ def build_measurement_inputs(
     explicit_negative_allowed: dict[str, bool] | None = None,
     l2_scoring: dict[str, Any] | None = None,
     candidate_targets: dict[str, list[str]] | None = None,
+    primary_measurement_sources: list[str] | None = None,
 ) -> MeasurementResult:
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
@@ -99,7 +100,18 @@ def build_measurement_inputs(
         evidence_by_key.setdefault((str(row[firm]), int(row[year])), []).append(row)
 
     expected_source_ids = sorted(expected_sources)
-    expected_channels = sorted(set(expected_sources.values()))
+    primary_source_ids = sorted(set(primary_measurement_sources or expected_source_ids))
+    unknown_primary_sources = sorted(set(primary_source_ids) - set(expected_source_ids))
+    if unknown_primary_sources:
+        raise ValueError(
+            f"primary measurement source set references unknown sources {unknown_primary_sources}"
+        )
+    if not primary_source_ids:
+        raise ValueError("primary measurement source set must not be empty")
+    primary_expected_sources = {
+        source_id: expected_sources[source_id] for source_id in primary_source_ids
+    }
+    expected_channels = sorted(set(primary_expected_sources.values()))
     temporal_roles = source_temporal_roles or {
         source_id: "delayed_verification" for source_id in expected_source_ids
     }
@@ -121,8 +133,12 @@ def build_measurement_inputs(
             f"P05 candidate targets reference unknown sources {unknown_target_sources}"
         )
     l2_configuration = _l2_configuration(
-        expected_source_ids=expected_source_ids,
-        source_profiles=source_profiles or {},
+        expected_source_ids=primary_source_ids,
+        source_profiles={
+            source_id: (source_profiles or {})[source_id]
+            for source_id in primary_source_ids
+            if source_id in (source_profiles or {})
+        },
         scoring=l2_scoring or {},
     )
     input_rows: list[dict[str, object]] = []
@@ -251,8 +267,8 @@ def build_measurement_inputs(
         for channel_id in expected_channels:
             channel_source_ids = [
                 source_id
-                for source_id in expected_source_ids
-                if expected_sources[source_id] == channel_id
+                for source_id in primary_source_ids
+                if primary_expected_sources[source_id] == channel_id
             ]
             values = [observed[source_id] for source_id in channel_source_ids]
             opportunities = [observed_opportunities[source_id] for source_id in channel_source_ids]
@@ -264,8 +280,12 @@ def build_measurement_inputs(
         channel_scores = _l2_channel_scores(
             source_outcomes=observed,
             source_lag_days=observed_lag_days,
-            expected_sources=expected_sources,
-            source_profiles=source_profiles or {},
+            expected_sources=primary_expected_sources,
+            source_profiles={
+                source_id: (source_profiles or {})[source_id]
+                for source_id in primary_source_ids
+                if source_id in (source_profiles or {})
+            },
             configuration=l2_configuration,
         )
         matrix_rows.append(
@@ -385,6 +405,7 @@ def build_measurement_inputs(
         matrices={
             "expected_sources": expected_sources,
             "expected_channels": expected_channels,
+            "primary_measurement_sources": primary_source_ids,
             "candidate_targets": targets,
             "valid_channels": valid_channels,
             "rows": matrix_rows,

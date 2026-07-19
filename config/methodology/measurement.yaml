@@ -2,19 +2,33 @@ measurement:
   primary_target_id: null
   candidate_targets:
     L1_ANNUAL:
-      sources: [S1_profit_adjustment, S1_revenue_adjustment, S2_audit_opinion]
+      sources:
+      - S1_profit_adjustment
+      - S1_revenue_adjustment
+      - S2_audit_opinion
     S3_BROAD:
-      sources: [S3_BROAD]
+      sources:
+      - S3_BROAD
     S3_REPORTING:
-      sources: [S3_REPORTING]
+      sources:
+      - S3_REPORTING
     S3_CONTENT:
-      sources: [S3_CONTENT]
+      sources:
+      - S3_CONTENT
     S3_TIMELINESS:
-      sources: [S3_TIMELINESS]
+      sources:
+      - S3_TIMELINESS
     L1_REPORTING:
-      sources: [S1_profit_adjustment, S1_revenue_adjustment, S2_audit_opinion, S3_REPORTING]
+      sources:
+      - S1_profit_adjustment
+      - S1_revenue_adjustment
+      - S2_audit_opinion
+      - S3_REPORTING
     L1_CONTENT_STRICT:
-      sources: [S1_profit_adjustment, S1_revenue_adjustment, S3_CONTENT]
+      sources:
+      - S1_profit_adjustment
+      - S1_revenue_adjustment
+      - S3_CONTENT
   roles:
     L0: single_source_benchmark
     L1: candidate_binary_aggregation
@@ -23,7 +37,10 @@ measurement:
   execution_tracks:
     mode: sequential_capability_gated
     primary_target_id: L1_ANNUAL
-    order: [L1_ANNUAL, L2, L3_fixed_pi]
+    order:
+    - L1_ANNUAL
+    - L2
+    - L3_fixed_pi
     primary_required: true
     optional_unavailable_policy: skip_track_not_pipeline
     outer_performance_selection_forbidden: true
@@ -70,7 +87,7 @@ measurement:
         random_effect_proposal_sd: 0.15
         rhat_max: 1.05
         ess_min: 200
-        posterior_predictive_source_rate_error_max: 0.10
+        posterior_predictive_source_rate_error_max: 0.1
         minimum_observations_per_source: 30
   fixed_pi:
     report_pi_bias: false
@@ -109,3 +126,31 @@ measurement:
       sanction_evidence: 1.0
     delay_half_life_days: 365
     channel_weights: equal
+  primary_source_set_id: primary_misstatement
+  primary_s3_endpoint: S3_CONTENT
+  source_sets:
+    primary_misstatement:
+      role: primary_measurement
+      sources:
+      - S1_profit_adjustment
+      - S1_revenue_adjustment
+      - S2_audit_opinion
+      - S3_CONTENT
+    reporting_sensitivity:
+      role: measurement_sensitivity
+      sources:
+      - S1_profit_adjustment
+      - S1_revenue_adjustment
+      - S2_audit_opinion
+      - S3_REPORTING
+    timeliness_sensitivity:
+      role: measurement_sensitivity
+      sources:
+      - S1_profit_adjustment
+      - S1_revenue_adjustment
+      - S2_audit_opinion
+      - S3_TIMELINESS
+    broad_descriptive:
+      role: descriptive_falsification_only
+      sources:
+      - S3_BROAD

@@ -88,6 +88,7 @@ def main() -> int:
         ]
         source_channels, accuracy_priors = _l3_bindings(
             registry=loaded.registry,
+            allowed_source_ids=_primary_measurement_sources(measurement),
             priors_by_profile=mapping(
                 operational.get("accuracy_priors_by_profile"),
                 "measurement.l3_model.operational.accuracy_priors_by_profile",
@@ -163,16 +164,42 @@ def main() -> int:
     return 0
 
 
+
+def _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:
+    source_set_id = measurement.get("primary_source_set_id")
+    if not isinstance(source_set_id, str) or not source_set_id:
+        raise ValueError("measurement.primary_source_set_id must be locked")
+    source_sets = mapping(measurement.get("source_sets"), "measurement.source_sets")
+    source_set = mapping(source_sets.get(source_set_id), f"measurement.source_sets.{source_set_id}")
+    sources = [
+        str(value)
+        for value in sequence(
+            source_set.get("sources"), f"measurement.source_sets.{source_set_id}.sources"
+        )
+    ]
+    s3_sources = sorted(source for source in sources if source.startswith("S3_"))
+    if s3_sources != ["S3_CONTENT"]:
+        raise ValueError("primary L3 source set must contain S3_CONTENT and no other S3 endpoint")
+    return sources
+
+
 def _l3_bindings(
     *,
     registry: dict[str, object],
     priors_by_profile: dict[str, Any],
+    allowed_source_ids: list[str] | None = None,
 ) -> tuple[dict[str, str], dict[str, dict[str, float]]]:
     """Bind L3 to logical endpoints, not physical snapshot file identifiers."""
     sources = logical_evidence_sources(registry)
     source_channels: dict[str, str] = {}
     accuracy_priors: dict[str, dict[str, float]] = {}
+    allowed = set(sources) if allowed_source_ids is None else set(allowed_source_ids)
+    unknown = sorted(allowed - set(sources))
+    if unknown:
+        raise ValueError(f"primary L3 source set contains unknown sources {unknown}")
     for logical_source_id, source in sorted(sources.items()):
+        if logical_source_id not in allowed:
+            continue
         raw_prior: object = priors_by_profile.get(source.profile_id)
         prior = mapping(raw_prior, f"L3 accuracy prior profile={source.profile_id}")
         parsed_prior: dict[str, float] = {}

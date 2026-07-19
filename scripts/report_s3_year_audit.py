@@ -94,6 +94,21 @@ def main() -> int:
 
     development = p03_counts.loc[p03_counts["development_history"].eq(True)].copy()
     development_positive = int(development["positive"].sum()) if not development.empty else 0
+    development_positive_by_endpoint = (
+        {
+            str(endpoint): int(group["positive"].sum())
+            for endpoint, group in development.groupby(SOURCE_ID, sort=True)
+        }
+        if not development.empty
+        else {}
+    )
+    content_positive = int(development_positive_by_endpoint.get("S3_CONTENT", 0))
+    sanction_year_unresolved_firm_year_count = int(
+        unknown_reasons.loc[
+            unknown_reasons[OUTCOME_BASIS].astype(str).eq("SANCTION_YEAR_UNRESOLVED"),
+            "unknown_count",
+        ].sum()
+    ) if not unknown_reasons.empty else 0
     mismatch_count = int(reconciliation["outcome_mismatch"].sum()) if not reconciliation.empty else 0
     missing_key_count = (
         int(reconciliation["p03_missing_key"].sum() + reconciliation["p05_missing_key"].sum())
@@ -108,8 +123,8 @@ def main() -> int:
     status = (
         "BLOCK_L3_RECONCILIATION"
         if mismatch_count or missing_key_count
-        else "BLOCK_L3_NO_DEVELOPMENT_POSITIVES"
-        if development_positive == 0
+        else "BLOCK_L3_NO_S3_CONTENT_DEVELOPMENT_POSITIVES"
+        if content_positive == 0
         else "REVIEW_FOR_L3_LOCK"
     )
     summary = {
@@ -117,6 +132,9 @@ def main() -> int:
         "protocol_hash": p05.protocol_hash,
         "initial_outer_year": initial_outer_year,
         "development_s3_positive_count": development_positive,
+        "development_positive_count_by_endpoint": development_positive_by_endpoint,
+        "development_s3_content_positive_count": content_positive,
+        "sanction_year_unresolved_firm_year_count": sanction_year_unresolved_firm_year_count,
         "earliest_positive_fiscal_year_by_endpoint": earliest_positive,
         "p03_p05_outcome_mismatch_count": mismatch_count,
         "p03_p05_missing_key_count": missing_key_count,
@@ -128,6 +146,9 @@ def main() -> int:
         ),
         "excluded_source_rule_mapping_count": sanction_audit.get(
             "excluded_source_rule_mapping_count"
+        ),
+        "excluded_source_rule_row_count": sanction_audit.get(
+            "excluded_source_rule_row_count"
         ),
         "excluded_unresolved_mapping_count": sanction_audit.get(
             "excluded_unresolved_mapping_count"

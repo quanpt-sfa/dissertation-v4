@@ -25,14 +25,25 @@ APPROVED_CORE_FILES = {
     "forbidden_patterns.py",
     "semantic_keys.py",
 }
-# P07A/P07B are explicitly non-production source-resolution audits.  They can
+# P07A/P07B are explicitly non-production source-resolution audits. They can
 # inspect external, researcher-supplied files but cannot consume runtime
-# artifacts, outcomes, or known cases.  Keeping this exception named and tiny
+# artifacts, outcomes, or known cases. Keeping this exception named and tiny
 # preserves the production-stage I/O firewall.
 NONPRODUCTION_AUDIT_SCRIPTS = {
     "scripts/p07a_feature_definition_audit.py",
+    "scripts/validate_production_source_contracts.py",
 }
 NONPRODUCTION_AUDIT_MODULES: set[str] = set()
+# These scripts intentionally maintain repository source/configuration rather
+# than execute an empirical stage. They may reference registered schema names or
+# non-manifest config paths only for migration/locking. The whitelist is exact;
+# no production runner or analysis stage belongs here.
+REPOSITORY_MAINTENANCE_SCRIPTS = {
+    "scripts/apply_s3_l3_production_hardening.py",
+    "scripts/finalize_s3_l3_production_hardening.py",
+    "scripts/repair_s3_l3_hardening_regressions.py",
+    "scripts/lock_l3_parameters.py",
+}
 PRODUCTION_DATA_BOUNDARIES = {
     "src/features/store.py",
     # Explicit documentation-export boundaries. These scripts read only verified
@@ -55,7 +66,12 @@ def _is_registered_data_boundary(root: Path, path: Path) -> bool:
     relative = path.relative_to(root).as_posix()
     return (
         relative
-        in (NONPRODUCTION_AUDIT_SCRIPTS | NONPRODUCTION_AUDIT_MODULES | PRODUCTION_DATA_BOUNDARIES)
+        in (
+            NONPRODUCTION_AUDIT_SCRIPTS
+            | NONPRODUCTION_AUDIT_MODULES
+            | REPOSITORY_MAINTENANCE_SCRIPTS
+            | PRODUCTION_DATA_BOUNDARIES
+        )
         or relative.startswith("src/p01/")
         or relative.startswith("src/p02/")
         or relative.startswith("src/snapshot/")
@@ -143,17 +159,18 @@ def validate_source_patterns(
                 f"source={path}: registered artifact paths copied into source: {copied_paths}"
             )
 
-        direct_config_paths = sorted(
-            value
-            for value in literals
-            if (value.startswith("config/") or value.startswith("config\\"))
-            and value
-            not in {
-                "config/pipeline.yaml",
-                "config\\pipeline.yaml",
-            }
-        )
-        if direct_config_paths:
-            raise ConfigurationError(
-                f"source={path}: direct source-config paths are forbidden: {direct_config_paths}"
+        if relative not in REPOSITORY_MAINTENANCE_SCRIPTS:
+            direct_config_paths = sorted(
+                value
+                for value in literals
+                if (value.startswith("config/") or value.startswith("config\\"))
+                and value
+                not in {
+                    "config/pipeline.yaml",
+                    "config\\pipeline.yaml",
+                }
             )
+            if direct_config_paths:
+                raise ConfigurationError(
+                    f"source={path}: direct source-config paths are forbidden: {direct_config_paths}"
+                )
