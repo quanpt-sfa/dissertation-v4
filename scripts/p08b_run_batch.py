@@ -30,6 +30,10 @@ from core.semantic_keys import (
     REPLICATION_ID,
     SCENARIO_ID,
 )
+from simulation.l3_variants import (
+    L3_VARIANT_IDS,
+    run_l3_variant_batch,
+)
 from simulation.method_contract import (
     ANALYSIS_ROLE,
     EXECUTION_PROFILE,
@@ -43,11 +47,13 @@ from simulation.method_contract import (
     method_by_id,
     required_metric_ids,
 )
+from simulation.replication_contract import (
+    replication_plan as _replication_plan,
+)
+from simulation.scenario_contract import (
+    validate_scenario_target_identity,
+)
 from simulation.service import run_batch
-from simulation.scenario_contract import validate_scenario_target_identity
-from simulation.replication_contract import replication_plan as _replication_plan
-
-
 
 
 _REQUIRED_OUTPUT_COLUMNS = {
@@ -71,7 +77,9 @@ def main() -> int:
     parser.add_argument("--count", type=int, required=True)
     args = parser.parse_args()
     if args.start < 0 or args.count < 1:
-        raise ValueError("start must be nonnegative and count must be positive")
+        raise ValueError(
+            "start must be nonnegative and count must be positive"
+        )
 
     coordinates = {
         SCENARIO_ID: args.scenario_id,
@@ -85,16 +93,27 @@ def main() -> int:
         state="FEATURED",
         coordinates=coordinates,
     )
-    simulation = mapping(loaded.registry.get("simulation"), "simulation")
+    simulation = mapping(
+        loaded.registry.get("simulation"),
+        "simulation",
+    )
     scenarios = sequence(
         loaded.context.read("simulation_scenario_registry", {}),
         "simulation scenario registry",
     )
-    mapped = [mapping(item, "simulation scenario") for item in scenarios]
-    matches = [item for item in mapped if item.get(SCENARIO_ID) == args.scenario_id]
+    mapped = [
+        mapping(item, "simulation scenario")
+        for item in scenarios
+    ]
+    matches = [
+        item
+        for item in mapped
+        if item.get(SCENARIO_ID) == args.scenario_id
+    ]
     if len(matches) != 1:
         raise ValueError(
-            f"scenario={args.scenario_id}: exactly one registered scenario required"
+            f"scenario={args.scenario_id}: "
+            "exactly one registered scenario required"
         )
     scenario = matches[0]
     validate_scenario_target_identity(scenario)
@@ -118,14 +137,20 @@ def main() -> int:
         )
 
     if args.start % batch_size != 0:
-        raise ValueError("batch start must align with the replication batch size")
+        raise ValueError(
+            "batch start must align with the replication batch size"
+        )
 
     if args.count > batch_size:
-        raise ValueError("batch count exceeds the locked batch size")
+        raise ValueError(
+            "batch count exceeds the locked batch size"
+        )
 
     import numpy as np
 
-    def data_rng_factory(rep_id: int) -> np.random.Generator:
+    def data_rng_factory(
+        rep_id: int,
+    ) -> np.random.Generator:
         return generator(
             loaded.protocol_hash,
             "P08_REPLICATION_DATA",
@@ -136,7 +161,9 @@ def main() -> int:
             str(rep_id),
         )
 
-    def model_rng_factory(rep_id: int) -> np.random.Generator:
+    def model_rng_factory(
+        rep_id: int,
+    ) -> np.random.Generator:
         return generator(
             loaded.protocol_hash,
             "P08_REPLICATION_MODEL",
@@ -148,31 +175,68 @@ def main() -> int:
             str(rep_id),
         )
 
-    diagnostics = {}
-    batch = run_batch(
-        scenario,
-        method_id=args.method_id,
-        replications=range(args.start, args.start + args.count),
-        data_rng_factory=data_rng_factory,
-        model_rng_factory=model_rng_factory,
-        diagnostics=diagnostics,
+    diagnostics: dict[str, object] = {}
+    replication_range = range(
+        args.start,
+        args.start + args.count,
     )
+    if args.method_id in L3_VARIANT_IDS:
+        batch = run_l3_variant_batch(
+            scenario,
+            method_id=args.method_id,
+            replications=replication_range,
+            data_rng_factory=data_rng_factory,
+            diagnostics=diagnostics,
+        )
+    else:
+        batch = run_batch(
+            scenario,
+            method_id=args.method_id,
+            replications=replication_range,
+            data_rng_factory=data_rng_factory,
+            model_rng_factory=model_rng_factory,
+            diagnostics=diagnostics,
+        )
+
     if not isinstance(batch, pd.DataFrame) or batch.empty:
-        raise ValueError("P08B run_batch must return a nonempty DataFrame")
-    missing_columns = sorted(_REQUIRED_OUTPUT_COLUMNS - set(batch.columns))
+        raise ValueError(
+            "P08B batch runner must return a nonempty DataFrame"
+        )
+    missing_columns = sorted(
+        _REQUIRED_OUTPUT_COLUMNS - set(batch.columns)
+    )
     if missing_columns:
-        raise ValueError(f"P08B batch is missing columns={missing_columns}")
-    if set(batch[SCENARIO_ID].astype(str)) != {args.scenario_id}:
-        raise ValueError("P08B batch scenario_id differs from worker coordinates")
-    if set(batch[METHOD_ID].astype(str)) != {args.method_id}:
-        raise ValueError("P08B batch method_id differs from worker coordinates")
+        raise ValueError(
+            f"P08B batch is missing columns={missing_columns}"
+        )
+    if set(batch[SCENARIO_ID].astype(str)) != {
+        args.scenario_id
+    }:
+        raise ValueError(
+            "P08B batch scenario_id differs from worker coordinates"
+        )
+    if set(batch[METHOD_ID].astype(str)) != {
+        args.method_id
+    }:
+        raise ValueError(
+            "P08B batch method_id differs from worker coordinates"
+        )
     if batch.duplicated(
-        [SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID],
+        [
+            SCENARIO_ID,
+            METHOD_ID,
+            REPLICATION_ID,
+            METRIC_ID,
+        ],
         keep=False,
     ).any():
-        raise ValueError("P08B batch contains duplicate replication-metric rows")
+        raise ValueError(
+            "P08B batch contains duplicate replication-metric rows"
+        )
 
-    batch[LABEL_STRATEGY_ID] = str(method_spec[LABEL_STRATEGY_ID])
+    batch[LABEL_STRATEGY_ID] = str(
+        method_spec[LABEL_STRATEGY_ID]
+    )
     batch[LEARNER_ID] = str(method_spec[LEARNER_ID])
     batch[LEARNER_TIER] = str(method_spec[LEARNER_TIER])
     batch[TRAINING_COST_REGIME_ID] = str(
@@ -181,15 +245,21 @@ def main() -> int:
     batch[IMBALANCE_TREATMENT_ID] = str(
         method_spec[IMBALANCE_TREATMENT_ID]
     )
-    batch[METHOD_FAMILY] = str(method_spec[METHOD_FAMILY])
-    batch[ANALYSIS_ROLE] = str(method_spec[ANALYSIS_ROLE])
-    batch[EXECUTION_PROFILE] = str(method_spec[EXECUTION_PROFILE])
-    batch[PROTOCOL_STATUS] = str(method_spec[PROTOCOL_STATUS])
-    batch["method_contract_version"] = 6
-
-    expected_replications = set(
-        range(args.start, args.start + args.count)
+    batch[METHOD_FAMILY] = str(
+        method_spec[METHOD_FAMILY]
     )
+    batch[ANALYSIS_ROLE] = str(
+        method_spec[ANALYSIS_ROLE]
+    )
+    batch[EXECUTION_PROFILE] = str(
+        method_spec[EXECUTION_PROFILE]
+    )
+    batch[PROTOCOL_STATUS] = str(
+        method_spec[PROTOCOL_STATUS]
+    )
+    batch["method_contract_version"] = 7
+
+    expected_replications = set(replication_range)
     actual_replications = set(
         batch[REPLICATION_ID].dropna().astype(int)
     )
@@ -207,31 +277,52 @@ def main() -> int:
         REPLICATION_ID,
         sort=False,
     ):
-        actual_metrics = set(frame[METRIC_ID].astype(str))
-        missing = sorted(required_metrics - actual_metrics)
-        unexpected = sorted(actual_metrics - required_metrics)
+        actual_metrics = set(
+            frame[METRIC_ID].astype(str)
+        )
+        missing = sorted(
+            required_metrics - actual_metrics
+        )
+        unexpected = sorted(
+            actual_metrics - required_metrics
+        )
 
         if missing or unexpected:
             raise ValueError(
                 f"P08B replication={replication_id}: "
-                f"missing_metrics={missing}, unexpected_metrics={unexpected}"
+                f"missing_metrics={missing}, "
+                f"unexpected_metrics={unexpected}"
             )
 
     scenario_key_str = "scenario_" + "key"
     method_key_str = "method_" + "key"
     batch_key_str = "batch_" + "key"
-    plan = _replication_plan(simulation, method_spec)
-    batch_size = int(plan["batch_size"])
     write_coordinates = {
-        scenario_key_str: str(scenario[scenario_key_str]),
-        method_key_str: str(method_spec[method_key_str]),
-        batch_key_str: f"b{args.start // batch_size:04d}",
+        scenario_key_str: str(
+            scenario[scenario_key_str]
+        ),
+        method_key_str: str(
+            method_spec[method_key_str]
+        ),
+        batch_key_str: (
+            f"b{args.start // batch_size:04d}"
+        ),
     }
-    loaded.context.write("simulation_batches", batch, write_coordinates)
-    loaded.context.write("model_diagnostics", diagnostics, write_coordinates)
+    loaded.context.write(
+        "simulation_batches",
+        batch,
+        write_coordinates,
+    )
+    loaded.context.write(
+        "model_diagnostics",
+        diagnostics,
+        write_coordinates,
+    )
     print(
-        f"P08B batch status=PASS scenario={args.scenario_id} "
-        f"profile={method_spec[EXECUTION_PROFILE]} method={args.method_id} "
+        f"P08B batch status=PASS "
+        f"scenario={args.scenario_id} "
+        f"profile={method_spec[EXECUTION_PROFILE]} "
+        f"method={args.method_id} "
         f"rows={len(batch)}"
     )
     return 0
