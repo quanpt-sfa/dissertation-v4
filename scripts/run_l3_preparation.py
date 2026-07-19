@@ -1,4 +1,4 @@
-"""Run the development-only P00-P06 preparation and produce S3/L3 lock evidence."""
+"""Run P00-P06 and report capability for the P0-registered L3 scenarios."""
 
 from __future__ import annotations
 
@@ -9,6 +9,11 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from core.l3_scenarios import locked_l3_scenario_registry  # noqa: E402
+from core.pipeline import load_run, mapping  # noqa: E402
 
 
 def _run(command: list[str], *, cwd: Path, capture: bool = False) -> str:
@@ -30,7 +35,6 @@ def _run(command: list[str], *, cwd: Path, capture: bool = False) -> str:
 
 
 def _run_tests(project_root: Path) -> None:
-    """Resolve pytest through the locked optional dev extra, not ambient .venv state."""
     uv = shutil.which("uv")
     if uv is None:
         raise RuntimeError("uv executable is required to run the test suite")
@@ -96,11 +100,11 @@ def _require_clean_tree(root: Path) -> None:
     )
     if result.stdout.strip():
         raise RuntimeError(
-            "L3 preparation requires a clean committed Git tree; review and commit the hardening diff first"
+            "L3 preparation requires a clean committed Git tree; review and commit the protocol first"
         )
 
 
-def _blockers(s3: dict[str, Any], calibration: dict[str, Any]) -> list[str]:
+def _data_contract_blockers(s3: dict[str, Any], calibration: dict[str, Any]) -> list[str]:
     result: list[str] = []
     required_s3_fields = {
         "development_positive_count_by_endpoint",
@@ -110,7 +114,6 @@ def _blockers(s3: dict[str, Any], calibration: dict[str, Any]) -> list[str]:
     missing_s3_fields = sorted(field for field in required_s3_fields if field not in s3)
     if missing_s3_fields:
         result.append("S3_AUDIT_SCHEMA_NOT_HARDENED:" + ",".join(missing_s3_fields))
-
     checks = {
         "P03_P05_OUTCOME_MISMATCH": int(s3.get("p03_p05_outcome_mismatch_count") or 0),
         "P03_P05_MISSING_KEY": int(s3.get("p03_p05_missing_key_count") or 0),
@@ -122,18 +125,27 @@ def _blockers(s3: dict[str, Any], calibration: dict[str, Any]) -> list[str]:
         ),
     }
     result.extend(name for name, value in checks.items() if value != 0)
-    by_endpoint = s3.get("development_positive_count_by_endpoint")
-    if isinstance(by_endpoint, dict):
-        if int(by_endpoint.get("S3_CONTENT") or 0) <= 0:
-            result.append("NO_DEVELOPMENT_S3_CONTENT_POSITIVES")
-    elif not missing_s3_fields:
-        result.append("S3_AUDIT_ENDPOINT_COUNTS_MALFORMED")
     if s3.get("outer_outcomes_accessed") is not False:
         result.append("S3_AUDIT_ACCESSED_OUTER_OUTCOMES")
     if calibration.get("outer_outcomes_accessed") is not False:
         result.append("CALIBRATION_ACCESSED_OUTER_OUTCOMES")
-    if calibration.get("l2_status") != "AVAILABLE":
-        result.append("L2_NOT_AVAILABLE")
+    return result
+
+
+def _unavailable_reasons(
+    s3: dict[str, Any],
+    capability: dict[str, Any],
+) -> list[str]:
+    result: list[str] = []
+    by_endpoint = s3.get("development_positive_count_by_endpoint")
+    if not isinstance(by_endpoint, dict):
+        result.append("S3_AUDIT_ENDPOINT_COUNTS_MALFORMED")
+    elif int(by_endpoint.get("S3_CONTENT") or 0) <= 0:
+        result.append("NO_DEVELOPMENT_S3_CONTENT_POSITIVES")
+    if capability.get("status") != "AVAILABLE" or capability.get("pilot_executed") is not True:
+        result.append(
+            f"L3_CAPABILITY_{capability.get('status', 'UNKNOWN')}_{capability.get('reason_code')}"
+        )
     return result
 
 
@@ -171,7 +183,7 @@ def main() -> int:
         ],
         cwd=project_root,
     )
-    registry = run_root / "P00" / "registry.lock.json"
+    registry_path = run_root / "P00" / "registry.lock.json"
     s3_dir = run_root / "S3_AUDIT"
     calibration_dir = run_root / "CALIBRATION"
     _run(
@@ -179,7 +191,7 @@ def main() -> int:
             python,
             "scripts/report_s3_year_audit.py",
             "--registry",
-            str(registry),
+            str(registry_path),
             "--run-id",
             args.run_id,
             "--output-dir",
@@ -192,7 +204,7 @@ def main() -> int:
             python,
             "scripts/report_measurement_calibration.py",
             "--registry",
-            str(registry),
+            str(registry_path),
             "--run-id",
             args.run_id,
             "--output-dir",
@@ -211,12 +223,37 @@ def main() -> int:
         json.dumps(calibration, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
-    blockers = _blockers(s3, calibration)
+    p06 = load_run(
+        registry_path=registry_path,
+        run_id=args.run_id,
+        step_id="P06",
+        state="MEASURED",
+    )
+    scenario_registry = locked_l3_scenario_registry(p06.registry)
+    capability = mapping(p06.context.read("l3_pilot_capability", {}), "L3 capability")
+    blockers = _data_contract_blockers(s3, calibration)
+    unavailable = _unavailable_reasons(s3, capability)
+    status = (
+        "L3_BLOCKED_BY_DATA_CONTRACT"
+        if blockers
+        else "L3_UNAVAILABLE_BY_DESIGN"
+        if unavailable
+        else "L3_AVAILABLE"
+    )
     receipt = {
         "run_id": args.run_id,
         "protocol_hash": s3.get("protocol_hash"),
-        "status": "READY_FOR_L3_PARAMETER_LOCK" if not blockers else "BLOCKED",
+        "status": status,
         "blockers": blockers,
+        "unavailable_reasons": unavailable,
+        "scenario_registry_status": "LOCKED_AT_P0",
+        "primary_scenario_id": scenario_registry.primary_scenario_id,
+        "registered_scenario_ids": [
+            scenario.scenario_id for scenario in scenario_registry.scenarios
+        ],
+        "scenario_selection_rule": "PRE_REGISTERED_PRIMARY",
+        "performance_based_scenario_selection": False,
+        "l3_capability": capability,
         "development_positive_count_by_endpoint": s3.get(
             "development_positive_count_by_endpoint", {}
         ),
@@ -236,7 +273,7 @@ def main() -> int:
         encoding="utf-8",
     )
     print("L3_PREPARATION_JSON=" + json.dumps(receipt, ensure_ascii=False, sort_keys=True))
-    return 0 if not blockers else 3
+    return 3 if blockers else 0
 
 
 if __name__ == "__main__":
