@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from core.fold_control import production_path_blockers, require_primary_target
 from core.pipeline import load_run, mapping, sequence
 from core.rng import generator
-from core.semantic_keys import CHANNEL_ID, OUTER_FOLD
+from core.semantic_keys import CHANNEL_ID, MEASUREMENT_ID, OUTER_FOLD
 from selection.service import fit_l3_fold_candidate, select_measurement
 from selection.track_plan import build_sequential_track_plan
 
@@ -157,9 +157,7 @@ def main() -> int:
     loaded.context.write("measurement_candidate_results", result.candidates, coordinates)
     loaded.context.write("measurement_selection_registry", selection_registry, coordinates)
     loaded.context.write("channel_measurement_selection", channel_selection, coordinates)
-    statuses = ",".join(
-        f"{item['measurement_id']}={item['status']}" for item in plan["tracks"]
-    )
+    statuses = ",".join(f"{item[MEASUREMENT_ID]}={item['status']}" for item in plan["tracks"])
     print(f"P10 status=PASS fold={args.outer_fold} tracks={statuses}")
     return 0
 
