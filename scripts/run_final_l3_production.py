@@ -72,17 +72,13 @@ def _parse_prefixed_json(output: str, prefix: str) -> dict[str, Any]:
 
 def _validate_locked_config(config_path: Path) -> None:
     pipeline = _load_yaml(config_path)
-    imports = pipeline.get("imports")
-    if not isinstance(imports, list):
-        raise ValueError("pipeline config imports are required")
-    measurement_path: Path | None = None
-    for value in imports:
-        candidate = (config_path.parent / str(value)).resolve()
-        if candidate.name == "measurement.yaml":
-            measurement_path = candidate
-            break
-    if measurement_path is None:
-        measurement_path = config_path.parent / "methodology" / "measurement.yaml"
+    modules = pipeline.get("modules")
+    if not isinstance(modules, dict):
+        raise ValueError("pipeline config modules mapping is required")
+    measurement_module = modules.get("measurement")
+    if not isinstance(measurement_module, str) or not measurement_module:
+        raise ValueError("pipeline modules.measurement path is required")
+    measurement_path = (config_path.parent / measurement_module).resolve()
     raw = _load_yaml(measurement_path)
     measurement = raw.get("measurement")
     if not isinstance(measurement, dict):
