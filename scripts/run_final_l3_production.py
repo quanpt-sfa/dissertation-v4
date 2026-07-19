@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,17 @@ def _run(command: list[str], *, cwd: Path, capture: bool = False) -> str:
             print(result.stderr, end="", file=sys.stderr, flush=True)
         return result.stdout
     return ""
+
+
+def _run_tests(project_root: Path) -> None:
+    """Resolve pytest through the locked optional dev extra, not ambient .venv state."""
+    uv = shutil.which("uv")
+    if uv is None:
+        raise RuntimeError("uv executable is required to run the test suite")
+    _run(
+        [uv, "run", "--extra", "dev", "python", "-m", "pytest", "-q"],
+        cwd=project_root,
+    )
 
 
 def _require_clean_tree(root: Path) -> None:
@@ -149,7 +161,7 @@ def main() -> int:
     _validate_locked_config(config)
     python = sys.executable
     if not args.skip_tests:
-        _run([python, "-m", "pytest", "-q"], cwd=project_root)
+        _run_tests(project_root)
 
     raw_root = args.raw_root.expanduser().resolve()
     output_root = args.output_root.expanduser().resolve()
