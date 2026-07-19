@@ -645,3 +645,28 @@ def test_sanction_rows_parser_with_target_fiscal_year(tmp_path: Path) -> None:
     assert parsed.target_fiscal_year == 2019
     assert target_fiscal_year(parsed) == 2019
 
+
+def test_decision_date_precedes_target_fiscal_year_fallback() -> None:
+    row = SanctionDecisionInput(
+        document_id="DOC",
+        firm_id="F1",
+        decision_date=datetime(2024, 7, 1),
+        target_fiscal_year=2018,
+    )
+
+    from core.semantic_keys import DECISION_DATE
+    assert resolve_sanction_year(row) == (2024, DECISION_DATE)
+    assert target_fiscal_year(row) == 2023
+
+
+def test_target_fiscal_year_is_final_fallback() -> None:
+    row = SanctionDecisionInput(
+        document_id="DOC",
+        firm_id="F1",
+        target_fiscal_year=2019,
+    )
+
+    from core.semantic_keys import TARGET_FISCAL_YEAR
+    assert resolve_sanction_year(row) == (2020, TARGET_FISCAL_YEAR)
+    assert target_fiscal_year(row) == 2019
+

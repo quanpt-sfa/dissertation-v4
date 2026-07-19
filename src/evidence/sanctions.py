@@ -100,8 +100,6 @@ def resolve_sanction_year(row: SanctionDecisionInput) -> tuple[int | None, str]:
 
 
 def target_fiscal_year(row: SanctionDecisionInput) -> int | None:
-    if row.target_fiscal_year is not None:
-        return int(row.target_fiscal_year)
     year, _ = resolve_sanction_year(row)
     return None if year is None else year - 1
 
