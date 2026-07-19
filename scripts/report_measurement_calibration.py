@@ -21,7 +21,6 @@ from core.semantic_keys import (
     ELIGIBLE,
     FIRM_ID,
     FISCAL_YEAR,
-    MATURE,
     OUTCOME,
     PREDICTION_TIME,
     SOURCE_ID,
@@ -35,24 +34,33 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
 
-    loaded = load_run(
+    p05 = load_run(
+        registry_path=args.registry,
+        run_id=args.run_id,
+        step_id="P05",
+        state="RISK_SET",
+    )
+    risk_sets = p05.context.read("risk_sets", {})
+    evidence = p05.context.read("evidence_ledger", {})
+
+    p06 = load_run(
         registry_path=args.registry,
         run_id=args.run_id,
         step_id="P06",
         state="MEASURED",
     )
-    risk_sets = loaded.context.read("risk_sets", {})
-    evidence = loaded.context.read("evidence_ledger", {})
     matrices = mapping(
-        loaded.context.read("source_channel_matrices", {}),
+        p06.context.read("source_channel_matrices", {}),
         "source_channel_matrices",
     )
+    if p05.protocol_hash != p06.protocol_hash:
+        raise ValueError("calibration report contexts must share one protocol hash")
     if not isinstance(risk_sets, pd.DataFrame) or not isinstance(evidence, pd.DataFrame):
         raise TypeError("P04 risk sets and P03 evidence ledger must be DataFrames")
 
-    columns = physical_columns(loaded.registry)
-    initial_outer_year = int(mapping(loaded.registry.get("folds"), "folds")["initial_outer_year"])
-    sources = logical_evidence_sources(loaded.registry)
+    columns = physical_columns(p05.registry)
+    initial_outer_year = int(mapping(p05.registry.get("folds"), "folds")["initial_outer_year"])
+    sources = logical_evidence_sources(p05.registry)
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -60,13 +68,7 @@ def main() -> int:
         mapping(item, "source-channel matrix row")
         for item in sequence(matrices.get("rows"), "source-channel matrix rows")
     ]
-    development_rows = [
-        row
-        for row in matrix_rows
-        if int(row[FISCAL_YEAR]) < initial_outer_year
-        and row.get(ELIGIBLE) is True
-        and row.get(MATURE) is True
-    ]
+    development_rows = _development_rows(matrix_rows, initial_outer_year)
 
     source_coverage = _source_coverage(development_rows, sources)
     channel_coverage = _channel_coverage(development_rows, matrices)
@@ -94,8 +96,8 @@ def main() -> int:
 
     summary = {
         "run_id": args.run_id,
-        "protocol_hash": loaded.protocol_hash,
-        "fit_scope": "mature_eligible_development_history_only",
+        "protocol_hash": p05.protocol_hash,
+        "fit_scope": "eligible_development_history_source_specific_observability",
         "initial_outer_year": initial_outer_year,
         "development_row_count": len(development_rows),
         "logical_source_count": len(sources),
@@ -106,6 +108,18 @@ def main() -> int:
     }
     print("MEASUREMENT_CALIBRATION_JSON=" + json.dumps(summary, sort_keys=True))
     return 0
+
+
+def _development_rows(
+    rows: list[dict[str, Any]],
+    initial_outer_year: int,
+) -> list[dict[str, Any]]:
+    """Keep eligible pre-outer rows; source-level missingness carries maturity information."""
+    return [
+        row
+        for row in rows
+        if int(row[FISCAL_YEAR]) < initial_outer_year and row.get(ELIGIBLE) is True
+    ]
 
 
 def _source_coverage(
@@ -183,16 +197,13 @@ def _lag_distribution(
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
     prediction = columns[PREDICTION_TIME]
-    mature = columns[MATURE]
     eligible = columns[ELIGIBLE]
     source = columns[SOURCE_ID]
     availability = columns[AVAILABILITY_DATE]
     outcome = columns[OUTCOME]
 
     development = risk_sets.loc[
-        (risk_sets[year] < initial_outer_year)
-        & risk_sets[mature].astype(bool)
-        & risk_sets[eligible].astype(bool),
+        (risk_sets[year] < initial_outer_year) & risk_sets[eligible].astype(bool),
         [firm, year, prediction],
     ].copy()
     merged = evidence.merge(development, on=[firm, year], how="inner", validate="many_to_one")
@@ -250,7 +261,7 @@ def _empirical_anchors(
         else {}
     )
     return {
-        "fit_scope": "mature_eligible_development_history_only",
+        "fit_scope": "eligible_development_history_source_specific_observability",
         "source_observed_positive_rates": source_rates,
         "channel_observed_positive_rates": channel_rates,
         "observed_rate_quantiles": quantiles,
