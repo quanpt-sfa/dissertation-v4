@@ -36,13 +36,12 @@ NONPRODUCTION_AUDIT_SCRIPTS = {
 NONPRODUCTION_AUDIT_MODULES: set[str] = set()
 # These scripts intentionally maintain repository source/configuration rather
 # than execute an empirical stage. They may reference registered schema names or
-# non-manifest config paths only for migration/locking. The whitelist is exact;
-# no production runner or analysis stage belongs here.
+# non-manifest config paths only for migration. The whitelist is exact; no
+# production runner or analysis stage belongs here.
 REPOSITORY_MAINTENANCE_SCRIPTS = {
     "scripts/apply_s3_l3_production_hardening.py",
     "scripts/finalize_s3_l3_production_hardening.py",
     "scripts/repair_s3_l3_hardening_regressions.py",
-    "scripts/lock_l3_parameters.py",
 }
 PRODUCTION_DATA_BOUNDARIES = {
     "src/features/store.py",
