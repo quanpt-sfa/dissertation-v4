@@ -10,10 +10,11 @@ table is imputed from outer outcomes or changed by this implementation.
 | S1 profit materiality threshold | `0.10` | `LOCKED_PRIMARY_RULE` | A profit adjustment is positive when the absolute pre/post-audit difference exceeds 10% of absolute post-audit profit. |
 | S1 revenue materiality threshold | `0.01` | `LOCKED_PRIMARY_RULE` | A revenue adjustment is positive when the absolute pre/post-audit difference exceeds 1% of absolute post-audit revenue. |
 | S1 denominator floor | `0.0` | `LOCKED_ZERO_ONLY_GUARD` | No arbitrary VND floor is imposed; exact zero denominators remain invalid under the existing fail-closed rule. |
-| L2 formula | `null` | `SKIP_OPTIONAL_TRACK` | L2 is recorded as unavailable and skipped without blocking L1. |
-| L2 minimum observed channels | `null` | `SKIP_OPTIONAL_TRACK` | L2 eligibility is not locked; only the L2 track is skipped. |
-| L2 source quality | empty mapping | `SKIP_OPTIONAL_TRACK` | Quality-weighted L2 scoring is unavailable; only the L2 track is skipped. |
-| L2 delay half-life | `null` | `SKIP_OPTIONAL_TRACK` | Delay weighting is unavailable; only the L2 track is skipped. |
-| L3 fixed-pi grid | empty list | `SKIP_OPTIONAL_TRACK` | L3 fixed-pi cannot become operational; only the L3 track is skipped. |
-| L3 accuracy priors | empty mapping | `SKIP_OPTIONAL_TRACK` | L3 accuracy model cannot become operational; only the L3 track is skipped. |
+| L2 formula | `quality_delay_weighted_observed_source_mean` | `LOCKED_NEUTRAL_L2` | L2 scores observed evidence only and preserves missingness. |
+| L2 minimum observed channels | `1` | `LOCKED_NEUTRAL_L2` | A row requires at least one observed channel; stricter complete-channel subsets remain sensitivity analyses. |
+| L2 source quality | all registered evidence profiles `1.0` | `LOCKED_NEUTRAL_L2` | No source-quality ranking is imposed without external validation or a ground truth. |
+| L2 delay half-life | `365` days | `LOCKED_NEUTRAL_L2` | Delay discounting is aligned with the locked 12-month primary horizon. |
+| L3 logical-source binding | logical endpoint IDs | `IMPLEMENTED` | Physical sources with multiple endpoints, especially S3, expand to separate logical outcomes before latent-class fitting. |
+| L3 fixed-pi grid | empty list | `DATA_CALIBRATION_REQUIRED` | Run the development-only calibration report and review external prevalence evidence before locking a broad fixed-pi grid. |
+| L3 accuracy priors | empty mapping | `THEORY_AND_EVIDENCE_REQUIRED` | Beta priors require documented literature, validation evidence, or expert elicitation plus prior-sensitivity analysis. |
 | `s3_taxonomy.sanction_source_completeness.source_year_close_date` | `null` | `SAFE_TO_REMAIN_NULL` | Completeness is explicitly controlled by year registry. |
