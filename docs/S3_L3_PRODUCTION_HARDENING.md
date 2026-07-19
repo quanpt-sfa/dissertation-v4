@@ -5,7 +5,7 @@ This branch adds an explicit four-phase workflow. The scripts do not use outer-f
 ## 1. Pull and switch to the branch
 
 ```powershell
-cd D:\Works\dissertation\dissertation-v4
+cd D:\Quan\dissertation-v4
 git fetch origin
 git switch agent/s3-content-l3-production-lock
 ```
@@ -34,7 +34,7 @@ After the script passes, inspect and commit the generated diff:
 
 ```powershell
 git diff
-git add config docs scripts src tests
+git add config docs scripts src templates tests
 git commit -m "Harden S3 content measurement and L3 production workflow"
 git status --porcelain
 git push
@@ -55,7 +55,7 @@ Validate them directly:
 
 ```powershell
 uv run python scripts/validate_production_source_contracts.py `
-  --raw-root "D:\Works\dissertation\dissertation-v4"
+  --raw-root (Get-Location).Path
 ```
 
 The known-case registry must contain exactly these firm-years:
@@ -112,12 +112,15 @@ Counts are reported separately for `S3_CONTENT`, `S3_REPORTING`, `S3_TIMELINESS`
 
 ## 5. Review and lock fixed-pi values and accuracy priors
 
+The registry compiler treats every `.yaml` beneath `config/` as configuration and rejects undeclared files. Therefore both the template and the reviewed working file must remain outside `config/`.
+
 Copy the template to a working lock file:
 
 ```powershell
+New-Item -ItemType Directory -Force working\l3 | Out-Null
 Copy-Item `
-  config\methodology\l3_parameter_lock.template.yaml `
-  config\methodology\l3_parameter_lock.reviewed.yaml
+  templates\l3_parameter_lock.template.yaml `
+  working\l3\l3_parameter_lock.reviewed.yaml
 ```
 
 Replace every illustrative number and placeholder. Set:
@@ -133,11 +136,11 @@ Apply the reviewed lock:
 ```powershell
 .\scripts\s3_l3_production_workflow.ps1 `
   -Mode Lock `
-  -LockFile "config\methodology\l3_parameter_lock.reviewed.yaml" `
+  -LockFile "working\l3\l3_parameter_lock.reviewed.yaml" `
   -PreparationReceipt "artifacts\runs\l3-preparation-20260719-01\PREPARATION\l3_preparation_receipt.json"
 ```
 
-The lock script writes fixed-pi and profile priors to `measurement.yaml`, records the input hashes and preparation protocol hash, regenerates catalogs, and reruns tests. Review and commit this change before the final run.
+The lock script writes fixed-pi and profile priors to `measurement.yaml`, records the input hashes and preparation protocol hash, regenerates catalogs, and reruns tests. Review and commit the resulting configuration and receipt before the final run. The reviewed working worksheet can remain uncommitted or be archived outside `config/`.
 
 ## 6. Run one fail-closed P00-P17 production command
 
