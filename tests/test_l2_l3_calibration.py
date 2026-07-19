@@ -39,6 +39,7 @@ _REPORT = _load_script_module(
 )
 _SNAPSHOT = _load_script_module("test_create_data_snapshot", "scripts/create_data_snapshot.py")
 _l3_bindings = cast(Any, getattr(_P10, "_l3_bindings"))
+_development_rows = cast(Any, getattr(_REPORT, "_development_rows"))
 _source_coverage = cast(Any, getattr(_REPORT, "_source_coverage"))
 _snapshot_compatible_registry = cast(Any, getattr(_SNAPSHOT, "_snapshot_compatible_registry"))
 _restore_zero_floor = cast(Any, getattr(_SNAPSHOT, "_restore_zero_floor"))
@@ -150,6 +151,19 @@ def test_l3_bindings_expand_physical_source_to_logical_endpoints() -> None:
     assert channels == {"S3_BROAD": "S3", "S3_REPORTING": "S3"}
     assert priors == {"S3_BROAD": prior, "S3_REPORTING": prior}
     assert "sanction_evidence" not in channels
+
+
+def test_calibration_development_scope_uses_source_specific_observability() -> None:
+    rows = [
+        {FISCAL_YEAR: 2019, ELIGIBLE: True, MATURE: False},
+        {FISCAL_YEAR: 2020, ELIGIBLE: True, MATURE: False},
+        {FISCAL_YEAR: 2021, ELIGIBLE: True, MATURE: True},
+        {FISCAL_YEAR: 2018, ELIGIBLE: False, MATURE: True},
+    ]
+
+    selected = _development_rows(rows, 2021)
+
+    assert [row[FISCAL_YEAR] for row in selected] == [2019, 2020]
 
 
 def test_source_coverage_preserves_unknown_outcomes() -> None:
