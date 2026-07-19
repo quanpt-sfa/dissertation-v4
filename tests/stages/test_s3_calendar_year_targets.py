@@ -670,3 +670,26 @@ def test_target_fiscal_year_is_final_fallback() -> None:
     assert resolve_sanction_year(row) == (2020, TARGET_FISCAL_YEAR)
     assert target_fiscal_year(row) == 2019
 
+
+def test_excluded_unresolved_decision_does_not_contaminate_firm_years() -> None:
+    result = _build(
+        [
+            _decision(
+                "DISCLOSURE-ONLY",
+                sanction_year=None,
+                decision_date=None,
+                publish_date=None,
+                row_included=False,
+                hard_positive=False,
+                level_1="DISCLOSURE",
+            )
+        ],
+        panel_keys={("F1", 2019), ("F1", 2020)},
+    )
+
+    records = _record_map(result)
+
+    assert all(record.outcome is False for record in records.values())
+    assert result.audit["unresolved_sanction_year_mapping_count"] == 0
+    assert result.audit["excluded_source_rule_mapping_count"] == 1
+

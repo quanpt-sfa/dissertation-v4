@@ -126,6 +126,15 @@ def main() -> int:
         "sanction_unresolved_year_mapping_count": sanction_audit.get(
             "unresolved_sanction_year_mapping_count"
         ),
+        "excluded_source_rule_mapping_count": sanction_audit.get(
+            "excluded_source_rule_mapping_count"
+        ),
+        "excluded_unresolved_mapping_count": sanction_audit.get(
+            "excluded_unresolved_mapping_count"
+        ),
+        "eligible_unresolved_sanction_year_mapping_count": sanction_audit.get(
+            "eligible_unresolved_sanction_year_mapping_count"
+        ),
         "status": status,
         "outer_outcomes_accessed": False,
         "scope_note": (

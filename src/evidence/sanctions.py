@@ -255,12 +255,13 @@ def build_s3_evidence(
         if not firm_id:
             raise ValueError("S3 decision requires firm_id")
         grouped.setdefault((document_id, firm_id), []).append(decision)
-
     ledger_rows: list[dict[str, object]] = []
     decision_values: dict[
         tuple[str, int], list[tuple[str, dict[str, bool | None], str | None, dict[str, object]]]
     ] = {}
-    unresolved_count = 0
+    excluded_source_rule_count = 0
+    excluded_unresolved_count = 0
+    eligible_unresolved_count = 0
     unresolved_firms: set[str] = set()
     duplicate_count = 0
     for key in sorted(grouped):
@@ -270,17 +271,34 @@ def build_s3_evidence(
             by_signature.setdefault(_decision_signature(item), item)
         group = sorted(by_signature.values(), key=_decision_sort_key)
         duplicate_count += len(raw_group) - len(group)
-        years = {resolve_sanction_year(item)[0] for item in group}
-        years.discard(None)
-        if len(years) != 1 or any(resolve_sanction_year(item)[0] is None for item in group):
-            unresolved_count += 1
-            unresolved_firms.add(key[1])
-            ledger_rows.append(_unresolved_ledger_row(raw_group, columns))
+
+        included = [item for item in group if item.row_included and item.hard_positive]
+        if not included:
+            ledger_rows.append(
+                _excluded_ledger_row(
+                    group,
+                    columns,
+                    reason="EXCLUDED_BY_SOURCE_RULE",
+                )
+            )
+            excluded_source_rule_count += 1
+            years_group = {resolve_sanction_year(item)[0] for item in group}
+            years_group.discard(None)
+            if len(years_group) != 1 or any(resolve_sanction_year(item)[0] is None for item in group):
+                excluded_unresolved_count += 1
             continue
+
+        years = {resolve_sanction_year(item)[0] for item in included}
+        years.discard(None)
+        if len(years) != 1 or any(resolve_sanction_year(item)[0] is None for item in included):
+            eligible_unresolved_count += 1
+            unresolved_firms.add(key[1])
+            ledger_rows.append(_unresolved_ledger_row(included, columns))
+            continue
+
         sanction_year_value = next(iter(years))
         assert sanction_year_value is not None
         target_year = sanction_year_value - 1
-        included = [item for item in group if item.row_included and item.hard_positive]
         classifications = [classify_s3_taxonomy(item, taxonomy) for item in included]
         endpoint_values: dict[str, bool | None] = {}
         unmapped = any(reason == "UNMAPPED_S3_TAXONOMY" for _, reason in classifications)
@@ -295,9 +313,7 @@ def build_s3_evidence(
             else:
                 endpoint_values[endpoint] = False
         reason = (
-            "EXCLUDED_BY_SOURCE_RULE"
-            if not included
-            else "UNMAPPED_S3_TAXONOMY"
+            "UNMAPPED_S3_TAXONOMY"
             if unmapped
             else None
         )
@@ -311,11 +327,21 @@ def build_s3_evidence(
                 columns=columns,
             )
         )
-        if included:
-            decision_values.setdefault((key[1], target_year), []).append(
-                (key[0], endpoint_values, reason, metadata)
-            )
+        for endpoint in S3_ENDPOINTS:
+            outcome = endpoint_values[endpoint]
+            if outcome is None:
+                continue
+            for k in ((key[1], target_year),):
+                decision_values.setdefault(k, []).append(
+                    (
+                        key[0],
+                        endpoint_values,
+                        reason,
+                        metadata,
+                    )
+                )
 
+    unresolved_count = eligible_unresolved_count
     endpoint_records: list[EvidenceRecord] = []
     for firm_id, fiscal_year in sorted(panel_keys):
         required_year = fiscal_year + 1
@@ -420,6 +446,9 @@ def build_s3_evidence(
             "firm_mapping_count": len(grouped),
             "duplicate_source_row_count": duplicate_count,
             "unresolved_sanction_year_mapping_count": unresolved_count,
+            "excluded_source_rule_mapping_count": excluded_source_rule_count,
+            "excluded_unresolved_mapping_count": excluded_unresolved_count,
+            "eligible_unresolved_sanction_year_mapping_count": eligible_unresolved_count,
             "firms_with_unresolved_sanction_year": sorted(unresolved_firms),
             "endpoint_result_count": len(endpoint_records),
             "complete_through_year": complete_through_year,
@@ -527,6 +556,20 @@ def _unresolved_ledger_row(
         sanction_year_value=0,
         target_year=0,
         reason="SANCTION_YEAR_UNRESOLVED",
+        columns=columns,
+    )
+    row[columns[TARGET_FISCAL_YEAR]] = None
+    return row
+
+
+def _excluded_ledger_row(
+    group: list[SanctionDecisionInput], columns: dict[str, str], reason: str
+) -> dict[str, object]:
+    row = _decision_ledger_row(
+        group=group,
+        sanction_year_value=0,
+        target_year=0,
+        reason=reason,
         columns=columns,
     )
     row[columns[TARGET_FISCAL_YEAR]] = None
