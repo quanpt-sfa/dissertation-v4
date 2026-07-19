@@ -19,13 +19,17 @@ from simulation.coordinate_contract import (
     SHORT_KEY_HEX_LENGTH,
 )
 from simulation.empirical_calibration import attach_empirical_panel_calibration
-from simulation.l3_variants import extend_method_registry
+from simulation.l3_variants import (
+    L3_VARIANT_IDS,
+    extend_method_registry,
+)
 from simulation.method_contract import (
     apply_execution_profile,
     build_cost_sensitive_contract,
     build_execution_profile_contract,
     build_full_method_registry,
     build_imbalance_treatment_contract,
+    expected_counts,
     profile_expected_counts,
     validate_optional_dependencies,
 )
@@ -110,10 +114,13 @@ def main() -> int:
         method_registry,
         active_only=True,
     )
-    full_counts = profile_expected_counts(
-        method_registry,
-        active_only=False,
+    full_counts = expected_counts(
+        cost_contract,
+        imbalance_contract,
     )
+    full_counts = dict(full_counts)
+    full_counts["standalone"] += len(L3_VARIANT_IDS)
+    full_counts["method_total"] += len(L3_VARIANT_IDS)
     active_counts = profile_expected_counts(
         method_registry,
         active_only=True,
