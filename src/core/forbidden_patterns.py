@@ -25,6 +25,17 @@ APPROVED_CORE_FILES = {
     "forbidden_patterns.py",
     "semantic_keys.py",
 }
+# These semantic roles describe control-plane or registry metadata rather than
+# physical empirical-data bindings. Their names may legitimately appear in
+# receipts and scenario-control dictionaries. All entity, period, measurement,
+# outcome, predictor, and evidence columns remain protected by the literal guard.
+NON_DATA_COLUMN_SEMANTIC_ROLES = {
+    "feature_registry_key",
+    "feature_view_key",
+    "feature_lineage_source",
+    "fold_key",
+    "simulation_scenario",
+}
 # P07A/P07B are explicitly non-production source-resolution audits. They can
 # inspect external, researcher-supplied files but cannot consume runtime
 # artifacts, outcomes, or known cases. Keeping this exception named and tiny
@@ -50,14 +61,6 @@ PRODUCTION_DATA_BOUNDARIES = {
     # the immutable production artifact namespace.
     "scripts/report_measurement_calibration.py",
     "scripts/report_s3_year_audit.py",
-}
-# These exact files emit ``scenario_id`` as control-plane JSON metadata for the
-# preregistered L3 scenario registry. They do not bind or access a physical data
-# column. The exception is literal- and path-specific; all other registered
-# physical-column literals remain forbidden in these files.
-REGISTERED_METADATA_LITERAL_EXCEPTIONS = {
-    "scripts/p05_measurement_inputs.py": {"scenario_id"},
-    "src/selection/preregistered_l3.py": {"scenario_id"},
 }
 
 StringMap = dict[str, Any]
@@ -107,12 +110,8 @@ def validate_source_patterns(
         physical_name = column.get("physical_name")
         if not isinstance(physical_name, str):
             raise ConfigurationError(f"column={column_id}: physical_name must be a string")
-        # P07 registry labels are artifact metadata, not raw-data physical bindings.
-        if column.get("semantic_role") not in {
-            "feature_registry_key",
-            "feature_view_key",
-            "feature_lineage_source",
-        }:
+        semantic_role = column.get("semantic_role")
+        if semantic_role not in NON_DATA_COLUMN_SEMANTIC_ROLES:
             physical_names.add(physical_name)
 
     for artifact_id, raw_artifact in artifacts.items():
@@ -153,8 +152,7 @@ def validate_source_patterns(
         }
 
         if not registered_boundary:
-            metadata_exceptions = REGISTERED_METADATA_LITERAL_EXCEPTIONS.get(relative, set())
-            copied_columns = sorted((physical_names & literals) - metadata_exceptions)
+            copied_columns = sorted(physical_names & literals)
             if copied_columns:
                 raise ConfigurationError(
                     f"source={path}: registered physical columns "
