@@ -86,11 +86,32 @@ def test_T005_primary_outcome(registry: dict[str, Any]) -> None:
 
 def test_T006_prior_accuracy(registry: dict[str, Any]) -> None:
     canonical(registry, "D06", "Miền prior/accuracy")
-    assert get(registry, "measurement.prior_accuracy_domain.primary_prior") == "fixed_pi_grid"
+    assert (
+        get(registry, "measurement.prior_accuracy_domain.primary_prior")
+        == "preregistered_l3_scenario_registry"
+    )
     assert (
         get(registry, "measurement.prior_accuracy_domain.hierarchical_prior_role")
         == "sensitivity_only"
     )
+    assert get(registry, "l3_scenarios.status") == "LOCKED_AT_P0"
+    assert get(registry, "l3_scenarios.primary_scenario_id") == "neutral_pi_03"
+    assert get(registry, "l3_scenarios.scenarios.low_pi_01.fixed_pi") == 0.01
+    assert get(registry, "l3_scenarios.scenarios.neutral_pi_03.fixed_pi") == 0.03
+    assert get(registry, "l3_scenarios.scenarios.high_pi_05.fixed_pi") == 0.05
+    assert get(registry, "l3_scenarios.execution_policy.run_all_registered_scenarios") is True
+    assert (
+        get(
+            registry,
+            "l3_scenarios.execution_policy.performance_based_scenario_selection_forbidden",
+        )
+        is True
+    )
+    assert get(registry, "l3_scenarios.execution_policy.outer_outcomes_accessed") is False
+    assert get(registry, "l3_scenarios.execution_policy.known_cases_accessed") is False
+    assert get(registry, "decisions.D06.lock_stage") == "P00"
+    assert set(get(registry, "decisions.D06.enforced_by_steps")) == {"P00", "P05", "P10"}
+    assert get(registry, "appendix_b.D06.lock_status") == "Khóa tại P0"
 
 
 def test_T007_review_budget(registry: dict[str, Any]) -> None:
@@ -205,9 +226,7 @@ def test_T023_gate_thresholds(registry: dict[str, Any]) -> None:
 def test_T024_interaction_library(registry: dict[str, Any]) -> None:
     canonical(registry, "D24", "Interaction library")
     assert get(registry, "inference.interaction_library.confirmatory_threshold_claims") == 2
-    assert (
-        get(registry, "inference.interaction_library.confirmatory_block") == "pressure_x_monitoring"
-    )
+    assert get(registry, "inference.interaction_library.confirmatory_block") == "pressure_x_monitoring"
 
 
 def test_T025_exit_events(registry: dict[str, Any]) -> None:
