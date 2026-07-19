@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 
@@ -11,26 +12,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import pandas as pd
 
 from core.pipeline import load_run, mapping, physical_columns, sequence
-from core.semantic_keys import FIRM_ID, FISCAL_YEAR, SCENARIO_ID, METHOD_ID
+from core.semantic_keys import FIRM_ID, FISCAL_YEAR, METHOD_ID, SCENARIO_ID
+from simulation.coordinate_contract import (
+    METHOD_KEY_PREFIX,
+    SCENARIO_KEY_PREFIX,
+    SHORT_KEY_HEX_LENGTH,
+)
+from simulation.empirical_calibration import attach_empirical_panel_calibration
+from simulation.l3_variants import extend_method_registry
 from simulation.method_contract import (
     apply_execution_profile,
     build_cost_sensitive_contract,
     build_execution_profile_contract,
-    build_imbalance_treatment_contract,
     build_full_method_registry,
-    expected_counts,
+    build_imbalance_treatment_contract,
     profile_expected_counts,
     validate_optional_dependencies,
 )
-from simulation.empirical_calibration import attach_empirical_panel_calibration
-from simulation.service import validate_scenarios
 from simulation.scenario_contract import validate_scenario_target_identity
-from simulation.coordinate_contract import (
-    SHORT_KEY_HEX_LENGTH,
-    SCENARIO_KEY_PREFIX,
-    METHOD_KEY_PREFIX,
-)
-import hashlib
+from simulation.service import validate_scenarios
 
 
 def build_short_key_map(
@@ -62,6 +62,7 @@ def build_short_key_map(
 
     return result
 
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry", type=Path, required=True)
@@ -90,20 +91,33 @@ def main() -> int:
         cost_contract,
         imbalance_contract,
     )
-    profile_contract = build_execution_profile_contract(simulation, full_registry)
+    full_registry = extend_method_registry(simulation, full_registry)
+    profile_contract = build_execution_profile_contract(
+        simulation,
+        full_registry,
+    )
     active_profile = str(profile_contract["active_profile"])
     if args.profile is not None and args.profile != active_profile:
         raise ValueError(
             f"--profile={args.profile} differs from protocol-locked "
             f"simulation.active_profile={active_profile}"
         )
-    method_registry = apply_execution_profile(full_registry, profile_contract)
+    method_registry = apply_execution_profile(
+        full_registry,
+        profile_contract,
+    )
     required_dependencies = validate_optional_dependencies(
         method_registry,
         active_only=True,
     )
-    full_counts = expected_counts(cost_contract, imbalance_contract)
-    active_counts = profile_expected_counts(method_registry, active_only=True)
+    full_counts = profile_expected_counts(
+        method_registry,
+        active_only=False,
+    )
+    active_counts = profile_expected_counts(
+        method_registry,
+        active_only=True,
+    )
 
     raw_scenarios = [
         mapping(item, "simulation operational scenario")
@@ -114,7 +128,10 @@ def main() -> int:
     ]
     firm_year_panel = loaded.context.read("firm_year_panel", {})
     feature_panel = loaded.context.read("feature_panel", {})
-    source_channel_matrices = loaded.context.read("source_channel_matrices", {})
+    source_channel_matrices = loaded.context.read(
+        "source_channel_matrices",
+        {},
+    )
     feature_registry = [
         mapping(item, "feature registry item")
         for item in sequence(
@@ -127,12 +144,18 @@ def main() -> int:
     if not isinstance(feature_panel, pd.DataFrame):
         raise ValueError("P08 feature panel must be a DataFrame")
     if not isinstance(source_channel_matrices, dict):
-        raise ValueError("P08 P05 source-channel matrices must be a JSON object")
+        raise ValueError(
+            "P08 P05 source-channel matrices must be a JSON object"
+        )
 
     folds = mapping(loaded.registry.get("folds"), "folds")
     empirical_settings = mapping(
         simulation.get("empirical_calibration"),
         "simulation.empirical_calibration",
+    )
+    l3_variant_settings = mapping(
+        simulation.get("l3_variant_settings"),
+        "simulation.l3_variant_settings",
     )
     columns = physical_columns(loaded.registry)
     scenarios = attach_empirical_panel_calibration(
@@ -144,7 +167,9 @@ def main() -> int:
         firm_column=columns[FIRM_ID],
         year_column=columns[FISCAL_YEAR],
         development_year_maximum=int(folds["initial_outer_year"]) - 1,
-        calibration_repeats=int(empirical_settings.get("calibration_repeats", 64)),
+        calibration_repeats=int(
+            empirical_settings.get("calibration_repeats", 64)
+        ),
     )
     scenarios = validate_scenarios(scenarios)
 
@@ -168,27 +193,33 @@ def main() -> int:
         validate_scenario_target_identity(item)
         scenario_id = str(item[SCENARIO_ID])
         item["scenario_" + "key"] = scenario_keys[scenario_id]
-        
+        item["l3_variant_settings"] = dict(l3_variant_settings)
+
         updated_method_registry = []
         for value in method_registry:
             method_spec = dict(value)
-            m_id = str(method_spec[METHOD_ID])
-            method_spec["method_" + "key"] = method_keys[m_id]
+            method_id = str(method_spec[METHOD_ID])
+            method_spec["method_" + "key"] = method_keys[method_id]
             updated_method_registry.append(method_spec)
         item["method_registry"] = updated_method_registry
-        item["active_method_ids"] = list(profile_contract["active_method_ids"])
+        item["active_method_ids"] = list(
+            profile_contract["active_method_ids"]
+        )
         item["execution_profile"] = active_profile
         item["execution_profile_registry"] = [
             dict(value) for value in profile_contract["profiles"]
         ]
         item["cost_regime_registry"] = [
-            dict(value) for value in cost_contract["cost_regime_registry"]
+            dict(value)
+            for value in cost_contract["cost_regime_registry"]
         ]
         item["review_budget_registry"] = [
-            dict(value) for value in cost_contract["review_budget_registry"]
+            dict(value)
+            for value in cost_contract["review_budget_registry"]
         ]
         item["imbalance_treatment_registry"] = [
-            dict(value) for value in imbalance_contract["treatment_registry"]
+            dict(value)
+            for value in imbalance_contract["treatment_registry"]
         ]
         item["imbalance_treatment_settings"] = {
             key: value
@@ -198,7 +229,11 @@ def main() -> int:
         item["cost_sensitive_settings"] = {
             key: value
             for key, value in cost_contract.items()
-            if key not in {"cost_regime_registry", "review_budget_registry"}
+            if key
+            not in {
+                "cost_regime_registry",
+                "review_budget_registry",
+            }
         }
         item["methodology_contract"] = {
             "comparison_design": (
@@ -217,11 +252,12 @@ def main() -> int:
             "latent_truth_used_for_evaluation_not_training": True,
             "profile_selection_locked_by_config": True,
             "active_optional_dependencies": required_dependencies,
-            "contract_version": 7,
+            "contract_version": 8,
             "sample_size_derived_from_P02": True,
             "observed_label_rate_derived_from_P05": True,
             "latent_prevalence_calibrated_to_empirical_rate": True,
             "exact_empirical_rows_no_bootstrap": True,
+            "l3_correct_and_misspecified_variants": True,
         }
         locked.append(item)
 
@@ -235,10 +271,15 @@ def main() -> int:
         return 0
 
     loaded.context.write("simulation_scenario_registry", locked, {})
-    status = "PASS" if locked else "SKIPPED reason=NO_OPERATIONAL_SCENARIOS"
+    status = (
+        "PASS"
+        if locked
+        else "SKIPPED reason=NO_OPERATIONAL_SCENARIOS"
+    )
     print(
         f"P08A registry status={status} scenarios={len(locked)} "
-        f"profile={active_profile} active_methods={active_counts['method_total']} "
+        f"profile={active_profile} "
+        f"active_methods={active_counts['method_total']} "
         f"available_methods={full_counts['method_total']}"
     )
     return 0
