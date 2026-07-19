@@ -1,0 +1,46 @@
+l3_scenarios:
+  version: 1
+  status: LOCKED_AT_P0
+  primary_scenario_id: neutral_pi_03
+  execution_policy:
+    run_all_registered_scenarios: true
+    performance_based_scenario_selection_forbidden: true
+    outer_outcomes_accessed: false
+    known_cases_accessed: false
+    modification_after_p00_forbidden: true
+    diagnostic_losses_role: capability_and_reporting_only
+  prior_sets:
+    baseline_accuracy:
+      financial_statement_core_long:
+        sensitivity_alpha: 8.0
+        sensitivity_beta: 2.0
+        specificity_alpha: 12.0
+        specificity_beta: 1.0
+      audit_annual_long:
+        sensitivity_alpha: 7.0
+        sensitivity_beta: 3.0
+        specificity_alpha: 10.0
+        specificity_beta: 2.0
+      sanction_evidence:
+        sensitivity_alpha: 6.0
+        sensitivity_beta: 4.0
+        specificity_alpha: 15.0
+        specificity_beta: 2.0
+  scenarios:
+    low_pi_01:
+      role: robustness
+      fixed_pi: 0.01
+      prior_set_id: baseline_accuracy
+    neutral_pi_03:
+      role: primary
+      fixed_pi: 0.03
+      prior_set_id: baseline_accuracy
+    high_pi_05:
+      role: robustness
+      fixed_pi: 0.05
+      prior_set_id: baseline_accuracy
+  provenance:
+    decision_stage: P0_PROTOCOL_LOCK
+    rationale: Pre-register the fixed-prevalence sensitivity range and source-accuracy priors before empirical execution; report every registered scenario and never select a scenario using predictive or holdout performance.
+    outer_outcomes_accessed: false
+    known_cases_accessed: false
