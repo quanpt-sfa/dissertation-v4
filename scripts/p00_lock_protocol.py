@@ -41,6 +41,7 @@ P08_REQUIRED_READS = frozenset(
         "source_channel_matrices",
         "simulation_scenario_registry",
         "simulation_batches",
+        "model_diagnostics",
     }
 )
 P08_REQUIRED_WRITES = frozenset(

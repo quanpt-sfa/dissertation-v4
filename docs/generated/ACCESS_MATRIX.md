@@ -249,7 +249,8 @@ Source: config/pipeline.yaml
       "feature_registry",
       "source_channel_matrices",
       "simulation_scenario_registry",
-      "simulation_batches"
+      "simulation_batches",
+      "model_diagnostics"
     ],
     "required_receipts": [],
     "writes": [

@@ -70,7 +70,12 @@ def main() -> int:
     coordinates_seen: list[dict[str, str]] = []
     simulation = mapping(loaded.registry.get("simulation"), "simulation")
 
-    for item in loaded.context.store.inventory():
+    # Call inventory exactly once; reuse for both the batch scan loop and the
+    # bijection check below.  inventory() may decode/validate each artifact, so
+    # calling it twice doubles I/O per MCSE check wave.
+    inventory = list(loaded.context.store.inventory())
+
+    for item in inventory:
         if item.get("artifact_id") != "simulation_batches":
             continue
         raw = item.get("coordinates")
@@ -137,25 +142,27 @@ def main() -> int:
         batches.append(value)
         coordinates_seen.append(coordinates)
 
-    # Bijection check: every simulation_batches artifact must have a paired model_diagnostics.
-    # A missing diagnostics artifact signals a partial write (interrupted worker); fail closed.
-    diagnostics_coords: set[tuple[str, ...]] = set()
-    for item in loaded.context.store.inventory():
-        if item.get("artifact_id") != "model_diagnostics":
-            continue
-        raw = item.get("coordinates")
-        if isinstance(raw, dict):
-            diagnostics_coords.add(
-                tuple(sorted((str(k), str(v)) for k, v in cast(dict[object, object], raw).items()))
-            )
-    for coords in coordinates_seen:
-        key = tuple(sorted(coords.items()))
-        if key not in diagnostics_coords:
-            raise ValueError(
-                f"simulation_batches artifact at coordinates={dict(coords)} has no paired "
-                "model_diagnostics artifact — batch write was likely interrupted; "
-                "re-run affected batch before aggregating."
-            )
+    # Full bijection check using the already-fetched inventory (no second call).
+    # batch → diagnostics: interrupted write (batch exists, diagnostics missing).
+    # diagnostics → batch: orphan artifact (should not happen, but detect anyway).
+    diagnostics_coords: set[tuple[str, ...]] = {
+        tuple(sorted((str(k), str(v)) for k, v in cast(dict[object, object], item["coordinates"]).items()))
+        for item in inventory
+        if item.get("artifact_id") == "model_diagnostics"
+        and isinstance(item.get("coordinates"), dict)
+    }
+    batch_coord_set: set[tuple[str, ...]] = {
+        tuple(sorted(coords.items())) for coords in coordinates_seen
+    }
+    missing_diagnostics = batch_coord_set - diagnostics_coords
+    orphan_diagnostics = diagnostics_coords - batch_coord_set
+    if missing_diagnostics or orphan_diagnostics:
+        raise ValueError(
+            "P08 batch-diagnostics coordinate mismatch — batch write was likely interrupted; "
+            "re-run affected batches before aggregating. "
+            f"missing_diagnostics={sorted(str(dict(c)) for c in missing_diagnostics)}, "
+            f"orphan_diagnostics={sorted(str(dict(c)) for c in orphan_diagnostics)}"
+        )
 
     methodology = _validate_methodology(
         batches=batches,

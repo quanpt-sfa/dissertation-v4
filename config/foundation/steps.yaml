@@ -266,6 +266,7 @@ steps:
     - source_channel_matrices
     - simulation_scenario_registry
     - simulation_batches
+    - model_diagnostics
     optional_reads: []
     writes:
     - simulation_scenario_registry

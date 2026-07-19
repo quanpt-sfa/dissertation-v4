@@ -144,6 +144,31 @@ def main() -> int:
         workers=args.workers,
     )
 
+    if args.resume:
+        # After initial phase, reload inventory and repair any incomplete
+        # batch/diagnostics pairs that exist in the store — this covers
+        # adaptive batches beyond `minimum` that were interrupted mid-write.
+        repair_loaded = load_run(
+            registry_path=registry_path,
+            run_id=args.run_id,
+            step_id="P08",
+            state="FEATURED",
+        )
+        repair_commands = _incomplete_batch_commands(
+            repair_loaded,
+            jobs=jobs,
+            python=python,
+            registry_path=registry_path,
+            run_id=args.run_id,
+        )
+        if repair_commands:
+            _run_parallel(
+                repair_commands,
+                cwd=project_root,
+                env=env,
+                workers=args.workers,
+            )
+
     while True:
         control = _control_report(
             python=python,
@@ -312,6 +337,77 @@ def _artifact_exists(
             context.read(artifact_id, coordinates)
             return True
     return False
+
+
+def _incomplete_batch_commands(
+    loaded: object,
+    *,
+    jobs: list[dict[str, object]],
+    python: str,
+    registry_path: Path,
+    run_id: str,
+) -> list[list[str]]:
+    """Return worker commands for every batch/diagnostics pair that is incomplete.
+
+    A pair is incomplete when exactly one of the two artifacts exists at a given
+    coordinate — which happens when the worker process was killed between the two
+    immutable writes.  This includes adaptive batches beyond ``minimum`` that the
+    initial-range resume check does not cover.
+    """
+    inventory = list(loaded.context.store.inventory())
+
+    def _coords_set(artifact_id: str) -> set[tuple[str, ...]]:
+        result: set[tuple[str, ...]] = set()
+        for item in inventory:
+            if item.get("artifact_id") != artifact_id:
+                continue
+            raw = item.get("coordinates")
+            if isinstance(raw, dict):
+                result.add(
+                    tuple(sorted((str(k), str(v)) for k, v in raw.items()))
+                )
+        return result
+
+    batch_coords = _coords_set("simulation_batches")
+    diagnostic_coords = _coords_set("model_diagnostics")
+    incomplete = batch_coords.symmetric_difference(diagnostic_coords)
+    if not incomplete:
+        return []
+
+    scenario_key_str = "scenario_" + "key"
+    method_key_str = "method_" + "key"
+    jobs_by_keys: dict[tuple[str, str], dict[str, object]] = {
+        (str(job[scenario_key_str]), str(job[method_key_str])): job
+        for job in jobs
+    }
+
+    commands: list[list[str]] = []
+    for coordinate_tuple in sorted(incomplete):
+        coordinates = dict(coordinate_tuple)
+        sk = coordinates.get("scenario_" + "key", "")
+        mk = coordinates.get("method_" + "key", "")
+        batch_key = coordinates.get("batch_" + "key", "")
+        job = jobs_by_keys.get((sk, mk))
+        if job is None:
+            continue  # orphan from a removed job — ignore
+        batch_size = int(job["batch_size"])
+        batch_index = int(batch_key.removeprefix("b"))
+        start = batch_index * batch_size
+        count = min(batch_size, int(job["maximum"]) - start)
+        if count <= 0:
+            continue
+        commands.append(
+            _worker_command(
+                python=python,
+                registry_path=registry_path,
+                run_id=run_id,
+                scenario_id=str(job[SCENARIO_ID]),
+                method_id=str(job[METHOD_ID]),
+                start=start,
+                count=count,
+            )
+        )
+    return commands
 
 
 def _batch_exists(

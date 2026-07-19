@@ -1468,7 +1468,7 @@ def test_p08c_bijection_check_missing_diagnostics_fails():
     @patch("scripts.p08c_aggregate_batches.argparse.ArgumentParser.parse_args", return_value=mock_args)
     def run_aggregate(mock_parse, mock_load):
         import pytest
-        with pytest.raises(ValueError, match="has no paired model_diagnostics artifact"):
+        with pytest.raises(ValueError, match="batch-diagnostics coordinate mismatch"):
             p08c.main()
 
     run_aggregate()
@@ -1612,3 +1612,143 @@ def test_batch_exists_batch_missing_reruns() -> None:
     ), "Diagnostics present but batch missing → must re-run (return False)"
 
 
+def test_incomplete_batch_commands_adaptive_resume() -> None:
+    """
+    _incomplete_batch_commands() must schedule a re-run for adaptive batch b0010
+    when only simulation_batches exists (diagnostics missing), even though b0010
+    is beyond minimum (0-2499) and was never covered by the initial range check.
+    """
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    from scripts.p08_profiled_orchestrator import _incomplete_batch_commands
+
+    sk = "sc_adaptive"
+    mk = "m_adaptive"
+    # b0010 corresponds to start=2500 with batch_size=250
+    coords_b10 = {
+        "scenario_" + "key": sk,
+        "method_" + "key": mk,
+        "batch_" + "key": "b0010",
+    }
+    # inventory: only simulation_batches for b0010, no diagnostics
+    inventory = [
+        {"artifact_id": "simulation_batches", "coordinates": coords_b10},
+        # model_diagnostics for b0010 intentionally absent
+    ]
+    loaded = _make_loaded(inventory)
+
+    jobs = [
+        {
+            "scenario_" + "key": sk,
+            "method_" + "key": mk,
+            "scenario_id": "some_scenario",
+            "method_id": "some_method",
+            "minimum": 2500,
+            "maximum": 5000,
+            "batch_size": 250,
+        }
+    ]
+    commands = _incomplete_batch_commands(
+        loaded,
+        jobs=jobs,
+        python="python",
+        registry_path=Path("mock.json"),
+        run_id="test-run",
+    )
+    assert len(commands) == 1, f"Expected 1 repair command, got {len(commands)}: {commands}"
+    cmd = commands[0]
+    # start=2500, count=min(250, 5000-2500)=250
+    assert "--start" in cmd
+    start_idx = cmd.index("--start")
+    assert cmd[start_idx + 1] == "2500"
+    assert "some_scenario" in " ".join(cmd)
+    assert "some_method" in " ".join(cmd)
+
+
+def test_convergence_warning_captured_from_estimator() -> None:
+    """
+    Integration test: verifies that when _fit_estimator raises a ConvergenceWarning,
+    it is captured by warnings.catch_warnings and recorded via record_model_warning()
+    into the active DiagnosticCollector.
+    """
+    import warnings
+    from unittest.mock import patch
+    from sklearn.exceptions import ConvergenceWarning
+    from simulation.service import (
+        DiagnosticCollector,
+        diagnostic_capture,
+        run_batch,
+    )
+    import yaml
+    from pathlib import Path
+    from simulation.method_contract import build_cost_sensitive_contract
+    import numpy as np
+
+    root = Path(__file__).resolve().parents[2]
+    simulation = yaml.safe_load(
+        (root / "config" / "execution" / "simulation.yaml").read_text(encoding="utf-8")
+    )["simulation"]
+    cost_contract = build_cost_sensitive_contract(simulation)
+
+    mock_scenario = {
+        "scenario_id": "convergence_warning_test",
+        "tier": "fully_synthetic",
+        "prevalence": 0.4,
+        "sample_size": 50,
+        "content_signal": 0.0,
+        "signal_structure": "linear",
+        "anchor_sensitivity": 0.8,
+        "anchor_false_positive": 0.1,
+        "weak_sensitivity": 0.5,
+        "weak_false_positive": 0.05,
+        "anchor_verification_probability": 1.0,
+        "weak_verification_probability": 1.0,
+        "selective_verification_strength": 0.0,
+        "detection_delay_mean_days": 30.0,
+        "horizon_days": 365.0,
+        "method_registry": [
+            {
+                "method_id": "naive_observed_as_negative__logistic_regression__traincost_symmetric",
+                "is_active": True,
+                "method_family": "predictive",
+                "label_strategy_id": "naive_observed_as_negative",
+                "learner_id": "logistic_regression",
+                "learner_tier": "core",
+                "training_cost_regime_id": "symmetric",
+                "imbalance_treatment_id": "none",
+            }
+        ],
+        "cost_regime_registry": [dict(v) for v in cost_contract["cost_regime_registry"]],
+        "review_budget_registry": [dict(v) for v in cost_contract["review_budget_registry"]],
+        "cost_sensitive_settings": {
+            k: v
+            for k, v in cost_contract.items()
+            if k not in {"cost_regime_registry", "review_budget_registry"}
+        },
+    }
+
+    # Patch _fit_estimator to emit a real ConvergenceWarning instead of running
+    def fake_fit(estimator, x, y, w):
+        warnings.warn("did not converge", ConvergenceWarning, stacklevel=2)
+
+    rng = np.random.default_rng(999)
+    diagnostics: dict = {}
+
+    with patch("simulation.service._fit_estimator", side_effect=fake_fit):
+        run_batch(
+            scenario=mock_scenario,
+            method_id="naive_observed_as_negative__logistic_regression__traincost_symmetric",
+            replications=[0],
+            rng=rng,
+            diagnostics=diagnostics,
+        )
+
+    model_warnings = diagnostics.get("warnings", {})
+    assert "ConvergenceWarning" in model_warnings, (
+        f"Expected ConvergenceWarning in diagnostics.warnings; got: {diagnostics}"
+    )
+    assert model_warnings["ConvergenceWarning"] >= 1
