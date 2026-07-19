@@ -14,7 +14,7 @@ import pandas as pd
 from core.fold_control import require_confirmatory_fold, require_primary_target
 from core.pipeline import load_run, mapping, physical_columns, sequence, stable_hash
 from core.rng import derive_seed
-from core.semantic_keys import OUTER_FOLD
+from core.semantic_keys import MEASUREMENT_ID, OUTER_FOLD
 from measurement.service import fold_local_l3_target_frame, measurement_target_frame
 from modeling.service import ModelFitResult, fit_anchor_pu_fold, fit_fold_models
 from selection.track_plan import executable_tracks
@@ -129,7 +129,7 @@ def main() -> int:
     primary_track = next(
         (item for item in plan_tracks if item.get("role") == "required_primary"), None
     )
-    if primary_track is None or primary_track.get("measurement_id") != primary:
+    if primary_track is None or primary_track.get(MEASUREMENT_ID) != primary:
         raise RuntimeError("P11 sequential plan is missing the required primary track")
 
     track_l1 = fit_fold_models(
@@ -162,7 +162,7 @@ def main() -> int:
     for track in plan_tracks:
         if track.get("role") == "required_primary":
             continue
-        measurement_id = str(track["measurement_id"])
+        measurement_id = str(track[MEASUREMENT_ID])
         track_id = str(track["track_id"])
         if not isinstance(minimum_channels, int) or minimum_channels < 1:
             track_statuses[track_id] = "SKIPPED_CONFIGURATION_UNAVAILABLE"
