@@ -72,6 +72,7 @@ def main() -> int:
 
     source_coverage = _source_coverage(development_rows, sources)
     channel_coverage = _channel_coverage(development_rows, matrices)
+    physical_channel_coverage = _physical_channel_coverage(channel_coverage, sources)
     lag_distribution = _lag_distribution(
         risk_sets=risk_sets,
         evidence=evidence,
@@ -79,11 +80,18 @@ def main() -> int:
         initial_outer_year=initial_outer_year,
         source_profiles={source_id: source.profile_id for source_id, source in sources.items()},
     )
-    empirical_anchors = _empirical_anchors(source_coverage, channel_coverage)
-    prior_worksheet = _prior_worksheet(source_coverage, sources)
+    empirical_anchors = _empirical_anchors(source_coverage, physical_channel_coverage)
+    prior_worksheet = _prior_worksheet(
+        source_coverage=source_coverage,
+        physical_channel_coverage=physical_channel_coverage,
+        sources=sources,
+    )
 
     source_coverage.to_csv(output_dir / "source_coverage_development.csv", index=False)
     channel_coverage.to_csv(output_dir / "channel_coverage_development.csv", index=False)
+    physical_channel_coverage.to_csv(
+        output_dir / "physical_channel_coverage_development.csv", index=False
+    )
     lag_distribution.to_csv(output_dir / "source_lag_distribution_development.csv", index=False)
     (output_dir / "prevalence_anchors_development.json").write_text(
         json.dumps(empirical_anchors, ensure_ascii=False, indent=2, sort_keys=True),
@@ -101,7 +109,8 @@ def main() -> int:
         "initial_outer_year": initial_outer_year,
         "development_row_count": len(development_rows),
         "logical_source_count": len(sources),
-        "channel_count": len(sequence(matrices.get("expected_channels"), "expected channels")),
+        "anchor_unit": "unique_measurement_channel",
+        "anchor_channel_count": len(physical_channel_coverage),
         "l2_status": mapping(matrices.get("l2_scoring"), "l2_scoring").get("status"),
         "l3_lock_status": "REQUIRES_RESEARCHER_REVIEW",
         "outer_outcomes_accessed": False,
@@ -186,6 +195,33 @@ def _channel_coverage(rows: list[dict[str, Any]], matrices: dict[str, Any]) -> p
     return pd.DataFrame(output)
 
 
+def _physical_channel_coverage(
+    channel_coverage: pd.DataFrame,
+    sources: dict[str, Any],
+) -> pd.DataFrame:
+    """Attach physical-profile provenance to one row per measurement channel."""
+    profiles_by_channel: dict[str, set[str]] = {}
+    logical_by_channel: dict[str, set[str]] = {}
+    for source_id, source in sources.items():
+        profiles_by_channel.setdefault(source.channel_id, set()).add(source.profile_id)
+        logical_by_channel.setdefault(source.channel_id, set()).add(source_id)
+
+    rows: list[dict[str, object]] = []
+    for raw in channel_coverage.to_dict(orient="records"):
+        row = {str(key): value for key, value in raw.items()}
+        channel_id = str(row[CHANNEL_ID])
+        rows.append(
+            {
+                **row,
+                "physical_profile_ids": ",".join(sorted(profiles_by_channel.get(channel_id, set()))),
+                "logical_source_ids": ",".join(sorted(logical_by_channel.get(channel_id, set()))),
+                "anchor_included": True,
+                "anchor_unit": "unique_measurement_channel",
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _lag_distribution(
     *,
     risk_sets: pd.DataFrame,
@@ -238,61 +274,114 @@ def _lag_distribution(
 
 def _empirical_anchors(
     source_coverage: pd.DataFrame,
-    channel_coverage: pd.DataFrame,
+    physical_channel_coverage: pd.DataFrame,
 ) -> dict[str, object]:
-    source_rates = [
-        float(value)
-        for value in source_coverage["observed_positive_rate"].dropna().tolist()
+    """Use each physical measurement channel once; logical endpoints remain diagnostics only."""
+    channel_records = [
+        {
+            CHANNEL_ID: str(row[CHANNEL_ID]),
+            "physical_profile_ids": str(row.get("physical_profile_ids", "")),
+            "logical_source_ids": str(row.get("logical_source_ids", "")),
+            "observed_outcomes": int(row["observed_outcomes"]),
+            "positive": int(row["positive"]),
+            "coverage_fraction": (
+                None if pd.isna(row["coverage_fraction"]) else float(row["coverage_fraction"])
+            ),
+            "observed_positive_rate": (
+                None
+                if pd.isna(row["observed_positive_rate"])
+                else float(row["observed_positive_rate"])
+            ),
+        }
+        for row in physical_channel_coverage.to_dict(orient="records")
     ]
-    channel_rates = [
-        float(value)
-        for value in channel_coverage["observed_positive_rate"].dropna().tolist()
+    rates = [
+        float(row["observed_positive_rate"])
+        for row in channel_records
+        if row["observed_positive_rate"] is not None
     ]
-    combined = source_rates + channel_rates
     quantiles = (
         {
-            "p10": float(pd.Series(combined).quantile(0.10)),
-            "p25": float(pd.Series(combined).quantile(0.25)),
-            "p50": float(pd.Series(combined).quantile(0.50)),
-            "p75": float(pd.Series(combined).quantile(0.75)),
-            "p90": float(pd.Series(combined).quantile(0.90)),
+            "p10": float(pd.Series(rates).quantile(0.10)),
+            "p25": float(pd.Series(rates).quantile(0.25)),
+            "p50": float(pd.Series(rates).quantile(0.50)),
+            "p75": float(pd.Series(rates).quantile(0.75)),
+            "p90": float(pd.Series(rates).quantile(0.90)),
         }
-        if combined
+        if rates
         else {}
     )
+    logical_diagnostics = [
+        {
+            SOURCE_ID: str(row[SOURCE_ID]),
+            "profile_id": str(row["profile_id"]),
+            CHANNEL_ID: str(row[CHANNEL_ID]),
+            "observed_positive_rate": (
+                None
+                if pd.isna(row["observed_positive_rate"])
+                else float(row["observed_positive_rate"])
+            ),
+            "excluded_from_anchor_reason": "logical_endpoint_not_independent_anchor_unit",
+        }
+        for row in source_coverage.to_dict(orient="records")
+    ]
     return {
         "fit_scope": "eligible_development_history_source_specific_observability",
-        "source_observed_positive_rates": source_rates,
-        "channel_observed_positive_rates": channel_rates,
+        "anchor_unit": "unique_measurement_channel",
+        "unique_channel_count": len(channel_records),
+        "channel_anchors": channel_records,
+        "channel_observed_positive_rates": rates,
         "observed_rate_quantiles": quantiles,
+        "logical_source_rates_for_diagnostics_only": logical_diagnostics,
         "interpretation": (
             "Observed positive rates are calibration anchors only; they are not latent prevalence "
-            "estimates because sensitivity and specificity are unknown."
+            "estimates because sensitivity and specificity are unknown. Each measurement channel "
+            "contributes at most one rate, so multiple logical endpoints from one physical source "
+            "cannot multiply its influence."
         ),
         "fixed_pi_lock_policy": (
             "Lock a broad grid before outer-fold access using external prevalence evidence, "
-            "development-only anchors, and explicit sensitivity analysis."
+            "unique-channel development anchors, and explicit sensitivity analysis."
         ),
     }
 
 
 def _prior_worksheet(
+    *,
     source_coverage: pd.DataFrame,
+    physical_channel_coverage: pd.DataFrame,
     sources: dict[str, Any],
 ) -> dict[str, object]:
     profiles = sorted({source.profile_id for source in sources.values()})
+    channel_rows = {
+        str(row[CHANNEL_ID]): row
+        for row in physical_channel_coverage.to_dict(orient="records")
+    }
     rows: list[dict[str, object]] = []
     for profile_id in profiles:
-        profile_rows = source_coverage.loc[source_coverage["profile_id"].eq(profile_id)]
+        logical_sources = sorted(
+            source_id for source_id, source in sources.items() if source.profile_id == profile_id
+        )
+        channels = sorted(
+            {source.channel_id for source in sources.values() if source.profile_id == profile_id}
+        )
+        if len(channels) != 1:
+            raise ValueError(f"profile={profile_id}: exactly one measurement channel required")
+        channel_id = channels[0]
+        channel_row = channel_rows.get(channel_id)
+        if channel_row is None:
+            raise ValueError(f"profile={profile_id}: missing channel coverage for {channel_id}")
+        profile_sources = source_coverage.loc[source_coverage["profile_id"].eq(profile_id)]
         rows.append(
             {
                 "profile_id": profile_id,
-                "logical_sources": sorted(
-                    source_id
-                    for source_id, source in sources.items()
-                    if source.profile_id == profile_id
+                CHANNEL_ID: channel_id,
+                "logical_sources": logical_sources,
+                "development_observed_firm_year_channels": int(channel_row["observed_outcomes"]),
+                "logical_endpoint_observed_outcome_sum": int(
+                    profile_sources["observed_outcomes"].sum()
                 ),
-                "development_observed_outcomes": int(profile_rows["observed_outcomes"].sum()),
+                "independent_prior_information_unit": "firm_year_channel",
                 "prior_mean_sensitivity": None,
                 "prior_mean_specificity": None,
                 "prior_effective_sample_size": None,
@@ -314,6 +403,7 @@ def _prior_worksheet(
             "Keep the primary prior weak enough to avoid prior-dominated posteriors.",
             "Run weak, skeptical, and evidence-hierarchy prior sensitivity scenarios.",
             "Do not infer sensitivity or specificity directly from observed positive rates.",
+            "Do not multiply prior effective sample size by the number of logical endpoints from one physical source.",
         ],
         "profiles": rows,
     }
