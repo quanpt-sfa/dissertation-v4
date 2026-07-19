@@ -63,25 +63,6 @@ function Invoke-UvPythonDev {
     }
 }
 
-function Assert-HardeningApplied {
-    $checks = @(
-        "scripts/repair_s3_l3_migration_checker.py",
-        "scripts/apply_s3_l3_production_hardening.py",
-        "scripts/finalize_s3_l3_production_hardening.py",
-        "scripts/repair_s3_l3_hardening_regressions.py"
-    )
-    foreach ($script in $checks) {
-        Write-Host "+ uv run python $script --check"
-        & uv run python $script --check
-        if ($LASTEXITCODE -eq 2) {
-            throw "S3/L3 hardening is incomplete. Run this workflow with -Mode Migrate, review and commit the generated changes, then use a new run ID."
-        }
-        if ($LASTEXITCODE -ne 0) {
-            throw "Hardening verification failed for $script with exit code $LASTEXITCODE"
-        }
-    }
-}
-
 Write-Host "ProjectRoot: $ProjectRoot"
 Write-Host "RawRoot:     $RawRoot"
 Write-Host "OutputRoot:  $OutputRoot"
@@ -91,25 +72,16 @@ Push-Location $ProjectRoot
 try {
     switch ($Mode) {
         "Migrate" {
-            Invoke-UvPython scripts/repair_s3_l3_migration_checker.py --apply
-            Write-Host "+ uv run python scripts/apply_s3_l3_production_hardening.py --check"
-            & uv run python scripts/apply_s3_l3_production_hardening.py --check
-            if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
-                throw "Hardening check failed with exit code $LASTEXITCODE"
-            }
-            Invoke-UvPython scripts/apply_s3_l3_production_hardening.py --apply
-            Invoke-UvPython scripts/finalize_s3_l3_production_hardening.py --apply
-            Invoke-UvPython scripts/repair_s3_l3_hardening_regressions.py --apply
+            # The historical S3/L3 one-time migration is already part of the base branch.
+            # This mode now validates the new P0-locked scenario architecture directly.
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --write
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --check
             Invoke-UvPythonDev -m pytest -q
-            Assert-HardeningApplied
-            Write-Host "Migration complete. Review and commit the P0-locked scenario registry before Prepare."
+            Write-Host "Scenario-registry migration validated. Review and commit before Prepare."
         }
 
         "Prepare" {
             if (-not $RunId) { throw "Prepare requires -RunId" }
-            Assert-HardeningApplied
             Invoke-UvPython scripts/validate_production_source_contracts.py --raw-root $RawRoot
             $runnerArgs = @(
                 "scripts/run_l3_preparation.py",
@@ -124,7 +96,6 @@ try {
 
         "Final" {
             if (-not $RunId) { throw "Final requires -RunId" }
-            Assert-HardeningApplied
             Invoke-UvPython scripts/validate_production_source_contracts.py --raw-root $RawRoot
             $runnerArgs = @(
                 "scripts/run_final_l3_production.py",
