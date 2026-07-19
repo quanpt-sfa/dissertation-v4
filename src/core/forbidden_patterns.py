@@ -105,6 +105,7 @@ def validate_source_patterns(
 
     physical_names: set[str] = set()
     artifact_paths: set[str] = set()
+    violations: list[str] = []
 
     for column_id, raw_column in columns.items():
         column = _mapping(raw_column, f"column={column_id}")
@@ -136,7 +137,7 @@ def validate_source_patterns(
         if relative not in NONPRODUCTION_AUDIT_SCRIPTS and not registered_boundary:
             for pattern in (*FORBIDDEN_IO, *FORBIDDEN_APPEND):
                 if pattern in text:
-                    raise ConfigurationError(
+                    violations.append(
                         f"source={path}: forbidden pattern {pattern}; "
                         "use the registered raw-reader or core runtime layer"
                     )
@@ -144,7 +145,10 @@ def validate_source_patterns(
         try:
             tree = ast.parse(text, filename=str(path))
         except SyntaxError as exc:
-            raise ConfigurationError(f"source={path}: Python syntax error") from exc
+            violations.append(
+                f"source={path}: Python syntax error at line={exc.lineno} offset={exc.offset}"
+            )
+            continue
 
         literals = {
             node.value
@@ -155,14 +159,14 @@ def validate_source_patterns(
         if not registered_boundary:
             copied_columns = sorted(physical_names & literals)
             if copied_columns:
-                raise ConfigurationError(
+                violations.append(
                     f"source={path}: registered physical columns "
                     f"copied into source: {copied_columns}"
                 )
 
         copied_paths = sorted(artifact_paths & literals)
         if copied_paths:
-            raise ConfigurationError(
+            violations.append(
                 f"source={path}: registered artifact paths copied into source: {copied_paths}"
             )
 
@@ -178,6 +182,13 @@ def validate_source_patterns(
                 }
             )
             if direct_config_paths:
-                raise ConfigurationError(
-                    f"source={path}: direct source-config paths are forbidden: {direct_config_paths}"
+                violations.append(
+                    f"source={path}: direct source-config paths are forbidden: "
+                    f"{direct_config_paths}"
                 )
+
+    if violations:
+        details = "\n".join(f"- {item}" for item in violations)
+        raise ConfigurationError(
+            f"source-pattern validation failed with {len(violations)} violation(s):\n{details}"
+        )
