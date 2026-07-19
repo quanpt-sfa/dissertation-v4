@@ -1,48 +1,50 @@
 # S3/L3 production-hardening workflow
 
-This branch adds an explicit four-phase workflow. The scripts do not use outer-fold outcomes or sealed known cases to set fixed-pi values, accuracy priors, measurement selection, or calibration.
+L1 annual remains the mandatory primary track. L2 and L3 remain optional and capability-gated. L3 fixed-prevalence assumptions and source-accuracy priors are registered before empirical execution in `config/methodology/l3_scenarios.yaml`; the file is included in the P0 protocol hash.
 
-## 1. Pull and switch to the branch
+The workflow never uses outer-fold outcomes or sealed known cases to define scenarios, choose a fixed-π value, set source priors, calibrate the measurement model, or select the primary L3 scenario.
+
+## 1. Branch and protocol
 
 ```powershell
 cd D:\Quan\dissertation-v4
 git fetch origin
-git switch agent/s3-content-l3-production-lock
+git switch agent/l3-preregistered-scenarios
 ```
 
-## 2. Apply the code/config migration
+The L3 registry contains:
+
+- one scenario with `role: primary`;
+- zero or more scenarios with `role: robustness`;
+- a fixed prevalence for every scenario;
+- a registered source-accuracy prior set;
+- `run_all_registered_scenarios: true`;
+- `performance_based_scenario_selection_forbidden: true`;
+- `outer_outcomes_accessed: false`;
+- `known_cases_accessed: false`.
+
+Any edit to this registry changes the P0 protocol hash. There is no post-Preparation parameter worksheet and no `Lock` mode.
+
+## 2. Apply and validate the repository migration
 
 ```powershell
 .\scripts\s3_l3_production_workflow.ps1 -Mode Migrate
 ```
 
-The migration performs these changes:
-
-- separates included and excluded S3 rows within the same `document_id × firm_id` group;
-- restricts eligible endpoint provenance to included rows;
-- retains excluded rows in the decision ledger with `EXCLUDED_BY_SOURCE_RULE`;
-- defines `primary_misstatement` with `S3_CONTENT` as its only S3 endpoint;
-- keeps `S3_REPORTING` and `S3_TIMELINESS` as sensitivity sets;
-- keeps `S3_BROAD` descriptive/falsification-only;
-- binds L2, the P05 L3 pilot, and fold-local L3 to the same primary source set;
-- changes the known-case source to `data/source/known_case_registry.csv`;
-- validates the external-validation-only known-case flags;
-- adds endpoint-specific S3 development counts and unresolved diagnostics;
-- writes regression tests and regenerates the locked catalogs.
-
-After the script passes, inspect and commit the generated diff:
+The migration and bootstrap must pass before any empirical run. Then review and commit the branch:
 
 ```powershell
-git diff
-git add config docs scripts src templates tests
-git commit -m "Harden S3 content measurement and L3 production workflow"
+git status --short
+git diff --stat
+git add config docs scripts src tests
+git commit -m "Pre-register L3 scenarios at P0"
 git status --porcelain
-git push
+git push -u origin agent/l3-preregistered-scenarios
 ```
 
-`git status --porcelain` must be empty before any immutable run.
+`git status --porcelain` must be empty before an immutable run.
 
-## 3. Required raw-source names and contracts
+## 3. Required raw-source contracts
 
 The raw root must contain:
 
@@ -51,124 +53,86 @@ data/source/firm_event_sanction_panel.csv
 data/source/known_case_registry.csv
 ```
 
-Validate them directly:
+Validate the contracts:
 
 ```powershell
 uv run python scripts/validate_production_source_contracts.py `
   --raw-root (Get-Location).Path
 ```
 
-The known-case registry must contain exactly these firm-years:
+Known cases remain external-validation-only. They cannot enter training, calibration, model selection, scenario construction, or scenario diagnostics.
 
-```text
-K1,TAR,2020
-K1,TAR,2022
-K2,TTF,2016
-K3,ROS,2018
-K3,ROS,2019
-K4,FHH,2019
-```
-
-Each row must use:
-
-```text
-case_construct = CONFIRMED_FINANCIAL_REPORTING_CASE
-role = SIMULATION_EXTERNAL_VALIDATION
-training_include_flag = FALSE
-calibration_include_flag = FALSE
-model_selection_include_flag = FALSE
-external_validation_include_flag = TRUE
-```
-
-## 4. Run the preparatory P00-P06 audit
+## 4. Preparation is capability-only
 
 Use a new run ID:
 
 ```powershell
 .\scripts\s3_l3_production_workflow.ps1 `
   -Mode Prepare `
-  -RunId "l3-preparation-20260719-01"
+  -RunId "l3-preparation-preregistered-01"
 ```
 
-The script runs tests, snapshots the registered sources, executes P00-P06, creates `S3_AUDIT` and `CALIBRATION`, and writes:
+The command runs tests, P00-P06, the S3 year audit, and measurement calibration. It writes:
 
 ```text
 artifacts/runs/<run-id>/PREPARATION/l3_preparation_receipt.json
 ```
 
-The receipt is ready for locking only when:
+The receipt status is one of:
 
 ```text
-p03_p05_outcome_mismatch_count = 0
-p03_p05_missing_key_count = 0
-eligible_unresolved_sanction_year_mapping_count = 0
-sanction_year_unresolved_firm_year_count = 0
-development_positive_count_by_endpoint.S3_CONTENT > 0
-outer_outcomes_accessed = false
-known_cases_accessed = false
+L3_AVAILABLE
+L3_UNAVAILABLE_BY_DESIGN
+L3_BLOCKED_BY_DATA_CONTRACT
 ```
 
-Counts are reported separately for `S3_CONTENT`, `S3_REPORTING`, `S3_TIMELINESS`, and `S3_BROAD`. Do not use their sum as an independent positive count because the endpoints are nested.
+`L3_AVAILABLE` requires the pre-registered primary scenario to pass the L3 pilot diagnostics and the registered-scenario eligible fraction to satisfy the robustness gate.
 
-## 5. Review and lock fixed-pi values and accuracy priors
+`L3_UNAVAILABLE_BY_DESIGN` is not a pipeline failure. L1 continues as the mandatory track, and L2/L3 follow the configured optional-track policy.
 
-The registry compiler treats every `.yaml` beneath `config/` as configuration and rejects undeclared files. Therefore both the template and the reviewed working file must remain outside `config/`.
+`L3_BLOCKED_BY_DATA_CONTRACT` is a hard stop caused by reconciliation errors, unresolved eligible sanction-year mappings, malformed audit outputs, or prohibited outcome access.
 
-Copy the template to a working lock file:
+The Preparation command does not modify fixed-π values, priors, scenario roles, or the primary scenario.
 
-```powershell
-New-Item -ItemType Directory -Force working\l3 | Out-Null
-Copy-Item `
-  templates\l3_parameter_lock.template.yaml `
-  working\l3\l3_parameter_lock.reviewed.yaml
-```
+## 5. Final P00-P17 production run
 
-Replace every illustrative number and placeholder. Set:
-
-```text
-provenance.status = LOCKED
-provenance.outer_outcomes_accessed = false
-provenance.known_cases_accessed = false
-```
-
-Apply the reviewed lock:
-
-```powershell
-.\scripts\s3_l3_production_workflow.ps1 `
-  -Mode Lock `
-  -LockFile "working\l3\l3_parameter_lock.reviewed.yaml" `
-  -PreparationReceipt "artifacts\runs\l3-preparation-20260719-01\PREPARATION\l3_preparation_receipt.json"
-```
-
-The lock script writes fixed-pi and profile priors to `measurement.yaml`, records the input hashes and preparation protocol hash, regenerates catalogs, and reruns tests. Review and commit the resulting configuration and receipt before the final run. The reviewed working worksheet can remain uncommitted or be archived outside `config/`.
-
-## 6. Run one fail-closed P00-P17 production command
-
-Use another new run ID after the parameter-lock commit:
+Use a distinct run ID:
 
 ```powershell
 .\scripts\s3_l3_production_workflow.ps1 `
   -Mode Final `
-  -RunId "dissertation-final-l1-l2-l3-v1"
+  -RunId "dissertation-final-preregistered-l3-v1"
 ```
 
 The final wrapper:
 
 1. requires a clean committed tree;
-2. validates the sanction and known-case raw sources;
-3. requires `S3_CONTENT` as the only primary S3 endpoint;
-4. requires a nonempty fixed-pi grid, complete priors, and a lock receipt;
-5. runs P00-P06;
-6. reruns S3 and calibration audits;
-7. blocks on reconciliation, unresolved mappings, absent S3 content positives, or outer-outcome access;
-8. requires the P05 L3 pilot to be `AVAILABLE` and executed;
-9. runs through P10 and requires `L3_fixed_pi=AVAILABLE` in every outer fold;
-10. resumes through P17 only after all checks pass.
+2. compiles and validates the P0-locked scenario registry;
+3. validates the sanction and known-case raw-source contracts;
+4. requires `S3_CONTENT` as the only primary S3 endpoint;
+5. runs P00-P06 and repeats the S3/calibration audits;
+6. blocks on data-contract violations or prohibited outcome access;
+7. runs every registered L3 scenario when L3 capability is available;
+8. uses only the pre-registered primary scenario for the primary L3 target;
+9. treats strict-channel losses as capability/reporting diagnostics, never as a scenario-selection objective;
+10. skips L3 without failing L1 when L3 is unavailable by design;
+11. resumes through P17 after preflight passes.
 
-The final preflight receipt is written to:
+The final receipt is written to:
 
 ```text
 artifacts/runs/<run-id>/PREFLIGHT/l3_preflight_receipt.json
 ```
 
-A completed P17 run is not treated as an L3 production run unless this receipt has `status = PASS_P00_P17`.
+A completed production run has:
+
+```text
+status = PASS_P00_P17
+scenario_registry_status = LOCKED_AT_P0
+scenario_selection_rule = PRE_REGISTERED_PRIMARY
+performance_based_scenario_selection = false
+outer_outcomes_accessed = false
+known_cases_accessed = false
+```
+
+`l3_execution_status` is either `EXECUTED_ALL_REGISTERED_SCENARIOS` or `SKIPPED_UNAVAILABLE_BY_DESIGN`.
