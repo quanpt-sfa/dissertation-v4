@@ -37,8 +37,11 @@ _REPORT = _load_script_module(
     "test_report_measurement_calibration",
     "scripts/report_measurement_calibration.py",
 )
+_SNAPSHOT = _load_script_module("test_create_data_snapshot", "scripts/create_data_snapshot.py")
 _l3_bindings = cast(Any, getattr(_P10, "_l3_bindings"))
 _source_coverage = cast(Any, getattr(_REPORT, "_source_coverage"))
+_snapshot_compatible_registry = cast(Any, getattr(_SNAPSHOT, "_snapshot_compatible_registry"))
+_restore_zero_floor = cast(Any, getattr(_SNAPSHOT, "_restore_zero_floor"))
 
 
 def test_neutral_l2_configuration_is_locked() -> None:
@@ -59,6 +62,48 @@ def test_neutral_l2_configuration_is_locked() -> None:
         "audit_annual_long": 1.0,
         "sanction_evidence": 1.0,
     }
+
+
+def test_zero_denominator_floor_survives_snapshot_compatibility_bridge() -> None:
+    registry = cast(
+        dict[str, Any],
+        compile_registry(ROOT / "config" / "pipeline.yaml").registry,
+    )
+    compatible = _snapshot_compatible_registry(registry)
+    original_floor = registry["source_catalog"]["profiles"]["financial_statement_core_long"][
+        "evidence_mapping"
+    ]["audit_adjustment"]["minimum_absolute_denominator"]
+    compatible_floor = compatible["source_catalog"]["profiles"][
+        "financial_statement_core_long"
+    ]["evidence_mapping"]["audit_adjustment"]["minimum_absolute_denominator"]
+
+    assert original_floor == 0.0
+    assert compatible_floor > 0.0
+
+    snapshot: dict[str, object] = {
+        "snapshot_schema_version": 1,
+        "root_environment_variable": "DISSERTATION_RAW_ROOT",
+        "raw_root_recorded": False,
+        "profiles": {},
+        "sources": [
+            {
+                "evidence_mapping": {
+                    "processor": "audit_adjustment",
+                    "audit_adjustment": {
+                        "minimum_absolute_denominator": compatible_floor,
+                    },
+                }
+            }
+        ],
+    }
+    _restore_zero_floor(snapshot)
+
+    restored = cast(list[dict[str, Any]], snapshot["sources"])[0]["evidence_mapping"][
+        "audit_adjustment"
+    ]["minimum_absolute_denominator"]
+    assert restored == 0.0
+    assert isinstance(snapshot["snapshot_content_hash"], str)
+    assert isinstance(snapshot["snapshot_hash"], str)
 
 
 def test_l3_bindings_expand_physical_source_to_logical_endpoints() -> None:
