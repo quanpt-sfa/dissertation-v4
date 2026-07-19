@@ -1,5 +1,5 @@
 measurement:
-  primary_target_id: L1_ANNUAL
+  primary_target_id: null
   candidate_targets:
     L1_ANNUAL:
       sources: [S1_profit_adjustment, S1_revenue_adjustment, S2_audit_opinion]
@@ -22,6 +22,7 @@ measurement:
     L3: measurement_sensitivity
   execution_tracks:
     mode: sequential_capability_gated
+    primary_target_id: L1_ANNUAL
     order: [L1_ANNUAL, L2, L3_fixed_pi]
     primary_required: true
     optional_unavailable_policy: skip_track_not_pipeline
