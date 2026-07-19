@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
 from core.evidence_registry import LogicalEvidenceSource
@@ -16,10 +18,27 @@ from core.semantic_keys import (
     SOURCE_ID,
     TEMPORAL_ROLE,
 )
-from scripts.p10_select_measurement import _l3_bindings
-from scripts.report_measurement_calibration import _source_coverage
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_script_module(module_name: str, relative_path: str) -> ModuleType:
+    path = ROOT / relative_path
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load test module from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_P10 = _load_script_module("test_p10_select_measurement", "scripts/p10_select_measurement.py")
+_REPORT = _load_script_module(
+    "test_report_measurement_calibration",
+    "scripts/report_measurement_calibration.py",
+)
+_l3_bindings = cast(Any, getattr(_P10, "_l3_bindings"))
+_source_coverage = cast(Any, getattr(_REPORT, "_source_coverage"))
 
 
 def test_neutral_l2_configuration_is_locked() -> None:
