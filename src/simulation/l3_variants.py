@@ -48,12 +48,12 @@ L3_VARIANT_IDS = (
 )
 
 L3_REQUIRED_METRICS = (
-    "fit_success",
+    "prevalence_fit_success",
     "prevalence_error",
     "prevalence_squared_error",
     "prevalence_coverage",
     "interval_width",
-    "misspecification_regret",
+    "prevalence_misspecification_regret",
     "empirical_panel_rows",
     "empirical_observed_positive_rate",
     "empirical_known_label_rate",
@@ -101,7 +101,6 @@ def extend_method_registry(
     registry: Sequence[Mapping[str, object]],
 ) -> list[dict[str, object]]:
     """Append protocol-locked L3 variants to the complete method registry."""
-
     configured_raw = simulation.get("l3_variants")
     if not isinstance(configured_raw, list):
         raise ValueError("simulation.l3_variants must be a list")
@@ -153,9 +152,9 @@ def estimate_l3_variant(
     source_rows: Sequence[Mapping[str, bool | None]],
     accuracy: Mapping[str, tuple[float, float]],
     scenario: Mapping[str, object],
+    observable_risk: np.ndarray | None = None,
 ) -> dict[str, float]:
     """Estimate prevalence under one locked L3 assumption set."""
-
     if variant_id not in L3_VARIANT_IDS:
         raise ValueError(f"unsupported L3 variant={variant_id}")
 
@@ -170,20 +169,20 @@ def estimate_l3_variant(
         accuracy=accuracy,
         dependence=float(scenario.get("channel_dependence", 0.0)),
         settings=settings,
+        scenario=scenario,
+        observable_risk=observable_risk,
     )
 
     if variant_id == "l3_correct":
-        estimate, lower, upper = (
-            correct_estimate,
-            correct_lower,
-            correct_upper,
-        )
+        estimate, lower, upper = correct_estimate, correct_lower, correct_upper
     elif variant_id == "l3_ignore_dependence":
         estimate, lower, upper = _posterior_pi(
             source_rows=source_rows,
             accuracy=accuracy,
             dependence=0.0,
             settings=settings,
+            scenario=scenario,
+            observable_risk=observable_risk,
         )
     elif variant_id == "l3_clean_anchor":
         clean_accuracy = dict(accuracy)
@@ -194,6 +193,8 @@ def estimate_l3_variant(
             accuracy=clean_accuracy,
             dependence=float(scenario.get("channel_dependence", 0.0)),
             settings=settings,
+            scenario=scenario,
+            observable_risk=observable_risk,
         )
     else:
         offset = float(settings["wrong_fixed_pi_offset"])
@@ -229,11 +230,9 @@ def run_l3_variant_batch(
     diagnostics: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
     """Run one L3 variant over a deterministic replication range."""
-
     if method_id not in L3_VARIANT_IDS:
         raise ValueError(f"unsupported L3 variant={method_id}")
 
-    # Import lazily to keep P08A registry construction independent of the DGP.
     from simulation.service import _generate_replication
 
     rows: list[dict[str, object]] = []
@@ -242,19 +241,16 @@ def run_l3_variant_batch(
             scenario,
             data_rng_factory(int(replication_id)),
         )
-        source_rows = cast(
-            list[dict[str, bool | None]],
-            data["source_rows"],
-        )
-        accuracy = cast(
-            dict[str, tuple[float, float]],
-            data["accuracy"],
-        )
+        source_rows = cast(list[dict[str, bool | None]], data["source_rows"])
+        accuracy = cast(dict[str, tuple[float, float]], data["accuracy"])
+        standardized_content = np.asarray(data["features"], dtype=float)[:, 0]
+        observable_risk = 1.0 / (1.0 + np.exp(-standardized_content))
         result = estimate_l3_variant(
             variant_id=method_id,
             source_rows=source_rows,
             accuracy=accuracy,
             scenario=scenario,
+            observable_risk=observable_risk,
         )
         true_prevalence = float(scenario["prevalence"])
         estimate = float(result["estimate"])
@@ -262,16 +258,12 @@ def run_l3_variant_batch(
         upper = float(result["upper"])
 
         metrics = {
-            "fit_success": 1.0,
+            "prevalence_fit_success": 1.0,
             "prevalence_error": estimate - true_prevalence,
-            "prevalence_squared_error": (
-                estimate - true_prevalence
-            ) ** 2,
-            "prevalence_coverage": float(
-                lower <= true_prevalence <= upper
-            ),
+            "prevalence_squared_error": (estimate - true_prevalence) ** 2,
+            "prevalence_coverage": float(lower <= true_prevalence <= upper),
             "interval_width": upper - lower,
-            "misspecification_regret": float(
+            "prevalence_misspecification_regret": float(
                 result["misspecification_regret"]
             ),
             "empirical_panel_rows": float(
@@ -341,6 +333,8 @@ def _posterior_pi(
     accuracy: Mapping[str, tuple[float, float]],
     dependence: float,
     settings: Mapping[str, object],
+    scenario: Mapping[str, object],
+    observable_risk: np.ndarray | None,
 ) -> tuple[float, float, float]:
     grid = np.linspace(
         float(settings["posterior_grid_minimum"]),
@@ -348,24 +342,32 @@ def _posterior_pi(
         int(settings["posterior_grid_points"]),
     )
     log_likelihood = np.zeros(len(grid), dtype=float)
+    risks = (
+        np.full(len(source_rows), 0.5, dtype=float)
+        if observable_risk is None
+        else np.asarray(observable_risk, dtype=float)
+    )
+    if len(risks) != len(source_rows):
+        raise ValueError("observable_risk length must match source_rows")
 
-    for row in source_rows:
+    for row, risk in zip(source_rows, risks, strict=True):
         likelihood_one = _pattern_probability(
             row=row,
             latent=True,
             accuracy=accuracy,
             dependence=dependence,
+            scenario=scenario,
+            observable_risk=float(risk),
         )
         likelihood_zero = _pattern_probability(
             row=row,
             latent=False,
             accuracy=accuracy,
             dependence=dependence,
+            scenario=scenario,
+            observable_risk=float(risk),
         )
-        mixture = (
-            grid * likelihood_one
-            + (1.0 - grid) * likelihood_zero
-        )
+        mixture = grid * likelihood_one + (1.0 - grid) * likelihood_zero
         log_likelihood += np.log(np.clip(mixture, 1e-12, None))
 
     posterior = np.exp(log_likelihood - np.max(log_likelihood))
@@ -378,10 +380,7 @@ def _posterior_pi(
     mass = float(settings["credible_interval_mass"])
     tail = (1.0 - mass) / 2.0
     cumulative = np.cumsum(posterior)
-    lower_index = min(
-        int(np.searchsorted(cumulative, tail)),
-        len(grid) - 1,
-    )
+    lower_index = min(int(np.searchsorted(cumulative, tail)), len(grid) - 1)
     upper_index = min(
         int(np.searchsorted(cumulative, 1.0 - tail)),
         len(grid) - 1,
@@ -395,11 +394,11 @@ def _pattern_probability(
     latent: bool,
     accuracy: Mapping[str, tuple[float, float]],
     dependence: float,
+    scenario: Mapping[str, object],
+    observable_risk: float,
 ) -> float:
     anchor_value = row.get("anchor")
     weak_value = row.get("weak")
-    if anchor_value is None and weak_value is None:
-        return 1.0
 
     anchor_sensitivity, anchor_specificity = accuracy["anchor"]
     weak_sensitivity, weak_specificity = accuracy["weak"]
@@ -414,24 +413,72 @@ def _pattern_probability(
         else 1.0 - float(weak_specificity)
     )
 
-    if weak_value is None:
-        return p_anchor if bool(anchor_value) else 1.0 - p_anchor
-    if anchor_value is None:
-        return p_weak if bool(weak_value) else 1.0 - p_weak
+    source_probability = 1.0
+    if weak_value is None and anchor_value is not None:
+        source_probability = p_anchor if bool(anchor_value) else 1.0 - p_anchor
+    elif anchor_value is None and weak_value is not None:
+        source_probability = p_weak if bool(weak_value) else 1.0 - p_weak
+    elif anchor_value is not None and weak_value is not None:
+        p11 = (
+            dependence * min(p_anchor, p_weak)
+            + (1.0 - dependence) * p_anchor * p_weak
+        )
+        probabilities = {
+            (True, True): p11,
+            (True, False): p_anchor - p11,
+            (False, True): p_weak - p11,
+            (False, False): 1.0 - p_anchor - p_weak + p11,
+        }
+        source_probability = probabilities[
+            (bool(anchor_value), bool(weak_value))
+        ]
 
-    p11 = (
-        dependence**2 * min(p_anchor, p_weak)
-        + (1.0 - dependence**2) * p_anchor * p_weak
+    selective = float(scenario.get("selective_verification_strength", 0.0))
+    latent_float = float(latent)
+    q_anchor = float(
+        np.clip(
+            float(scenario.get("anchor_verification_probability", 1.0))
+            + 0.25 * selective * observable_risk
+            + 0.75 * selective * latent_float,
+            0.0,
+            1.0,
+        )
     )
-    probabilities = {
-        (True, True): p11,
-        (True, False): p_anchor - p11,
-        (False, True): p_weak - p11,
-        (False, False): 1.0 - p_anchor - p_weak + p11,
-    }
+    q_weak = float(
+        np.clip(
+            float(scenario.get("weak_verification_probability", 1.0))
+            + 0.25 * selective * observable_risk
+            + 0.75 * selective * latent_float,
+            0.0,
+            1.0,
+        )
+    )
+    horizon = float(scenario.get("horizon_days", 365.0))
+    delay_mean = float(scenario.get("detection_delay_mean_days", 30.0))
+    maturity_probability = 1.0 - math.exp(-horizon / delay_mean)
+
+    anchor_present = anchor_value is not None
+    weak_present = weak_value is not None
+    if anchor_present and weak_present:
+        observation_probability = maturity_probability * q_anchor * q_weak
+    elif anchor_present:
+        observation_probability = (
+            maturity_probability * q_anchor * (1.0 - q_weak)
+        )
+    elif weak_present:
+        observation_probability = (
+            maturity_probability * (1.0 - q_anchor) * q_weak
+        )
+    else:
+        observation_probability = (
+            1.0
+            - maturity_probability
+            + maturity_probability * (1.0 - q_anchor) * (1.0 - q_weak)
+        )
+
     return float(
         np.clip(
-            probabilities[(bool(anchor_value), bool(weak_value))],
+            source_probability * observation_probability,
             1e-12,
             1.0,
         )
