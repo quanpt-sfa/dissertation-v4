@@ -56,6 +56,15 @@ function Invoke-UvPython {
     }
 }
 
+function Invoke-UvPythonDev {
+    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+    Write-Host "+ uv run --extra dev python $($Arguments -join ' ')"
+    & uv run --extra dev python @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code $LASTEXITCODE"
+    }
+}
+
 Write-Host "ProjectRoot: $ProjectRoot"
 Write-Host "RawRoot:     $RawRoot"
 Write-Host "OutputRoot:  $OutputRoot"
@@ -74,22 +83,22 @@ try {
             Invoke-UvPython scripts/finalize_s3_l3_production_hardening.py --apply
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --write
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --check
-            Invoke-UvPython -m pytest -q
+            Invoke-UvPythonDev -m pytest -q
             Write-Host "Migration complete. Review git diff, then commit before Prepare."
         }
 
         "Prepare" {
             if (-not $RunId) { throw "Prepare requires -RunId" }
             Invoke-UvPython scripts/validate_production_source_contracts.py --raw-root $RawRoot
-            $arguments = @(
+            $runnerArgs = @(
                 "scripts/run_l3_preparation.py",
                 "--run-id", $RunId,
                 "--raw-root", $RawRoot,
                 "--output-root", $OutputRoot,
                 "--config", $Config
             )
-            if ($SkipTests) { $arguments += "--skip-tests" }
-            Invoke-UvPython @arguments
+            if ($SkipTests) { $runnerArgs += "--skip-tests" }
+            Invoke-UvPython @runnerArgs
         }
 
         "Lock" {
@@ -101,24 +110,25 @@ try {
                 --write
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --write
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --check
-            Invoke-UvPython -m pytest -q
+            Invoke-UvPythonDev -m pytest -q
             Write-Host "L3 parameters locked. Review and commit the config before Final."
         }
 
         "Final" {
             if (-not $RunId) { throw "Final requires -RunId" }
             Invoke-UvPython scripts/validate_production_source_contracts.py --raw-root $RawRoot
-            $arguments = @(
+            $runnerArgs = @(
                 "scripts/run_final_l3_production.py",
                 "--run-id", $RunId,
                 "--raw-root", $RawRoot,
                 "--output-root", $OutputRoot,
                 "--config", $Config
             )
-            if ($SkipTests) { $arguments += "--skip-tests" }
-            Invoke-UvPython @arguments
+            if ($SkipTests) { $runnerArgs += "--skip-tests" }
+            Invoke-UvPython @runnerArgs
         }
     }
-} finally {
+}
+finally {
     Pop-Location
 }
