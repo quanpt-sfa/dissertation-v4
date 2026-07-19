@@ -41,6 +41,7 @@ NONPRODUCTION_AUDIT_MODULES: set[str] = set()
 REPOSITORY_MAINTENANCE_SCRIPTS = {
     "scripts/apply_s3_l3_production_hardening.py",
     "scripts/finalize_s3_l3_production_hardening.py",
+    "scripts/repair_s3_l3_hardening_regressions.py",
     "scripts/lock_l3_parameters.py",
 }
 PRODUCTION_DATA_BOUNDARIES = {
