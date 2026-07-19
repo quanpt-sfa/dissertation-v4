@@ -69,7 +69,7 @@ def test_exception_is_semantic_role_based_not_name_based(tmp_path: Path) -> None
         validate_source_patterns(tmp_path, registry)
 
 
-def test_static_guard_reports_all_files_in_one_failure(tmp_path: Path) -> None:
+def test_static_guard_reports_all_files_with_portable_paths(tmp_path: Path) -> None:
     _write(tmp_path, "scripts/first.py", 'payload = {"firm_master_id": "F1"}\n')
     _write(tmp_path, "src/second.py", 'payload = {"firm_master_id": "F2"}\n')
 
@@ -78,8 +78,9 @@ def test_static_guard_reports_all_files_in_one_failure(tmp_path: Path) -> None:
 
     message = str(captured.value)
     assert "2 violation(s)" in message
-    assert "scripts/first.py" in message
-    assert "src/second.py" in message
+    assert "source=scripts/first.py" in message
+    assert "source=src/second.py" in message
+    assert str(tmp_path) not in message
 
 
 def test_current_repository_passes_complete_static_source_scan() -> None:
