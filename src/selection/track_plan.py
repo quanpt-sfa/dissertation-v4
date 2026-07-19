@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from core.semantic_keys import ELIGIBLE, OUTER_FOLD
+from core.semantic_keys import ELIGIBLE, MEASUREMENT_ID, OUTER_FOLD
 
 SEQUENTIAL_MODE = "sequential_capability_gated"
 PRIMARY_TRACK_ROLE = "required_primary"
@@ -67,7 +67,7 @@ def build_sequential_track_plan(
             tracks.append(
                 {
                     "track_id": track_id,
-                    "measurement_id": measurement_id,
+                    MEASUREMENT_ID: measurement_id,
                     "role": PRIMARY_TRACK_ROLE,
                     "status": "REQUIRED",
                     ELIGIBLE: True,
@@ -81,7 +81,7 @@ def build_sequential_track_plan(
         tracks.append(
             {
                 "track_id": track_id,
-                "measurement_id": measurement_id,
+                MEASUREMENT_ID: measurement_id,
                 "role": OPTIONAL_TRACK_ROLE,
                 "status": "AVAILABLE" if eligible else "SKIPPED",
                 ELIGIBLE: eligible,
