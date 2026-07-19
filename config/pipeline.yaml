@@ -15,6 +15,7 @@ modules:
   risksets: methodology/risksets.yaml
   folds: methodology/folds.yaml
   measurement: methodology/measurement.yaml
+  l3_scenarios: methodology/l3_scenarios.yaml
   s3_taxonomy: methodology/s3_taxonomy.yaml
   features: methodology/features.yaml
   calibration: methodology/calibration.yaml
