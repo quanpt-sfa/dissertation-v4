@@ -17,6 +17,7 @@ from core.evidence_registry import logical_evidence_sources
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.semantic_keys import (
     AVAILABILITY_DATE,
+    CHANNEL_ID,
     ELIGIBLE,
     FIRM_ID,
     FISCAL_YEAR,
@@ -127,7 +128,7 @@ def _source_coverage(
             {
                 SOURCE_ID: source_id,
                 "profile_id": source.profile_id,
-                "channel_id": source.channel_id,
+                CHANNEL_ID: source.channel_id,
                 "development_rows": len(rows),
                 "observed_outcomes": len(observed),
                 "observed_opportunities": sum(value is True for value in opportunities),
@@ -157,7 +158,7 @@ def _channel_coverage(rows: list[dict[str, Any]], matrices: dict[str, Any]) -> p
         positives = sum(value is True for value in observed)
         output.append(
             {
-                "channel_id": channel_id,
+                CHANNEL_ID: channel_id,
                 "development_rows": len(rows),
                 "observed_outcomes": len(observed),
                 "observed_opportunities": sum(value is True for value in opportunities),
