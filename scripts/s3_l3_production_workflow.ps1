@@ -78,6 +78,7 @@ try {
             Invoke-UvPython -m compileall -q scripts src tests
             Invoke-UvPythonDev -m pytest -q `
                 tests/core/test_forbidden_pattern_metadata_exceptions.py `
+                tests/assurance/test_appendix_b_decisions.py::test_T006_prior_accuracy `
                 tests/stages/test_s3_decision_ledger_grain.py `
                 tests/stages/test_s3_calendar_year_targets.py `
                 tests/stages/test_l3_latent_class.py `
