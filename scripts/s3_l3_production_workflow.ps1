@@ -72,8 +72,19 @@ Push-Location $ProjectRoot
 try {
     switch ($Mode) {
         "Migrate" {
-            # The historical S3/L3 one-time migration is already part of the base branch.
-            # This mode now validates the new P0-locked scenario architecture directly.
+            # Run branch-specific checks before generating repository artifacts. The
+            # static guard scans every production Python file and reports all violations
+            # in one failure instead of exposing them one file at a time.
+            Invoke-UvPython -m compileall -q scripts src tests
+            Invoke-UvPythonDev -m pytest -q `
+                tests/core/test_forbidden_pattern_metadata_exceptions.py `
+                tests/stages/test_s3_decision_ledger_grain.py `
+                tests/stages/test_s3_calendar_year_targets.py `
+                tests/stages/test_l3_latent_class.py `
+                tests/stages/test_remaining_stage_invariants.py `
+                tests/test_l2_l3_calibration.py `
+                tests/test_l3_preregistered_scenarios.py
+
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --write
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --check
             Invoke-UvPythonDev -m pytest -q
