@@ -35,6 +35,10 @@ NONPRODUCTION_AUDIT_SCRIPTS = {
 NONPRODUCTION_AUDIT_MODULES: set[str] = set()
 PRODUCTION_DATA_BOUNDARIES = {
     "src/features/store.py",
+    # Explicit documentation-export boundary. The script reads only verified
+    # runtime artifacts and writes researcher-facing calibration tables outside
+    # the immutable production artifact namespace.
+    "scripts/report_measurement_calibration.py",
 }
 
 StringMap = dict[str, Any]
