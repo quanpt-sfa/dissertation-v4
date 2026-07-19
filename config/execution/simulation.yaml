@@ -1,25 +1,381 @@
 simulation:
   operational_scenarios:
-    - scenario_id: empirical_baseline__target_L1_ANNUAL
-      tier: semi_synthetic_development_covariates
-      sample_design: p02_development_panel
-      calibration_target_id: L1_ANNUAL
-      semi_synthetic_feature_ids:
-        - fs_aud_accounts_receivable
-      anchor_sensitivity: 0.85
-      anchor_false_positive: 0.001
-      weak_sensitivity: 0.60
-      weak_false_positive: 0.002
-      content_signal: 1.0
-      anchor_verification_probability: 0.70
-      weak_verification_probability: 0.45
-      selective_verification_strength: 0.20
-      channel_dependence: 0.10
-      horizon_days: 365
-      detection_delay_mean_days: 120
-      shift_strength: 0.0
-      signal_structure: linear
-      latent_risk_strength: 1.0
+  - scenario_id: empirical_baseline__target_L1_ANNUAL
+    scenario_block: S00_empirical_baseline
+    chapter3_role: semi_synthetic_baseline
+    tier: semi_synthetic_development_covariates
+    sample_design: p02_development_panel
+    calibration_target_id: L1_ANNUAL
+    semi_synthetic_feature_ids:
+    - fs_aud_accounts_receivable
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+    latent_risk_strength: 1.0
+  - scenario_id: synthetic_baseline
+    scenario_block: S01_synthetic_baseline
+    chapter3_role: fully_synthetic_reference
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_low_prevalence
+    scenario_block: S02_prevalence_low
+    chapter3_role: rare_event_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.02
+    fixed_pi: 0.02
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_high_prevalence
+    scenario_block: S03_prevalence_high
+    chapter3_role: prevalence_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.2
+    fixed_pi: 0.2
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_noisy_anchor
+    scenario_block: S04_anchor_not_clean
+    chapter3_role: anchor_specificity_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.8
+    anchor_false_positive: 0.03
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_noisy_weak_source
+    scenario_block: S05_weak_source_noise
+    chapter3_role: weak_source_error_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.55
+    weak_false_positive: 0.1
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_strong_source_dependence
+    scenario_block: S06_source_dependence_strong
+    chapter3_role: dependence_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.7
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_strong_selective_verification_full_support
+    scenario_block: S07_selective_verification_strong_full_support
+    chapter3_role: verification_selection_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.65
+    weak_verification_probability: 0.5
+    selective_verification_strength: 0.7
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_strong_selective_verification_limited_support
+    scenario_block: S08_selective_verification_limited_support
+    chapter3_role: limited_overlap_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.15
+    weak_verification_probability: 0.1
+    selective_verification_strength: 0.85
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_slow_detection
+    scenario_block: S09_slow_detection
+    chapter3_role: delayed_source_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 365
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_severe_censoring
+    scenario_block: S10_severe_censoring
+    chapter3_role: maturity_censoring_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 90
+    detection_delay_mean_days: 365
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_null_signal
+    scenario_block: S11_signal_null
+    chapter3_role: gate_type1_error_null
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 0.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_nonlinear_signal
+    scenario_block: S12_signal_nonlinear
+    chapter3_role: nonlinear_recovery_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: nonlinear
+  - scenario_id: synthetic_interaction_signal
+    scenario_block: S13_signal_interaction
+    chapter3_role: interaction_recovery_stress
+    tier: fully_synthetic
+    sample_size: 4000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: interaction
+  - scenario_id: synthetic_small_sample
+    scenario_block: S14_sample_small
+    chapter3_role: small_sample_feasibility
+    tier: fully_synthetic
+    sample_size: 500
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_large_sample
+    scenario_block: S15_sample_large
+    chapter3_role: large_sample_reference
+    tier: fully_synthetic
+    sample_size: 12000
+    prevalence: 0.08
+    fixed_pi: 0.08
+    anchor_sensitivity: 0.85
+    anchor_false_positive: 0.001
+    weak_sensitivity: 0.6
+    weak_false_positive: 0.002
+    content_signal: 1.0
+    anchor_verification_probability: 0.7
+    weak_verification_probability: 0.45
+    selective_verification_strength: 0.2
+    channel_dependence: 0.1
+    horizon_days: 365
+    detection_delay_mean_days: 120
+    shift_strength: 0.0
+    signal_structure: linear
+  - scenario_id: synthetic_combined_adverse
+    scenario_block: S16_combined_adverse
+    chapter3_role: combined_worst_case_stress
+    tier: fully_synthetic
+    sample_size: 2000
+    prevalence: 0.02
+    fixed_pi: 0.02
+    anchor_sensitivity: 0.75
+    anchor_false_positive: 0.03
+    weak_sensitivity: 0.45
+    weak_false_positive: 0.1
+    content_signal: 0.5
+    anchor_verification_probability: 0.12
+    weak_verification_probability: 0.08
+    selective_verification_strength: 0.9
+    channel_dependence: 0.7
+    horizon_days: 90
+    detection_delay_mean_days: 365
+    shift_strength: 0.0
+    signal_structure: interaction
+  chapter3_scenario_contract:
+    design: baseline_plus_one_factor_stress_blocks_plus_combined_adverse
+    measurement_comparison_profile: chapter3_measurement
+    learner_comparison_profile: core
+    baseline_scenario_ids:
+    - empirical_baseline__target_L1_ANNUAL
+    - synthetic_baseline
+    required_scenario_blocks:
+    - S00_empirical_baseline
+    - S01_synthetic_baseline
+    - S02_prevalence_low
+    - S03_prevalence_high
+    - S04_anchor_not_clean
+    - S05_weak_source_noise
+    - S06_source_dependence_strong
+    - S07_selective_verification_strong_full_support
+    - S08_selective_verification_limited_support
+    - S09_slow_detection
+    - S10_severe_censoring
+    - S11_signal_null
+    - S12_signal_nonlinear
+    - S13_signal_interaction
+    - S14_sample_small
+    - S15_sample_large
+    - S16_combined_adverse
+    deferred_engine_blocks:
+    - block: S3_complete_next_calendar_year_maturity
+      reason: Current P08 DGP has one generic maturity process shared by both sources.
+    - block: covariate_concept_and_label_policy_shift
+      reason: shift_strength is validated but not yet applied to train/test distributions.
+    - block: gate_1_to_3_operating_characteristics
+      reason: Current metrics cover prediction, utility, prevalence and MCSE but not gate selection error/power.
+    - block: L3_correct_vs_misspecified_variants
+      reason: Current standalone estimators do not yet expose correct/ignore-dependence/wrong-pi/clean-anchor variants.
   imports_production_labels: true
   objective:
     targets:
@@ -48,7 +404,7 @@ simulation:
   - shift
   - sample_size
   - signal_structure
-  l3_correct_and_misspecified_checked: true
+  l3_correct_and_misspecified_checked: false
   scenario_space:
   - prevalence
   - Se
@@ -60,169 +416,174 @@ simulation:
   - sample_size
   - signal_structure
   scenario_design: baseline_plus_locked_stress_blocks
-
-  active_profile: core
-
+  active_profile: chapter3_measurement
   execution_profiles:
-    core:
-      description: Confirmatory dissertation analysis used for the dissertation's main claims.
+    chapter3_measurement:
+      description: 'Chapter 3 measurement-focused simulation: hold learner fixed while comparing feasible label and identification strategies.'
       analysis_role: confirmatory
       role_priority: 0
       include_standalone_estimators: true
       blocks:
-        - learners:
-            - logistic_regression
-            - linear_svm
-            - random_forest
-            - xgboost
-            - multilayer_perceptron
-          strategies:
-            - naive_observed_as_negative
-            - verified_only
-            - ipw
-            - pu
-          training_cost_regimes:
-            - symmetric
-          imbalance_treatments:
-            - none
-
+      - learners:
+        - logistic_regression
+        strategies:
+        - naive_observed_as_negative
+        - verified_only
+        - ipw
+        - pu
+        training_cost_regimes:
+        - symmetric
+        imbalance_treatments:
+        - none
+    core:
+      description: Confirmatory dissertation learner comparison used on baseline scenarios in a separately locked run.
+      analysis_role: confirmatory
+      role_priority: 5
+      include_standalone_estimators: true
+      blocks:
+      - learners:
+        - logistic_regression
+        - linear_svm
+        - random_forest
+        - xgboost
+        - multilayer_perceptron
+        strategies:
+        - naive_observed_as_negative
+        - verified_only
+        - ipw
+        - pu
+        training_cost_regimes:
+        - symmetric
+        imbalance_treatments:
+        - none
     cost_sensitive_robustness:
       description: Prespecified robustness for asymmetric training loss.
       analysis_role: robustness_cost_sensitive
       role_priority: 10
       include_standalone_estimators: false
       blocks:
-        - learners:
-            - logistic_regression
-            - random_forest
-            - xgboost
-          strategies:
-            - naive_observed_as_negative
-            - ipw
-            - pu
-          training_cost_regimes:
-            - moderate_fn
-            - high_fn
-          imbalance_treatments:
-            - none
-
+      - learners:
+        - logistic_regression
+        - random_forest
+        - xgboost
+        strategies:
+        - naive_observed_as_negative
+        - ipw
+        - pu
+        training_cost_regimes:
+        - moderate_fn
+        - high_fn
+        imbalance_treatments:
+        - none
     methodological_robustness:
       description: Prespecified robustness for regularized linear, single tree, and default boosting families.
       analysis_role: robustness_methodological
       role_priority: 15
       include_standalone_estimators: false
       blocks:
-        - learners:
-            - elastic_net_logistic
-            - decision_tree
-            - main_boosting
-          strategies:
-            - naive_observed_as_negative
-            - pu
-          training_cost_regimes:
-            - symmetric
-          imbalance_treatments:
-            - none
-
+      - learners:
+        - elastic_net_logistic
+        - decision_tree
+        - main_boosting
+        strategies:
+        - naive_observed_as_negative
+        - pu
+        training_cost_regimes:
+        - symmetric
+        imbalance_treatments:
+        - none
     algorithmic_robustness:
       description: Prespecified breadth across non-core learner families.
       analysis_role: robustness_algorithmic
       role_priority: 20
       include_standalone_estimators: false
       blocks:
-        - learners:
-            - rbf_svm
-            - k_nearest_neighbors
-            - gaussian_naive_bayes
-            - adaboost
-            - extra_trees
-            - lightgbm
-            - catboost
-          strategies:
-            - naive_observed_as_negative
-            - pu
-          training_cost_regimes:
-            - symmetric
-          imbalance_treatments:
-            - none
-
+      - learners:
+        - rbf_svm
+        - k_nearest_neighbors
+        - gaussian_naive_bayes
+        - adaboost
+        - extra_trees
+        - lightgbm
+        - catboost
+        strategies:
+        - naive_observed_as_negative
+        - pu
+        training_cost_regimes:
+        - symmetric
+        imbalance_treatments:
+        - none
     imbalance_treatment_robustness:
       description: Prespecified robustness for synthetic minority oversampling.
       analysis_role: robustness_imbalance_treatment
       role_priority: 30
       include_standalone_estimators: false
       blocks:
-        - learners:
-            - logistic_regression
-            - random_forest
-            - xgboost
-          strategies:
-            - naive_observed_as_negative
-            - verified_only
-          training_cost_regimes:
-            - symmetric
-          imbalance_treatments:
-            - smote
-            - adasyn
-
+      - learners:
+        - logistic_regression
+        - random_forest
+        - xgboost
+        strategies:
+        - naive_observed_as_negative
+        - verified_only
+        training_cost_regimes:
+        - symmetric
+        imbalance_treatments:
+        - smote
+        - adasyn
     prespecified_all:
       description: Union of confirmatory and all prespecified robustness blocks.
       analysis_role: prespecified_union
       role_priority: 90
       union_profiles:
-        - core
-        - cost_sensitive_robustness
-        - methodological_robustness
-        - algorithmic_robustness
-        - imbalance_treatment_robustness
-
+      - chapter3_measurement
+      - core
+      - cost_sensitive_robustness
+      - methodological_robustness
+      - algorithmic_robustness
+      - imbalance_treatment_robustness
     full:
       description: Full available library for future or explicitly exploratory work.
       analysis_role: exploratory_full_benchmark
       role_priority: 100
       include_all_registered_methods: true
-
   targets:
-    - L0
-    - L1
-    - L2
-    - L3_fixed_pi
-    - L3_hierarchical_pi
-
+  - L0
+  - L1
+  - L2
+  - L3_fixed_pi
+  - L3_hierarchical_pi
   learners:
-    - logistic_regression
-    - elastic_net_logistic
-    - decision_tree
-    - random_forest
-    - main_boosting
-    - linear_svm
-    - rbf_svm
-    - k_nearest_neighbors
-    - gaussian_naive_bayes
-    - adaboost
-    - extra_trees
-    - xgboost
-    - lightgbm
-    - catboost
-    - multilayer_perceptron
-
+  - logistic_regression
+  - elastic_net_logistic
+  - decision_tree
+  - random_forest
+  - main_boosting
+  - linear_svm
+  - rbf_svm
+  - k_nearest_neighbors
+  - gaussian_naive_bayes
+  - adaboost
+  - extra_trees
+  - xgboost
+  - lightgbm
+  - catboost
+  - multilayer_perceptron
   methods:
-    - naive_observed_as_negative
-    - verified_only
-    - ipw
-    - pu
-    - latent_bayesian
-    - partial_identification
-
+  - naive_observed_as_negative
+  - verified_only
+  - ipw
+  - pu
+  - latent_bayesian
+  - partial_identification
   full_cartesian_product: false
   matrix_design:
     confirmatory_vietnamese_learners:
-      - logistic_regression
-      - linear_svm
-      - random_forest
-      - xgboost
-      - multilayer_perceptron
-
+    - logistic_regression
+    - linear_svm
+    - random_forest
+    - xgboost
+    - multilayer_perceptron
   oracle_role: upper_benchmark_only
   sensitivities:
   - noisy_positive_pu
@@ -267,7 +628,6 @@ simulation:
     - method_demotion
     - logged_method_error_fix
     gate_optimization_on_outer_performance_forbidden: true
-
   cost_sensitive:
     enabled: true
     cost_neutral_regime_id: symmetric
@@ -276,45 +636,50 @@ simulation:
     threshold_validation_fraction: 0.25
     maximum_cost_weight: 100.0
     cost_mcse_relative_fraction: 0.02
-
-    core_training_regimes: [symmetric, moderate_fn, high_fn]
-    extended_training_regimes: [symmetric, high_fn]
-    evaluation_regimes: [symmetric, moderate_fn, high_fn, extreme_fn]
-
+    core_training_regimes:
+    - symmetric
+    - moderate_fn
+    - high_fn
+    extended_training_regimes:
+    - symmetric
+    - high_fn
+    evaluation_regimes:
+    - symmetric
+    - moderate_fn
+    - high_fn
+    - extreme_fn
     cost_regimes:
-      - cost_regime_id: symmetric
-        false_positive_cost: 1.0
-        false_negative_cost: 1.0
-        review_cost: 0.0
-        true_positive_benefit: 0.0
-        role: cost_neutral_baseline
-      - cost_regime_id: moderate_fn
-        false_positive_cost: 1.0
-        false_negative_cost: 5.0
-        review_cost: 0.10
-        true_positive_benefit: 0.0
-        role: moderate_false_negative_penalty
-      - cost_regime_id: high_fn
-        false_positive_cost: 1.0
-        false_negative_cost: 20.0
-        review_cost: 0.10
-        true_positive_benefit: 0.0
-        role: high_false_negative_penalty
-      - cost_regime_id: extreme_fn
-        false_positive_cost: 1.0
-        false_negative_cost: 50.0
-        review_cost: 0.10
-        true_positive_benefit: 0.0
-        role: extreme_false_negative_stress
-
+    - cost_regime_id: symmetric
+      false_positive_cost: 1.0
+      false_negative_cost: 1.0
+      review_cost: 0.0
+      true_positive_benefit: 0.0
+      role: cost_neutral_baseline
+    - cost_regime_id: moderate_fn
+      false_positive_cost: 1.0
+      false_negative_cost: 5.0
+      review_cost: 0.1
+      true_positive_benefit: 0.0
+      role: moderate_false_negative_penalty
+    - cost_regime_id: high_fn
+      false_positive_cost: 1.0
+      false_negative_cost: 20.0
+      review_cost: 0.1
+      true_positive_benefit: 0.0
+      role: high_false_negative_penalty
+    - cost_regime_id: extreme_fn
+      false_positive_cost: 1.0
+      false_negative_cost: 50.0
+      review_cost: 0.1
+      true_positive_benefit: 0.0
+      role: extreme_false_negative_stress
     review_budgets:
-      - review_budget_id: top_01pct
-        fraction: 0.01
-      - review_budget_id: top_05pct
-        fraction: 0.05
-      - review_budget_id: top_10pct
-        fraction: 0.10
-
+    - review_budget_id: top_01pct
+      fraction: 0.01
+    - review_budget_id: top_05pct
+      fraction: 0.05
+    - review_budget_id: top_10pct
+      fraction: 0.1
   empirical_calibration:
     enabled: true
     population_artifact: firm_year_panel
@@ -326,28 +691,30 @@ simulation:
     incompatible_detection_model: fail_closed
     calibration_target_must_be_explicit: true
     calibration_repeats: 32
-
   imbalance_treatment:
     enabled: true
-    treatments: [none, smote, adasyn]
+    treatments:
+    - none
+    - smote
+    - adasyn
     neutral_treatment_id: none
-    robustness_treatments: [smote, adasyn]
+    robustness_treatments:
+    - smote
+    - adasyn
     learners:
-      - logistic_regression
-      - random_forest
-      - xgboost
+    - logistic_regression
+    - random_forest
+    - xgboost
     strategies:
-      - naive_observed_as_negative
-      - verified_only
+    - naive_observed_as_negative
+    - verified_only
     training_cost_regime_id: symmetric
     maximum_neighbors: 5
-
   cost_sensitive_replication:
     minimum_replications: 500
     pass_fail_mcse_max: 0.02
     batch_size: 50
     maximum_replications: 2000
-
   extended_replication:
     minimum_replications: 250
     pass_fail_mcse_max: 0.02
