@@ -137,6 +137,26 @@ def main() -> int:
         batches.append(value)
         coordinates_seen.append(coordinates)
 
+    # Bijection check: every simulation_batches artifact must have a paired model_diagnostics.
+    # A missing diagnostics artifact signals a partial write (interrupted worker); fail closed.
+    diagnostics_coords: set[tuple[str, ...]] = set()
+    for item in loaded.context.store.inventory():
+        if item.get("artifact_id") != "model_diagnostics":
+            continue
+        raw = item.get("coordinates")
+        if isinstance(raw, dict):
+            diagnostics_coords.add(
+                tuple(sorted((str(k), str(v)) for k, v in cast(dict[object, object], raw).items()))
+            )
+    for coords in coordinates_seen:
+        key = tuple(sorted(coords.items()))
+        if key not in diagnostics_coords:
+            raise ValueError(
+                f"simulation_batches artifact at coordinates={dict(coords)} has no paired "
+                "model_diagnostics artifact — batch write was likely interrupted; "
+                "re-run affected batch before aggregating."
+            )
+
     methodology = _validate_methodology(
         batches=batches,
         scenario_by_id=scenario_by_id,

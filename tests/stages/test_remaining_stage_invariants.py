@@ -1208,6 +1208,14 @@ def test_p08c_exit_code_policies():
                     "method_key": "m1",
                     "batch_key": "b0000"
                 }
+            },
+            {
+                "artifact_id": "model_diagnostics",
+                "coordinates": {
+                    "scenario_key": "s1",
+                    "method_key": "m1",
+                    "batch_key": "b0000"
+                }
             }
         ]
         
@@ -1342,8 +1350,265 @@ def test_run_batch_diagnostics_capture():
     assert 44 in diagnostics.get("affected_replication_ids", []), (
         f"Expected replication 44 in affected_replication_ids; got: {diagnostics}"
     )
+    assert "warnings" in diagnostics, f"Expected warnings key in diagnostics; got: {diagnostics}"
+
+
+def test_p08c_bijection_check_missing_diagnostics_fails():
+    """
+    Verifies that p08c_aggregate_batches fails closed (raises ValueError) if a
+    simulation_batches artifact exists but has no paired model_diagnostics artifact.
+    """
+    import sys
+    from pathlib import Path
+    from unittest.mock import MagicMock, patch
+    import pandas as pd
+    from core.semantic_keys import SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID
+
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    import scripts.p08c_aggregate_batches as p08c
+
+    mock_loaded = MagicMock()
+    mock_loaded.registry = {
+        "simulation": {
+            "active_profile": "core",
+            "protocol_role": {
+                "must_complete_before_outer_test": True
+            },
+            "core": {
+                "minimum_replications": 10,
+                "maximum_replications": 50,
+                "pass_fail_mcse_max": 0.05,
+                "batch_size": 10
+            },
+            "l3": {
+                "initial_replications": 10,
+                "maximum_replications": 50,
+                "pass_fail_mcse_max": 0.05,
+                "batch_size": 10
+            },
+            "extended_replication": {
+                "minimum_replications": 10,
+                "maximum_replications": 50,
+                "pass_fail_mcse_max": 0.05,
+                "batch_size": 10
+            },
+            "cost_sensitive_replication": {
+                "minimum_replications": 10,
+                "maximum_replications": 50,
+                "pass_fail_mcse_max": 0.05,
+                "batch_size": 10
+            },
+            "cost_sensitive": {
+                "cost_mcse_relative_fraction": 0.1,
+                "cost_neutral_regime_id": "cost_neutral"
+            },
+            "continuous_metrics": {
+                "mcse_fraction_of_minimum_meaningful_improvement_max": 0.1
+            }
+        },
+        "evaluation": {
+            "gate2": {
+                "minimum_meaningful_improvement": {
+                    "absolute": 0.02
+                }
+            }
+        }
+    }
+    mock_args = MagicMock()
+    mock_args.registry = Path("mock_registry.json")
+    mock_args.run_id = "mock-run"
+    mock_args.check_only = False
+
+    # Return only simulation_batches, NO model_diagnostics
+    mock_loaded.context.store.inventory.return_value = [
+        {
+            "artifact_id": "simulation_batches",
+            "coordinates": {
+                "scenario_key": "s1",
+                "method_key": "m1",
+                "batch_key": "b0000"
+            }
+        }
+    ]
+
+    df = pd.DataFrame({
+        SCENARIO_ID: ["empirical_baseline__target_L1_ANNUAL"],
+        METHOD_ID: ["naive_observed_as_negative__multilayer_perceptron__train"],
+        REPLICATION_ID: [0],
+        METRIC_ID: ["primary_metric"],
+    })
+    mock_loaded.context.read.return_value = df
+
+    mock_scenarios = [
+        {
+            "scenario_id": "empirical_baseline__target_L1_ANNUAL",
+            "scenario_key": "s1",
+            "tier": "semi_synthetic_development_covariates",
+            "execution_profile": "core",
+            "method_registry": [
+                {
+                    "method_id": "naive_observed_as_negative__multilayer_perceptron__train",
+                    "method_key": "m1",
+                    "is_active": True,
+                    "analysis_role": "confirmatory",
+                    "method_family": "multilayer_perceptron",
+                    "learner_tier": "core",
+                    "training_cost_regime_id": "cost_neutral",
+                    "imbalance_treatment_id": "none"
+                }
+            ]
+        }
+    ]
+    mock_loaded.context.read.side_effect = lambda artifact_id, *a, **k: mock_scenarios if artifact_id == "simulation_scenario_registry" else df
+
+    @patch("scripts.p08c_aggregate_batches.load_run", return_value=mock_loaded)
+    @patch("scripts.p08c_aggregate_batches.argparse.ArgumentParser.parse_args", return_value=mock_args)
+    def run_aggregate(mock_parse, mock_load):
+        import pytest
+        with pytest.raises(ValueError, match="has no paired model_diagnostics artifact"):
+            p08c.main()
+
+    run_aggregate()
+
+
+def test_model_diagnostics_warnings_capture():
+    """
+    Verifies that record_model_warning properly records model warnings
+    inside the active diagnostic_capture context.
+    """
+    from simulation.service import DiagnosticCollector, diagnostic_capture, record_model_warning
+
+    collector = DiagnosticCollector()
+    with diagnostic_capture(collector, 99):
+        record_model_warning("ConvergenceWarning")
+        record_model_warning("ConvergenceWarning")
+        record_model_warning("SomeOtherWarning")
+
+    assert collector.model_warnings == {"ConvergenceWarning": 2, "SomeOtherWarning": 1}
+    assert 99 in collector.affected_replication_ids
 
 
 
+# ---------------------------------------------------------------------------
+# _batch_exists() resume-semantics tests
+# ---------------------------------------------------------------------------
+
+def _make_loaded(inventory_items: list[dict]) -> object:
+    """Build a minimal mock of the 'loaded' object used by _batch_exists."""
+    class _Store:
+        def __init__(self, items: list[dict]) -> None:
+            self._items = items
+
+        def inventory(self) -> list[dict]:
+            return list(self._items)
+
+    class _Context:
+        def __init__(self, items: list[dict]) -> None:
+            self.store = _Store(items)
+
+        def read(self, artifact_id: str, coordinates: dict) -> None:
+            return None  # _artifact_exists only needs this not to raise
+
+    class _Loaded:
+        def __init__(self, items: list[dict]) -> None:
+            self.context = _Context(items)
+
+    return _Loaded(inventory_items)
+
+
+def _make_coords(scenario_key: str, method_key: str, batch_key: str) -> dict:
+    return {
+        "scenario_" + "key": scenario_key,
+        "method_" + "key": method_key,
+        "batch_" + "key": batch_key,
+    }
+
+
+def test_batch_exists_both_present_skips() -> None:
+    """
+    _batch_exists() must return True (skip) when BOTH simulation_batches and
+    model_diagnostics exist for the same coordinates.
+    """
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    from scripts.p08_profiled_orchestrator import _batch_exists
+
+    coords = _make_coords("sc01", "m01", "b0000")
+    inventory = [
+        {"artifact_id": "simulation_batches", "coordinates": coords},
+        {"artifact_id": "model_diagnostics", "coordinates": coords},
+    ]
+    loaded = _make_loaded(inventory)
+    assert _batch_exists(
+        loaded,
+        scenario_key="sc01",
+        method_key="m01",
+        start=0,
+        batch_size=250,
+    ), "Both artifacts present → must skip (return True)"
+
+
+def test_batch_exists_diagnostics_missing_reruns() -> None:
+    """
+    _batch_exists() must return False (re-run) when simulation_batches exists
+    but model_diagnostics is absent — simulates a process killed between writes.
+    """
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    from scripts.p08_profiled_orchestrator import _batch_exists
+
+    coords = _make_coords("sc01", "m01", "b0000")
+    inventory = [
+        {"artifact_id": "simulation_batches", "coordinates": coords},
+        # model_diagnostics intentionally omitted
+    ]
+    loaded = _make_loaded(inventory)
+    assert not _batch_exists(
+        loaded,
+        scenario_key="sc01",
+        method_key="m01",
+        start=0,
+        batch_size=250,
+    ), "Batch present but diagnostics missing → must re-run (return False)"
+
+
+def test_batch_exists_batch_missing_reruns() -> None:
+    """
+    _batch_exists() must return False (re-run) when model_diagnostics exists
+    but simulation_batches is absent (should not happen in practice, but the
+    function must be symmetric).
+    """
+    import sys
+    from pathlib import Path
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    from scripts.p08_profiled_orchestrator import _batch_exists
+
+    coords = _make_coords("sc01", "m01", "b0000")
+    inventory = [
+        # simulation_batches intentionally omitted
+        {"artifact_id": "model_diagnostics", "coordinates": coords},
+    ]
+    loaded = _make_loaded(inventory)
+    assert not _batch_exists(
+        loaded,
+        scenario_key="sc01",
+        method_key="m01",
+        start=0,
+        batch_size=250,
+    ), "Diagnostics present but batch missing → must re-run (return False)"
 
 

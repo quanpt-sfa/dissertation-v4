@@ -48,6 +48,7 @@ P08_REQUIRED_WRITES = frozenset(
         "simulation_scenario_registry",
         "simulation_batches",
         "mcse_report",
+        "model_diagnostics",
     }
 )
 P08_EXPECTED_PRODUCERS = {

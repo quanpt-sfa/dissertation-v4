@@ -686,7 +686,7 @@ artifacts:
   model_diagnostics:
     producer_step: P08
     path_template: P08/model_diagnostics/{scenario_key}/{method_key}/{batch_key}.json
-    schema_id: json_object
+    schema_id: model_diagnostics_schema
     format: json
     coordinates:
     - scenario_key

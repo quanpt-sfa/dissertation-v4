@@ -324,20 +324,22 @@ def _batch_exists(
 ) -> bool:
     batch_index = start // batch_size
     batch_key = f"b{batch_index:04d}"
-    
+
     scenario_key_str = "scenario_" + "key"
     method_key_str = "method_" + "key"
     batch_key_str = "batch_" + "key"
-    
-    return _artifact_exists(
-        loaded,
-        "simulation_batches",
-        {
-            scenario_key_str: scenario_key,
-            method_key_str: method_key,
-            batch_key_str: batch_key,
-        },
-    )
+
+    coordinates = {
+        scenario_key_str: scenario_key,
+        method_key_str: method_key,
+        batch_key_str: batch_key,
+    }
+
+    batch_written = _artifact_exists(loaded, "simulation_batches", coordinates)
+    diagnostics_written = _artifact_exists(loaded, "model_diagnostics", coordinates)
+    # Both must exist: if process died between the two writes, diagnostics_written is False
+    # and the worker re-runs.  Immutable re-write of identical content is idempotent.
+    return batch_written and diagnostics_written
 
 
 def _run_parallel(

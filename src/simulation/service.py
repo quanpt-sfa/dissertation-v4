@@ -208,6 +208,7 @@ class DiagnosticCollector:
     def __init__(self) -> None:
         self.fit_failures: dict[str, int] = {}
         self.resampling_failures: dict[str, int] = {}
+        self.model_warnings: dict[str, int] = {}
         self.affected_replication_ids: set[int] = set()
 
     def record_fit_failure(self, error_name: str, replication_id: int) -> None:
@@ -216,6 +217,10 @@ class DiagnosticCollector:
 
     def record_resampling_failure(self, error_name: str, replication_id: int) -> None:
         self.resampling_failures[error_name] = self.resampling_failures.get(error_name, 0) + 1
+        self.affected_replication_ids.add(replication_id)
+
+    def record_model_warning(self, warning_name: str, replication_id: int) -> None:
+        self.model_warnings[warning_name] = self.model_warnings.get(warning_name, 0) + 1
         self.affected_replication_ids.add(replication_id)
 
 
@@ -247,6 +252,13 @@ def record_resampling_failure(error_name: str) -> None:
     rep_id = getattr(_thread_local, "_diag_rep_id", None)
     if collector is not None and rep_id is not None:
         collector.record_resampling_failure(error_name, rep_id)
+
+
+def record_model_warning(warning_name: str) -> None:
+    collector = getattr(_thread_local, "collector", None)
+    rep_id = getattr(_thread_local, "_diag_rep_id", None)
+    if collector is not None and rep_id is not None:
+        collector.record_model_warning(warning_name, rep_id)
 
 
 def run_batch(
@@ -329,6 +341,7 @@ def run_batch(
         diagnostics.update({
             "fit_failures": collector.fit_failures,
             "resampling_failures": collector.resampling_failures,
+            "warnings": collector.model_warnings,
             "affected_replication_ids": sorted(list(collector.affected_replication_ids)),
         })
 
@@ -1012,7 +1025,12 @@ def _fit_and_predict(
             fit_x = x_train[sampled]
             fit_y = y_train[sampled]
             fit_weight = None
-        _fit_estimator(estimator, fit_x, fit_y, fit_weight)
+        import warnings as _w
+        with _w.catch_warnings(record=True) as captured_warnings:
+            _w.simplefilter("always")
+            _fit_estimator(estimator, fit_x, fit_y, fit_weight)
+        for w in (captured_warnings or []):
+            record_model_warning(w.category.__name__)
         scores = _predict_scores(estimator, x_test)
         if not np.all(np.isfinite(scores)):
             raise ValueError("non-finite predictions")

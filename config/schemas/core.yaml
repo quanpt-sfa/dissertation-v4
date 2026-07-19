@@ -1012,3 +1012,13 @@ schemas:
     - batch_coordinates
     additional_properties: true
     compatibility_policy: strict
+  model_diagnostics_schema:
+    contract_type: json_object
+    version: 1
+    required_keys:
+    - fit_failures
+    - resampling_failures
+    - warnings
+    - affected_replication_ids
+    additional_properties: true
+    compatibility_policy: strict

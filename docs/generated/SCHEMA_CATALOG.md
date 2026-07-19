@@ -138,6 +138,10 @@ Version: 1
 
 Version: 1
 
+## model_diagnostics_schema
+
+Version: 1
+
 ## model_freeze_receipt_schema
 
 Version: 1
