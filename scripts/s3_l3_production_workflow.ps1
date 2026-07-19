@@ -65,6 +65,23 @@ function Invoke-UvPythonDev {
     }
 }
 
+function Assert-HardeningApplied {
+    $checks = @(
+        "scripts/apply_s3_l3_production_hardening.py",
+        "scripts/finalize_s3_l3_production_hardening.py"
+    )
+    foreach ($script in $checks) {
+        Write-Host "+ uv run python $script --check"
+        & uv run python $script --check
+        if ($LASTEXITCODE -eq 2) {
+            throw "S3/L3 hardening is incomplete. Run this workflow with -Mode Migrate, review and commit the generated changes, then use a new run ID."
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "Hardening verification failed for $script with exit code $LASTEXITCODE"
+        }
+    }
+}
+
 Write-Host "ProjectRoot: $ProjectRoot"
 Write-Host "RawRoot:     $RawRoot"
 Write-Host "OutputRoot:  $OutputRoot"
@@ -84,11 +101,13 @@ try {
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --write
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --check
             Invoke-UvPythonDev -m pytest -q
+            Assert-HardeningApplied
             Write-Host "Migration complete. Review git diff, then commit before Prepare."
         }
 
         "Prepare" {
             if (-not $RunId) { throw "Prepare requires -RunId" }
+            Assert-HardeningApplied
             Invoke-UvPython scripts/validate_production_source_contracts.py --raw-root $RawRoot
             $runnerArgs = @(
                 "scripts/run_l3_preparation.py",
@@ -104,6 +123,7 @@ try {
         "Lock" {
             if (-not $LockFile) { throw "Lock requires -LockFile" }
             if (-not $PreparationReceipt) { throw "Lock requires -PreparationReceipt" }
+            Assert-HardeningApplied
             Invoke-UvPython scripts/lock_l3_parameters.py `
                 --lock-file $LockFile `
                 --preparation-receipt $PreparationReceipt `
@@ -116,6 +136,7 @@ try {
 
         "Final" {
             if (-not $RunId) { throw "Final requires -RunId" }
+            Assert-HardeningApplied
             Invoke-UvPython scripts/validate_production_source_contracts.py --raw-root $RawRoot
             $runnerArgs = @(
                 "scripts/run_final_l3_production.py",
