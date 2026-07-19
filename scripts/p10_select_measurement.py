@@ -11,10 +11,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from core.evidence_registry import logical_evidence_sources
 from core.fold_control import production_path_blockers, require_primary_target
+from core.l3_scenarios import locked_l3_scenario_registry
 from core.pipeline import load_run, mapping, sequence
 from core.rng import generator
 from core.semantic_keys import MEASUREMENT_ID, OUTER_FOLD
-from selection.service import fit_l3_fold_candidate, select_measurement
+from selection.preregistered_l3 import fit_l3_preregistered_scenarios
+from selection.service import select_measurement
 from selection.track_plan import build_sequential_track_plan
 
 
@@ -82,24 +84,17 @@ def main() -> int:
     ):
         l3_model = mapping(measurement.get("l3_model"), "measurement.l3_model")
         operational = mapping(l3_model.get("operational"), "measurement.l3_model.operational")
-        fixed_pi_grid = [
-            float(value)
-            for value in sequence(operational.get("fixed_pi_grid"), "L3 fixed-pi grid")
-        ]
-        source_channels, accuracy_priors = _l3_bindings(
+        scenario_registry = locked_l3_scenario_registry(loaded.registry)
+        source_channels, source_profiles = _l3_source_bindings(
             registry=loaded.registry,
             allowed_source_ids=_primary_measurement_sources(measurement),
-            priors_by_profile=mapping(
-                operational.get("accuracy_priors_by_profile"),
-                "measurement.l3_model.operational.accuracy_priors_by_profile",
-            ),
         )
-        l3_fold_result = fit_l3_fold_candidate(
+        l3_fold_result = fit_l3_preregistered_scenarios(
             matrices=matrices,
             outer_year=int(args.outer_fold),
             source_channels=source_channels,
-            accuracy_priors=accuracy_priors,
-            fixed_pi_grid=fixed_pi_grid,
+            source_profiles=source_profiles,
+            scenario_registry=scenario_registry,
             mcmc=mapping(operational.get("mcmc"), "L3 MCMC controls"),
             minimum_observed_channels=minimum_channels,
             robust_fraction=float(
@@ -112,7 +107,7 @@ def main() -> int:
                 loaded.protocol_hash,
                 "P10",
                 coordinates,
-                "l3_fold_local_channel_selection",
+                "l3_preregistered_scenario_execution",
             ),
         )
 
@@ -142,14 +137,20 @@ def main() -> int:
         "selected_measurement": primary_target_id,
         "optional_candidate_selected_for_diagnostics": result.selection.get("selected_measurement"),
         "optional_selection_scope": result.selection.get("selection_scope"),
+        "l3_scenario_selection_rule": "PRE_REGISTERED_PRIMARY",
+        "l3_performance_based_scenario_selection": False,
     }
     channel_selection = dict(result.channel_selection)
     if l3_fold_result is not None and l3_fold_result.get("status") == "PASS":
         channel_selection.update(
             {
                 "l3_target_rows": l3_fold_result.get("target_rows", []),
-                "l3_selected_fixed_pi": l3_fold_result.get("selected_fixed_pi"),
-                "l3_selection_objective": l3_fold_result.get("selection_objective"),
+                "l3_target_rows_by_scenario": l3_fold_result.get("target_rows_by_scenario", {}),
+                "l3_primary_scenario_id": l3_fold_result.get("primary_scenario_id"),
+                "l3_primary_fixed_pi": l3_fold_result.get("primary_fixed_pi"),
+                "l3_scenario_selection_rule": l3_fold_result.get("scenario_selection_rule"),
+                "l3_performance_based_scenario_selection": False,
+                "l3_diagnostic_objective": l3_fold_result.get("selection_objective"),
                 "l3_full_fit_diagnostics": l3_fold_result.get("full_fit_diagnostics"),
                 "l3_source_accuracy": l3_fold_result.get("source_accuracy"),
                 "l3_channel_random_effect_sd": l3_fold_result.get("channel_random_effect_sd"),
@@ -162,7 +163,6 @@ def main() -> int:
     statuses = ",".join(f"{item[MEASUREMENT_ID]}={item['status']}" for item in plan["tracks"])
     print(f"P10 status=PASS fold={args.outer_fold} tracks={statuses}")
     return 0
-
 
 
 def _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:
@@ -183,13 +183,35 @@ def _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:
     return sources
 
 
+def _l3_source_bindings(
+    *,
+    registry: dict[str, object],
+    allowed_source_ids: list[str],
+) -> tuple[dict[str, str], dict[str, str]]:
+    sources = logical_evidence_sources(registry)
+    allowed = set(allowed_source_ids)
+    unknown = sorted(allowed - set(sources))
+    if unknown:
+        raise ValueError(f"primary L3 source set contains unknown sources {unknown}")
+    source_channels: dict[str, str] = {}
+    source_profiles: dict[str, str] = {}
+    for logical_source_id, source in sorted(sources.items()):
+        if logical_source_id not in allowed:
+            continue
+        source_channels[logical_source_id] = source.channel_id
+        source_profiles[logical_source_id] = source.profile_id
+    if not source_channels:
+        raise ValueError("P10 L3 execution requires registered logical evidence sources")
+    return source_channels, source_profiles
+
+
 def _l3_bindings(
     *,
     registry: dict[str, object],
     priors_by_profile: dict[str, Any],
     allowed_source_ids: list[str] | None = None,
 ) -> tuple[dict[str, str], dict[str, dict[str, float]]]:
-    """Bind L3 to logical endpoints, not physical snapshot file identifiers."""
+    """Compatibility helper retained for focused binding tests."""
     sources = logical_evidence_sources(registry)
     source_channels: dict[str, str] = {}
     accuracy_priors: dict[str, dict[str, float]] = {}
@@ -205,14 +227,12 @@ def _l3_bindings(
         parsed_prior: dict[str, float] = {}
         for key, value in prior.items():
             if not isinstance(value, (int, float)) or isinstance(value, bool):
-                raise ValueError(
-                    f"profile={source.profile_id}: L3 prior values must be numeric"
-                )
+                raise ValueError(f"profile={source.profile_id}: L3 prior values must be numeric")
             parsed_prior[str(key)] = float(value)
         source_channels[logical_source_id] = source.channel_id
         accuracy_priors[logical_source_id] = parsed_prior
     if not source_channels:
-        raise ValueError("P10 L3 selection requires registered logical evidence sources")
+        raise ValueError("P10 L3 binding requires registered logical evidence sources")
     return source_channels, accuracy_priors
 
 
