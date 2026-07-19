@@ -68,7 +68,8 @@ function Invoke-UvPythonDev {
 function Assert-HardeningApplied {
     $checks = @(
         "scripts/apply_s3_l3_production_hardening.py",
-        "scripts/finalize_s3_l3_production_hardening.py"
+        "scripts/finalize_s3_l3_production_hardening.py",
+        "scripts/repair_s3_l3_hardening_regressions.py"
     )
     foreach ($script in $checks) {
         Write-Host "+ uv run python $script --check"
@@ -98,6 +99,7 @@ try {
             }
             Invoke-UvPython scripts/apply_s3_l3_production_hardening.py --apply
             Invoke-UvPython scripts/finalize_s3_l3_production_hardening.py --apply
+            Invoke-UvPython scripts/repair_s3_l3_hardening_regressions.py --apply
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --write
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --check
             Invoke-UvPythonDev -m pytest -q
