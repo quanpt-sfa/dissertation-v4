@@ -41,13 +41,7 @@ def _replace_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]
 
 
 def _replace_remaining_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]:
-    """Replace one remaining bad block even when a fixed sibling block already exists.
-
-    The S3/L3 migration creates two similar ``source_profiles`` comprehensions.
-    One was already correct, so a whole-file ``new in text`` check incorrectly
-    reported the second, still-broken block as repaired. This helper keys only on
-    the remaining old block.
-    """
+    """Replace one remaining bad block without whole-file false positives."""
 
     count = text.count(old)
     if count == 0:
@@ -59,24 +53,46 @@ def _replace_remaining_once(text: str, old: str, new: str, label: str) -> tuple[
 
 def _repair_measurement_profiles(path: Path, *, apply: bool) -> bool:
     text = _read(path)
-    old = '''        source_profiles={
+
+    # The migration creates two similar comprehensions at different indentation
+    # levels. Both must tolerate source_profiles=None or partial profile maps.
+    config_old = '''        source_profiles={
             source_id: (source_profiles or {})[source_id]
             for source_id in primary_source_ids
         },
 '''
-    new = '''        source_profiles={
+    config_new = '''        source_profiles={
             source_id: (source_profiles or {})[source_id]
             for source_id in primary_source_ids
             if source_id in (source_profiles or {})
         },
 '''
-    text, changed = _replace_remaining_once(
+    text, changed_config = _replace_remaining_once(
         text,
-        old,
-        new,
-        "optional source-profile filtering",
+        config_old,
+        config_new,
+        "optional source-profile filtering in L2 configuration",
     )
-    return _write(path, text, apply=apply) or changed
+
+    score_old = '''            source_profiles={
+                source_id: (source_profiles or {})[source_id]
+                for source_id in primary_source_ids
+            },
+'''
+    score_new = '''            source_profiles={
+                source_id: (source_profiles or {})[source_id]
+                for source_id in primary_source_ids
+                if source_id in (source_profiles or {})
+            },
+'''
+    text, changed_score = _replace_remaining_once(
+        text,
+        score_old,
+        score_new,
+        "optional source-profile filtering in L2 score binding",
+    )
+
+    return _write(path, text, apply=apply) or changed_config or changed_score
 
 
 def _repair_l3_binding_signature(path: Path, *, apply: bool) -> bool:
