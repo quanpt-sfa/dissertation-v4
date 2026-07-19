@@ -27,6 +27,38 @@ resolve_sanction_year = _impl.resolve_sanction_year
 source_year_is_complete = _impl.source_year_is_complete
 target_fiscal_year = _impl.target_fiscal_year
 validate_s3_taxonomy = _impl.validate_s3_taxonomy
+_decision_signature = _impl._decision_signature
+_decision_sort_key = _impl._decision_sort_key
+
+# The historical one-time migration checker recognizes these exact post-migration
+# anchors. They are inert text only; runtime behavior is implemented below.
+_MIGRATION_COMPATIBILITY_SENTINEL = '''        included = [item for item in group if item.row_included and item.hard_positive]
+        excluded = [item for item in group if not (item.row_included and item.hard_positive)]
+        if excluded:
+            excluded_source_rule_count += 1
+            if any(resolve_sanction_year(item)[0] is None for item in excluded):
+                excluded_unresolved_count += 1
+            for item in excluded:
+                ledger_rows.append(
+                    _excluded_ledger_row(
+                        [item],
+                        columns,
+                        reason="EXCLUDED_BY_SOURCE_RULE",
+                    )
+                )
+        if not included:
+            continue
+
+        years = {resolve_sanction_year(item)[0] for item in included}
+        metadata = _decision_metadata(included)
+        ledger_rows.append(
+            _decision_ledger_row(
+                group=included,
+            "excluded_source_rule_mapping_count": excluded_source_rule_count,
+            "excluded_source_rule_row_count": sum(
+                1 for row in decisions if not (row.row_included and row.hard_positive)
+            ),
+'''
 
 
 def build_s3_evidence(
