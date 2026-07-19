@@ -1,14 +1,12 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("Migrate", "Prepare", "Lock", "Final")]
+    [ValidateSet("Migrate", "Prepare", "Final")]
     [string]$Mode,
 
     [string]$RunId,
     [string]$RawRoot,
     [string]$OutputRoot,
     [string]$Config,
-    [string]$LockFile,
-    [string]$PreparationReceipt,
     [switch]$SkipTests
 )
 
@@ -93,8 +91,6 @@ Push-Location $ProjectRoot
 try {
     switch ($Mode) {
         "Migrate" {
-            # Synchronize the one-time migration generator before asking it to
-            # validate a checkout that may already contain the compatibility repairs.
             Invoke-UvPython scripts/repair_s3_l3_migration_checker.py --apply
             Write-Host "+ uv run python scripts/apply_s3_l3_production_hardening.py --check"
             & uv run python scripts/apply_s3_l3_production_hardening.py --check
@@ -108,7 +104,7 @@ try {
             Invoke-UvPython scripts/bootstrap_repository.py --config $Config --check
             Invoke-UvPythonDev -m pytest -q
             Assert-HardeningApplied
-            Write-Host "Migration complete. Review git diff, then commit before Prepare."
+            Write-Host "Migration complete. Review and commit the P0-locked scenario registry before Prepare."
         }
 
         "Prepare" {
@@ -124,20 +120,6 @@ try {
             )
             if ($SkipTests) { $runnerArgs += "--skip-tests" }
             Invoke-UvPython @runnerArgs
-        }
-
-        "Lock" {
-            if (-not $LockFile) { throw "Lock requires -LockFile" }
-            if (-not $PreparationReceipt) { throw "Lock requires -PreparationReceipt" }
-            Assert-HardeningApplied
-            Invoke-UvPython scripts/lock_l3_parameters.py `
-                --lock-file $LockFile `
-                --preparation-receipt $PreparationReceipt `
-                --write
-            Invoke-UvPython scripts/bootstrap_repository.py --config $Config --write
-            Invoke-UvPython scripts/bootstrap_repository.py --config $Config --check
-            Invoke-UvPythonDev -m pytest -q
-            Write-Host "L3 parameters locked. Review and commit the config before Final."
         }
 
         "Final" {
