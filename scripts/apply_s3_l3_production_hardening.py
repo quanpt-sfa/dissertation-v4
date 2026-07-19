@@ -168,6 +168,7 @@ def _patch_measurement_service(path: Path, *, apply: bool) -> bool:
         "            source_profiles={\n"
         "                source_id: (source_profiles or {})[source_id]\n"
         "                for source_id in primary_source_ids\n"
+        "                if source_id in (source_profiles or {})\n"
         "            },\n",
         "primary L2 score bindings",
     )
@@ -231,7 +232,7 @@ def _patch_p10(path: Path, *, apply: bool) -> bool:
         "    *,\n"
         "    registry: dict[str, object],\n"
         "    priors_by_profile: dict[str, Any],\n"
-        "    allowed_source_ids: list[str],\n"
+        "    allowed_source_ids: list[str] | None = None,\n"
         ") -> tuple[dict[str, str], dict[str, dict[str, float]]]:\n",
         "P10 L3 binding signature",
     )
@@ -239,7 +240,7 @@ def _patch_p10(path: Path, *, apply: bool) -> bool:
         text,
         "    for logical_source_id, source in sorted(sources.items()):\n"
         "        raw_prior: object = priors_by_profile.get(source.profile_id)\n",
-        "    allowed = set(allowed_source_ids)\n"
+        "    allowed = set(sources) if allowed_source_ids is None else set(allowed_source_ids)\n"
         "    unknown = sorted(allowed - set(sources))\n"
         "    if unknown:\n"
         "        raise ValueError(f\"primary L3 source set contains unknown sources {unknown}\")\n"

@@ -273,19 +273,20 @@ def build_s3_evidence(
         duplicate_count += len(raw_group) - len(group)
 
         included = [item for item in group if item.row_included and item.hard_positive]
-        if not included:
-            ledger_rows.append(
-                _excluded_ledger_row(
-                    group,
-                    columns,
-                    reason="EXCLUDED_BY_SOURCE_RULE",
-                )
-            )
+        excluded = [item for item in group if not (item.row_included and item.hard_positive)]
+        if excluded:
             excluded_source_rule_count += 1
-            years_group = {resolve_sanction_year(item)[0] for item in group}
-            years_group.discard(None)
-            if len(years_group) != 1 or any(resolve_sanction_year(item)[0] is None for item in group):
+            if any(resolve_sanction_year(item)[0] is None for item in excluded):
                 excluded_unresolved_count += 1
+            for item in excluded:
+                ledger_rows.append(
+                    _excluded_ledger_row(
+                        [item],
+                        columns,
+                        reason="EXCLUDED_BY_SOURCE_RULE",
+                    )
+                )
+        if not included:
             continue
 
         years = {resolve_sanction_year(item)[0] for item in included}
@@ -317,10 +318,10 @@ def build_s3_evidence(
             if unmapped
             else None
         )
-        metadata = _decision_metadata(raw_group)
+        metadata = _decision_metadata(included)
         ledger_rows.append(
             _decision_ledger_row(
-                group=raw_group,
+                group=included,
                 sanction_year_value=sanction_year_value,
                 target_year=target_year,
                 reason=reason,
@@ -447,6 +448,9 @@ def build_s3_evidence(
             "duplicate_source_row_count": duplicate_count,
             "unresolved_sanction_year_mapping_count": unresolved_count,
             "excluded_source_rule_mapping_count": excluded_source_rule_count,
+            "excluded_source_rule_row_count": sum(
+                1 for row in decisions if not (row.row_included and row.hard_positive)
+            ),
             "excluded_unresolved_mapping_count": excluded_unresolved_count,
             "eligible_unresolved_sanction_year_mapping_count": eligible_unresolved_count,
             "firms_with_unresolved_sanction_year": sorted(unresolved_firms),

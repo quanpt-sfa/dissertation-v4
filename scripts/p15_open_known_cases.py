@@ -108,7 +108,17 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
     if hash_file(path) != spec.locked_sha256:
         raise ValueError("known-case file does not match its P00 snapshot hash")
     semantics = mapping(source.get("resolved_semantics"), "known-case resolved semantics")
-    required = {"case_id", FIRM_ID, FISCAL_YEAR}
+    required = {
+        "case_id",
+        FIRM_ID,
+        FISCAL_YEAR,
+        "case_construct",
+        "case_role",
+        "training_include_flag",
+        "calibration_include_flag",
+        "model_selection_include_flag",
+        "external_validation_include_flag",
+    }
     if not required.issubset(semantics):
         raise ValueError("known-case semantics are incomplete")
     entity = EntityResolutionSpec.from_mapping(registry.get("entity_resolution"))
@@ -118,6 +128,28 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
         raw_firm = str(row[str(semantics[FIRM_ID])])
         normalized = normalize_entity_field(raw_firm, entity)
         canonical, _ = resolve_entity_link(source_id, raw_firm, normalized, entity)
+        case_construct = str(row[str(semantics["case_construct"])]).strip()
+        case_role = str(row[str(semantics["case_role"])]).strip()
+        flags = {
+            name: _parse_bool(row[str(semantics[name])], name)
+            for name in (
+                "training_include_flag",
+                "calibration_include_flag",
+                "model_selection_include_flag",
+                "external_validation_include_flag",
+            )
+        }
+        if case_construct != "CONFIRMED_FINANCIAL_REPORTING_CASE":
+            raise ValueError("known case construct must be CONFIRMED_FINANCIAL_REPORTING_CASE")
+        if case_role != "SIMULATION_EXTERNAL_VALIDATION":
+            raise ValueError("known case role must be SIMULATION_EXTERNAL_VALIDATION")
+        if flags != {
+            "training_include_flag": False,
+            "calibration_include_flag": False,
+            "model_selection_include_flag": False,
+            "external_validation_include_flag": True,
+        }:
+            raise ValueError("known case inclusion flags violate the sealed external-validation role")
         rows.append(
             {
                 "case_id": str(row[str(semantics["case_id"])]),
@@ -126,6 +158,17 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def _parse_bool(value: object, field: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "yes", "y"}:
+        return True
+    if normalized in {"false", "0", "no", "n"}:
+        return False
+    raise ValueError(f"known case field={field}: boolean value required")
 
 
 if __name__ == "__main__":
