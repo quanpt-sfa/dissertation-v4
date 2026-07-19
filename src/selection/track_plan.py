@@ -18,6 +18,23 @@ DEFAULT_TRACK_IDS = {
 }
 
 
+def resolve_sequential_primary_target(measurement: Mapping[str, Any]) -> str:
+    """Resolve the locked primary track while the legacy field remains nullable."""
+    execution = measurement.get("execution_tracks")
+    if not isinstance(execution, Mapping):
+        raise RuntimeError("SEQUENTIAL_TRACKS_NOT_LOCKED")
+    primary = execution.get("primary_target_id")
+    order = execution.get("order")
+    candidates = measurement.get("candidate_targets")
+    if not isinstance(primary, str) or not primary:
+        raise RuntimeError("SEQUENTIAL_PRIMARY_TARGET_NOT_LOCKED")
+    if not isinstance(order, list) or not order or order[0] != primary:
+        raise RuntimeError("SEQUENTIAL_PRIMARY_TARGET_MUST_BE_FIRST")
+    if not isinstance(candidates, Mapping) or primary not in candidates:
+        raise RuntimeError("SEQUENTIAL_PRIMARY_TARGET_NOT_REGISTERED")
+    return primary
+
+
 def build_sequential_track_plan(
     *,
     primary_target_id: str,
