@@ -46,6 +46,33 @@ def _run_tests(project_root: Path) -> None:
     )
 
 
+def _require_hardening_applied(project_root: Path) -> None:
+    checks = (
+        "scripts/apply_s3_l3_production_hardening.py",
+        "scripts/finalize_s3_l3_production_hardening.py",
+    )
+    for script in checks:
+        result = subprocess.run(
+            [sys.executable, script, "--check"],
+            cwd=project_root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.stdout:
+            print(result.stdout, end="", flush=True)
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr, flush=True)
+        if result.returncode == 2:
+            raise RuntimeError(
+                "S3/L3 hardening is not fully applied. Run "
+                ".\\scripts\\s3_l3_production_workflow.ps1 -Mode Migrate, "
+                "review and commit the generated changes before production."
+            )
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(result.returncode, [sys.executable, script, "--check"])
+
+
 def _require_clean_tree(root: Path) -> None:
     result = subprocess.run(
         ["git", "status", "--porcelain"],
@@ -126,6 +153,15 @@ def _validate_locked_config(config_path: Path) -> None:
 
 def _audit_blockers(s3: dict[str, Any], calibration: dict[str, Any]) -> list[str]:
     result: list[str] = []
+    required_s3_fields = {
+        "development_positive_count_by_endpoint",
+        "sanction_year_unresolved_firm_year_count",
+        "excluded_source_rule_row_count",
+    }
+    missing_s3_fields = sorted(field for field in required_s3_fields if field not in s3)
+    if missing_s3_fields:
+        result.append("S3_AUDIT_SCHEMA_NOT_HARDENED:" + ",".join(missing_s3_fields))
+
     for key in (
         "p03_p05_outcome_mismatch_count",
         "p03_p05_missing_key_count",
@@ -135,8 +171,11 @@ def _audit_blockers(s3: dict[str, Any], calibration: dict[str, Any]) -> list[str
         if int(s3.get(key) or 0) != 0:
             result.append(key.upper())
     positives = s3.get("development_positive_count_by_endpoint")
-    if not isinstance(positives, dict) or int(positives.get("S3_CONTENT") or 0) <= 0:
-        result.append("NO_DEVELOPMENT_S3_CONTENT_POSITIVES")
+    if isinstance(positives, dict):
+        if int(positives.get("S3_CONTENT") or 0) <= 0:
+            result.append("NO_DEVELOPMENT_S3_CONTENT_POSITIVES")
+    elif not missing_s3_fields:
+        result.append("S3_AUDIT_ENDPOINT_COUNTS_MALFORMED")
     if s3.get("outer_outcomes_accessed") is not False:
         result.append("S3_AUDIT_OUTER_OUTCOME_ACCESS")
     if calibration.get("outer_outcomes_accessed") is not False:
@@ -157,6 +196,7 @@ def main() -> int:
 
     config = args.config.resolve()
     project_root = config.parent.parent
+    _require_hardening_applied(project_root)
     _require_clean_tree(project_root)
     _validate_locked_config(config)
     python = sys.executable
