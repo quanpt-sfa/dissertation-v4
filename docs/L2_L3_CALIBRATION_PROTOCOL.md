@@ -2,7 +2,9 @@
 
 ## Scope
 
-This protocol uses only eligible development-history rows before the initial outer year. Source-specific observability and missingness determine whether an individual source contributes. Outer-fold outcomes are never used to set L2 coefficients, the L3 fixed-prevalence grid, or L3 accuracy priors.
+This protocol uses only eligible development-history rows before the initial outer year. Source-specific observability and missingness determine whether an individual source contributes. Outer-fold outcomes and known cases are never used to define L2 coefficients, choose an L3 prevalence scenario, set L3 accuracy priors, or modify the measurement model.
+
+L1 annual remains the mandatory primary track. L2 and L3 are optional, capability-gated tracks. Failure of an optional track means that track is unavailable by design; it does not replace or invalidate L1.
 
 ## Neutral L2
 
@@ -15,37 +17,64 @@ The primary L2 configuration is deliberately neutral:
 - at least one observed channel;
 - missing sources remain missing and are not recoded to zero.
 
-This is a measurement baseline, not a claim that all sources have equal diagnostic accuracy. Alternative quality weights and stricter coverage rules belong in sensitivity analyses and require external validation.
+This is a measurement baseline, not a claim that all sources have equal diagnostic accuracy. Alternative quality weights and stricter coverage rules belong in sensitivity analyses and require external justification.
 
-## Development-only calibration report
+## P0-registered L3 scenarios
 
-After P05, run `scripts/report_measurement_calibration.py`. It produces:
+L3 prevalence assumptions and source-accuracy priors are declared in `config/methodology/l3_scenarios.yaml`. That module is loaded by `config/pipeline.yaml`, included in the protocol hash, validated during P00 compilation, and forbidden from modification after P00.
 
-- logical-source coverage and observed source counts for diagnostics;
+The registered fixed-prevalence scenarios are:
+
+- `low_pi_01`: fixed π = 0.01, robustness;
+- `neutral_pi_03`: fixed π = 0.03, preregistered primary;
+- `high_pi_05`: fixed π = 0.05, robustness.
+
+All registered scenarios are executed when L3 capability is available. Diagnostic losses are used only for capability assessment and reporting. They may not select a scenario, replace `neutral_pi_03`, or revise the scenario registry.
+
+The primary scenario is therefore determined by protocol registration, not by minimum loss, outer-fold performance, known-case behavior, or post-Preparation review.
+
+## P0-registered accuracy priors
+
+Each evidence profile receives Beta priors for sensitivity and specificity in the same P0 module. The baseline registered prior set is:
+
+- financial-statement core: sensitivity Beta(8, 2), specificity Beta(12, 1);
+- annual audit evidence: sensitivity Beta(7, 3), specificity Beta(10, 2);
+- sanction evidence: sensitivity Beta(6, 4), specificity Beta(15, 2).
+
+These are measurement-sensitivity assumptions, not claims that S3 is fraud ground truth. S3 remains evidence of administrative sanctions. Logical endpoints from one physical source are not independent prior-information units and cannot be summed to inflate prior precision.
+
+Hierarchical π remains sensitivity-only. It cannot replace the registered fixed-π primary analysis.
+
+## Development-only capability report
+
+After P05, `scripts/report_measurement_calibration.py` reports:
+
+- logical-source coverage and observed source counts;
 - channel coverage;
 - one physical-channel coverage row per S1/S2/S3 measurement channel;
 - development-only positive rates by source and channel;
 - lag distributions by source;
-- a prevalence-anchor JSON file;
-- an L3 prior-elicitation worksheet.
+- prevalence-anchor diagnostics;
+- prior and scenario diagnostics.
 
-Prevalence-anchor quantiles use each measurement channel exactly once. Logical endpoints from the same physical source remain visible for diagnostics but do not enter the anchor distribution separately. Thus the four S3 logical endpoints cannot multiply the influence of the sanction source.
+These outputs assess observability, numerical feasibility, and capability. They do not authorize any change to the P0 scenario registry or priors.
 
-Observed positive rates are not treated as latent prevalence estimates. They depend jointly on latent prevalence, sensitivity, specificity, opportunity, and detection delay.
+Observed positive rates are not treated as latent prevalence estimates. They depend jointly on latent prevalence, sensitivity, specificity, opportunity, and detection delay. Prevalence-anchor quantiles use each physical measurement channel once, so multiple logical S3 endpoints cannot multiply the sanction source's influence.
 
 ## S3 year audit
 
-Before locking L3, run `scripts/report_s3_year_audit.py` against the same P00-P05 run. The script reads verified artifacts and produces:
+`scripts/report_s3_year_audit.py` reads verified artifacts and produces:
 
 - decision-ledger counts by target fiscal year;
-- P03 endpoint outcomes by year and S3 endpoint;
-- P05 endpoint outcomes by year and S3 endpoint;
+- P03 and P05 endpoint outcomes by year and S3 endpoint;
 - unknown-outcome reason counts;
 - P03-to-P05 reconciliation summaries;
 - row-level mismatch details;
-- a JSON lock-status summary.
+- a JSON capability and data-contract summary.
 
-The audit must establish whether positive S3 decisions exist before the initial outer year and whether P03 positives propagate unchanged into P05 matrices. Any missing key or outcome mismatch blocks L3. If development-history S3 contains no positive, S3 sensitivity is not empirically informed and L3 remains blocked pending a defensible design decision.
+The audit must establish whether eligible S3 decisions exist before the initial outer year and whether P03 positives propagate unchanged into P05 matrices. Missing keys, outcome mismatches, or unresolved eligible sanction-year mappings are data-contract blockers.
+
+No development-history S3_CONTENT positives, insufficient channel coverage, or failed L3 diagnostics make L3 unavailable by design. They do not trigger post-data parameter revision and do not block the mandatory L1 pipeline.
 
 Example:
 
@@ -58,39 +87,23 @@ uv run python scripts/report_s3_year_audit.py `
 
 The audit does not re-read the raw CSV. It reconciles verified P03 and P05 artifacts and uses the verified sanction decision ledger plus the annual evidence audit to summarize pre-P03 exclusions.
 
-## Fixed-pi grid
-
-The fixed-prevalence grid must be locked before outer-fold access. The grid should be justified from three inputs:
-
-1. external evidence on the plausible incidence or prevalence of material reporting problems;
-2. development-only unique-channel observed-rate anchors from the calibration report;
-3. a deliberately broad sensitivity range that does not assume any observed source is a gold standard.
-
-The final grid should include low, central, and high plausible scenarios. It must not be selected using outer-fold predictive performance.
-
-## Accuracy priors
-
-Each evidence profile receives Beta priors for sensitivity and specificity. Priors are parameterized using a prior mean `m` and prior effective sample size `kappa`:
-
-- `alpha = m * kappa`;
-- `beta = (1 - m) * kappa`.
-
-The evidence basis for each prior must be recorded as one of:
-
-- external published validation evidence;
-- an independently reviewed validation subsample;
-- structured expert elicitation;
-- a weakly informative prior used because stronger evidence is unavailable.
-
-A stronger prior effective sample size is permitted only when the evidence basis is correspondingly stronger. Logical endpoints from one physical source are not independent prior-information units; their observed counts must not be summed to inflate `kappa`. The primary analysis must be accompanied by weak, skeptical, and evidence-hierarchy sensitivity scenarios.
-
 ## No-gold-standard cautions
 
-Bayesian latent-class models can be unidentified or weakly identified without informative restrictions. Prior precision can create misleading posterior precision when prior means are inaccurate. Conditional dependence between sources can also inflate estimated accuracy. The implementation therefore retains channel random effects, posterior predictive checks, R-hat and ESS gates, minimum source counts, and fixed-pi sensitivity scenarios.
+Bayesian latent-class models can be unidentified or weakly identified without informative restrictions. Prior precision can create misleading posterior precision when prior means are inaccurate. Conditional dependence between sources can also inflate estimated accuracy. The implementation therefore retains channel random effects, posterior predictive checks, R-hat and ESS gates, minimum source counts, fixed-π robustness scenarios, and capability-based skipping.
 
-## Lock decision
+## Assurance decision D06
 
-L3 remains `EMPIRICALLY_PENDING` until the calibration report, S3 year audit, and prior worksheet have been reviewed. Only then should `measurement.l3_model.operational.fixed_pi_grid` and `accuracy_priors_by_profile` be committed in a new protocol-locking change.
+D06 is locked at P00. Its executable assurance contract requires:
+
+- `measurement.prior_accuracy_domain.primary_prior = preregistered_l3_scenario_registry`;
+- `l3_scenarios.status = LOCKED_AT_P0`;
+- `neutral_pi_03` as the sole primary scenario;
+- all registered scenarios to run when capability permits;
+- performance-based scenario selection to remain forbidden;
+- outer outcomes and known cases to remain inaccessible;
+- hierarchical π to remain sensitivity-only.
+
+The D06 amendment is a named manifest module, included in source hashes and applied before decision traceability is compiled. Generated Appendix B and D01–D45 traceability therefore use the same P0 decision as runtime code.
 
 ## Methodological references
 
