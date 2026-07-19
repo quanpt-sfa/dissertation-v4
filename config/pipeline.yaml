@@ -30,6 +30,7 @@ modules:
   reproducibility: execution/reproducibility.yaml
   appendix_b: assurance/appendix_b.yaml
   decisions: assurance/decisions.yaml
+  l3_preregistered_assurance: assurance/l3_preregistered_assurance.yaml
   tests: assurance/tests.yaml
   reporting: assurance/reporting.yaml
   agent_contract: assurance/agent_contract.yaml
