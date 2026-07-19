@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
+from core.fold_control import require_primary_target
 from core.pipeline import load_run, mapping, outer_fold_ids, physical_columns, sequence, stable_hash
 from splits.service import build_splits_and_weights
 
@@ -48,6 +49,8 @@ def main() -> int:
     support = sequence(common.get("propensity_support"), "gate_common.propensity_support")
     if len(support) != 2:
         raise ValueError("propensity support requires lower and upper bounds")
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    primary_target_id = require_primary_target(measurement, "P09")
     result = build_splits_and_weights(
         feature_panel=panel,
         risk_sets=risk_sets,
@@ -66,16 +69,7 @@ def main() -> int:
             if item.get("role") == "observability"
             and item.get("available_before_verification", True) is True
         ],
-        primary_target_id=(
-            str(value)
-            if (
-                value := mapping(loaded.registry.get("measurement"), "measurement").get(
-                    "primary_target_id"
-                )
-            )
-            is not None
-            else None
-        ),
+        primary_target_id=primary_target_id,
     )
     loaded.context.write("temporal_split_registry", result.splits, {})
     loaded.context.write("channel_time_split_registry", result.channel_splits, {})
@@ -84,7 +78,7 @@ def main() -> int:
         diagnostics = result.weight_diagnostics[fold_id]
         diagnostics["split_registry_hash"] = stable_hash(result.splits)
         loaded.context.write("weight_diagnostics", diagnostics, {"fold_id": fold_id})
-    print(f"P09 status=PASS folds={len(result.splits)}")
+    print(f"P09 status=PASS folds={len(result.splits)} primary_target={primary_target_id}")
     return 0
 
 
