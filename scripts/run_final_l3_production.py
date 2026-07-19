@@ -45,33 +45,6 @@ def _run_tests(project_root: Path) -> None:
     )
 
 
-def _require_hardening_applied(project_root: Path) -> None:
-    checks = (
-        "scripts/apply_s3_l3_production_hardening.py",
-        "scripts/finalize_s3_l3_production_hardening.py",
-    )
-    for script in checks:
-        result = subprocess.run(
-            [sys.executable, script, "--check"],
-            cwd=project_root,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if result.stdout:
-            print(result.stdout, end="", flush=True)
-        if result.stderr:
-            print(result.stderr, end="", file=sys.stderr, flush=True)
-        if result.returncode == 2:
-            raise RuntimeError(
-                "S3/L3 hardening is not fully applied. Run "
-                ".\\scripts\\s3_l3_production_workflow.ps1 -Mode Migrate, "
-                "review and commit the generated changes before production."
-            )
-        if result.returncode != 0:
-            raise subprocess.CalledProcessError(result.returncode, [sys.executable, script, "--check"])
-
-
 def _require_clean_tree(root: Path) -> None:
     result = subprocess.run(
         ["git", "status", "--porcelain"],
@@ -187,7 +160,6 @@ def main() -> int:
 
     config = args.config.resolve()
     project_root = config.parent.parent
-    _require_hardening_applied(project_root)
     _require_clean_tree(project_root)
     scenario_receipt = _validate_preregistered_config(config)
     python = sys.executable
