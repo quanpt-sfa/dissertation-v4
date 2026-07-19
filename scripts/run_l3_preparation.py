@@ -10,9 +10,22 @@ from pathlib import Path
 from typing import Any
 
 
-def _run(command: list[str], *, cwd: Path) -> None:
+def _run(command: list[str], *, cwd: Path, capture: bool = False) -> str:
     print("+", " ".join(command), flush=True)
-    subprocess.run(command, cwd=cwd, check=True)
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        text=True,
+        capture_output=capture,
+        check=True,
+    )
+    if capture:
+        if result.stdout:
+            print(result.stdout, end="", flush=True)
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr, flush=True)
+        return result.stdout
+    return ""
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -21,6 +34,16 @@ def _json(path: Path) -> dict[str, Any]:
     raw: object = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"JSON object required: {path}")
+    return raw
+
+
+def _parse_prefixed_json(output: str, prefix: str) -> dict[str, Any]:
+    matches = [line[len(prefix) :] for line in output.splitlines() if line.startswith(prefix)]
+    if len(matches) != 1:
+        raise RuntimeError(f"expected exactly one {prefix} line, found {len(matches)}")
+    raw: object = json.loads(matches[0])
+    if not isinstance(raw, dict):
+        raise ValueError(f"{prefix} payload must be a JSON object")
     return raw
 
 
@@ -112,7 +135,7 @@ def main() -> int:
         ],
         cwd=project_root,
     )
-    _run(
+    calibration_output = _run(
         [
             python,
             "scripts/report_measurement_calibration.py",
@@ -124,10 +147,18 @@ def main() -> int:
             str(calibration_dir),
         ],
         cwd=project_root,
+        capture=True,
     )
 
     s3 = _json(s3_dir / "s3_year_audit_summary.json")
-    calibration = _json(calibration_dir / "measurement_calibration_summary.json")
+    calibration = _parse_prefixed_json(
+        calibration_output, "MEASUREMENT_CALIBRATION_JSON="
+    )
+    calibration_dir.mkdir(parents=True, exist_ok=True)
+    (calibration_dir / "measurement_calibration_summary.json").write_text(
+        json.dumps(calibration, ensure_ascii=False, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     blockers = _blockers(s3, calibration)
     receipt = {
         "run_id": args.run_id,
