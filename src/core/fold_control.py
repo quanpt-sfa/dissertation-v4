@@ -10,9 +10,17 @@ from core.semantic_keys import OUTER_FOLD, TARGET_ID
 def require_primary_target(measurement: object, stage_id: str) -> str:
     if not isinstance(measurement, dict):
         raise RuntimeError(f"{stage_id}_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_NOT_LOCKED")
-    primary = cast(dict[str, Any], measurement).get("primary_target_id")
+    configuration = cast(dict[str, Any], measurement)
+    primary = configuration.get("primary_target_id")
+    if not isinstance(primary, str) or not primary.strip():
+        execution = configuration.get("execution_tracks")
+        if isinstance(execution, dict):
+            primary = cast(dict[str, Any], execution).get("primary_target_id")
     if not isinstance(primary, str) or not primary.strip():
         raise RuntimeError(f"{stage_id}_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_NOT_LOCKED")
+    candidates = configuration.get("candidate_targets")
+    if not isinstance(candidates, dict) or primary.strip() not in candidates:
+        raise RuntimeError(f"{stage_id}_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_NOT_REGISTERED")
     return primary.strip()
 
 

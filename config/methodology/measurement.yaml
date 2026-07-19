@@ -20,6 +20,17 @@ measurement:
     L1: candidate_binary_aggregation
     L2: alternative_aggregation
     L3: measurement_sensitivity
+  execution_tracks:
+    mode: sequential_capability_gated
+    primary_target_id: L1_ANNUAL
+    order: [L1_ANNUAL, L2, L3_fixed_pi]
+    primary_required: true
+    optional_unavailable_policy: skip_track_not_pipeline
+    outer_performance_selection_forbidden: true
+    track_ids:
+      L1_ANNUAL: track_l1
+      L2: track_l2
+      L3_fixed_pi: track_l3_fixed_pi
   selection_candidates:
   - L2
   - L3_fixed_pi

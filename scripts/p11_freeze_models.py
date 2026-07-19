@@ -1,11 +1,11 @@
-"""P11 CLI: fit fold-local models, emit predictions, and freeze all hashes."""
+"""P11 CLI: fit sequential fold-local measurement tracks and freeze hashes."""
 
 from __future__ import annotations
 
 import argparse
 import sys
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -14,30 +14,45 @@ import pandas as pd
 from core.fold_control import require_confirmatory_fold, require_primary_target
 from core.pipeline import load_run, mapping, physical_columns, sequence, stable_hash
 from core.rng import derive_seed
-from core.semantic_keys import OUTER_FOLD
+from core.semantic_keys import MEASUREMENT_ID, OUTER_FOLD
 from measurement.service import fold_local_l3_target_frame, measurement_target_frame
 from modeling.service import ModelFitResult, fit_anchor_pu_fold, fit_fold_models
+from selection.track_plan import executable_tracks
 
 
-def _combine_fits(fits: list[ModelFitResult], *, selected_track_b: bool) -> ModelFitResult:
+def _combine_fits(
+    fits: list[ModelFitResult],
+    *,
+    required_fit: ModelFitResult,
+    track_statuses: dict[str, str],
+) -> ModelFitResult:
     model_rows: list[object] = []
     target_rows: list[object] = []
+    oof_frames: list[pd.DataFrame] = []
+    outer_frames: list[pd.DataFrame] = []
     for fit in fits:
         model_rows.extend(sequence(fit.models.get("models"), "fitted models"))
         target_rows.extend(sequence(fit.models.get("oof_training_targets"), "OOF training targets"))
-    required_count = 2 if selected_track_b else 1
-    required_pass = all(fit.models.get("status") == "PASS" for fit in fits[:required_count])
+        if not fit.oof_predictions.empty:
+            oof_frames.append(fit.oof_predictions)
+        if not fit.outer_predictions.empty:
+            outer_frames.append(fit.outer_predictions)
+    required_pass = (
+        required_fit.models.get("status") == "PASS"
+        and not required_fit.oof_predictions.empty
+        and not required_fit.outer_predictions.empty
+    )
     return ModelFitResult(
         models={
             "status": "PASS" if required_pass else "SKIPPED",
-            "track_a_executed": True,
-            "track_b_required": selected_track_b,
-            "track_b_executed": selected_track_b and len(fits) > 1,
+            "sequential_tracks": True,
+            "required_primary_track_passed": required_pass,
+            "track_statuses": track_statuses,
             "models": model_rows,
             "oof_training_targets": target_rows,
         },
-        oof_predictions=pd.concat([fit.oof_predictions for fit in fits], ignore_index=True),
-        outer_predictions=pd.concat([fit.outer_predictions for fit in fits], ignore_index=True),
+        oof_predictions=pd.concat(oof_frames, ignore_index=True) if oof_frames else pd.DataFrame(),
+        outer_predictions=pd.concat(outer_frames, ignore_index=True) if outer_frames else pd.DataFrame(),
     )
 
 
@@ -94,8 +109,7 @@ def main() -> int:
     )
     if not all(isinstance(value, pd.DataFrame) for value in (panel, inputs, weights)):
         raise ValueError("P11 tabular inputs must be DataFrames")
-    selected = selection.get("selected_measurement")
-    selected_measurement = str(selected) if selected not in {None, "none"} else None
+
     learners = mapping(loaded.registry.get("learners"), "learners")
     learner_ids = [
         str(value) for value in sequence(learners.get("confirmatory"), "learners.confirmatory")
@@ -110,7 +124,15 @@ def main() -> int:
             f"{missing_search_spaces} under learners.tuning.search_spaces"
         )
     maximum_configurations = int(tuning["max_valid_configurations_per_learner_inner_fold"])
-    track_a = fit_fold_models(
+    columns = physical_columns(loaded.registry)
+    plan_tracks = executable_tracks(selection)
+    primary_track = next(
+        (item for item in plan_tracks if item.get("role") == "required_primary"), None
+    )
+    if primary_track is None or primary_track.get(MEASUREMENT_ID) != primary:
+        raise RuntimeError("P11 sequential plan is missing the required primary track")
+
+    track_l1 = fit_fold_models(
         feature_panel=cast(pd.DataFrame, panel),
         feature_registry=[mapping(item, "feature registry item") for item in feature_registry],
         label_inputs=cast(pd.DataFrame, inputs),
@@ -120,66 +142,69 @@ def main() -> int:
         learner_settings=settings,
         target_id=primary,
         measurement_id=primary,
-        columns=physical_columns(loaded.registry),
-        random_state=derive_seed(loaded.protocol_hash, "P11", coordinates, "model_fit")
+        columns=columns,
+        random_state=derive_seed(loaded.protocol_hash, "P11", coordinates, "track_l1_model_fit")
         % (2**32 - 1),
-        track_id="track_a",
+        track_id=str(primary_track["track_id"]),
         learner_search_spaces=search_spaces,
         maximum_valid_configurations=maximum_configurations,
     )
-    fits = [track_a]
-    if selected_measurement is not None:
-        missingness = mapping(measurement.get("l2_missingness"), "measurement.l2_missingness")
-        minimum_channels = missingness.get("minimum_observed_channels")
+    fits = [track_l1]
+    track_statuses: dict[str, str] = {str(primary_track["track_id"]): str(track_l1.models["status"])}
+
+    optional_learners = [
+        value for value in learner_ids if value in {"elastic_net_logistic", "main_boosting"}
+    ]
+    if not optional_learners:
+        raise RuntimeError("Optional measurement tracks require logistic and/or boosting learners")
+    missingness = mapping(measurement.get("l2_missingness"), "measurement.l2_missingness")
+    minimum_channels = missingness.get("minimum_observed_channels")
+    for track in plan_tracks:
+        if track.get("role") == "required_primary":
+            continue
+        measurement_id = str(track[MEASUREMENT_ID])
+        track_id = str(track["track_id"])
         if not isinstance(minimum_channels, int) or minimum_channels < 1:
-            raise RuntimeError(
-                "selected Track B requires measurement.l2_missingness."
-                "minimum_observed_channels to be empirically locked"
-            )
-        if selected_measurement == "L3_fixed_pi":
+            track_statuses[track_id] = "SKIPPED_CONFIGURATION_UNAVAILABLE"
+            continue
+        if measurement_id == "L3_fixed_pi":
             target_values = fold_local_l3_target_frame(
                 channel_selection=channel_selection,
                 outer_year=int(args.outer_fold),
-                columns=physical_columns(loaded.registry),
+                columns=columns,
             )
         else:
             target_values = measurement_target_frame(
                 matrices=matrices,
-                measurement_id=selected_measurement,
+                measurement_id=measurement_id,
                 minimum_observed_channels=minimum_channels,
-                columns=physical_columns(loaded.registry),
+                columns=columns,
             )
-        track_b_learners = [
-            value for value in learner_ids if value in {"elastic_net_logistic", "main_boosting"}
-        ]
-        if not track_b_learners:
-            raise RuntimeError("Track B requires registered logistic and/or boosting learners")
-        fits.append(
-            fit_fold_models(
-                feature_panel=cast(pd.DataFrame, panel),
-                feature_registry=[
-                    mapping(item, "feature registry item") for item in feature_registry
-                ],
-                label_inputs=cast(pd.DataFrame, inputs),
-                weights=cast(pd.DataFrame, weights),
-                outer_year=int(args.outer_fold),
-                learner_ids=track_b_learners,
-                learner_settings=settings,
-                target_id=selected_measurement,
-                measurement_id=selected_measurement,
-                columns=physical_columns(loaded.registry),
-                random_state=derive_seed(
-                    loaded.protocol_hash, "P11", coordinates, "track_b_model_fit"
-                )
-                % (2**32 - 1),
-                target_values=target_values,
-                soft_target=True,
-                target_transform="training_ecdf" if selected_measurement == "L2" else "identity",
-                track_id="track_b",
-                learner_search_spaces=search_spaces,
-                maximum_valid_configurations=maximum_configurations,
+        optional_fit = fit_fold_models(
+            feature_panel=cast(pd.DataFrame, panel),
+            feature_registry=[mapping(item, "feature registry item") for item in feature_registry],
+            label_inputs=cast(pd.DataFrame, inputs),
+            weights=cast(pd.DataFrame, weights),
+            outer_year=int(args.outer_fold),
+            learner_ids=optional_learners,
+            learner_settings=settings,
+            target_id=primary,
+            measurement_id=measurement_id,
+            columns=columns,
+            random_state=derive_seed(
+                loaded.protocol_hash, "P11", coordinates, f"{track_id}_model_fit"
             )
+            % (2**32 - 1),
+            target_values=target_values,
+            soft_target=True,
+            target_transform="training_ecdf" if measurement_id == "L2" else "identity",
+            track_id=track_id,
+            learner_search_spaces=search_spaces,
+            maximum_valid_configurations=maximum_configurations,
         )
+        fits.append(optional_fit)
+        track_statuses[track_id] = str(optional_fit.models["status"])
+
     pu_results: list[ModelFitResult] = []
     if anchor_capability.get("status") == "AVAILABLE":
         for anchor_source_id in sequence(
@@ -188,15 +213,13 @@ def main() -> int:
             pu_results.append(
                 fit_anchor_pu_fold(
                     feature_panel=cast(pd.DataFrame, panel),
-                    feature_registry=[
-                        mapping(item, "feature registry item") for item in feature_registry
-                    ],
+                    feature_registry=[mapping(item, "feature registry item") for item in feature_registry],
                     label_inputs=cast(pd.DataFrame, inputs),
                     weights=cast(pd.DataFrame, weights),
                     anchor_source_id=str(anchor_source_id),
                     outer_year=int(args.outer_fold),
                     settings=settings,
-                    columns=physical_columns(loaded.registry),
+                    columns=columns,
                     random_state=derive_seed(
                         loaded.protocol_hash,
                         "P11",
@@ -208,15 +231,16 @@ def main() -> int:
                 )
             )
     fits.extend(pu_results)
-    result = _combine_fits(fits, selected_track_b=selected_measurement is not None)
+    result = _combine_fits(fits, required_fit=track_l1, track_statuses=track_statuses)
     if (
         result.models["status"] != "PASS"
         or result.oof_predictions.empty
         or result.outer_predictions.empty
     ):
         raise RuntimeError(
-            "P11_REQUIRED_MODEL_TRACK_INCOMPLETE: SKIPPED is not a passing production state"
+            "P11_REQUIRED_PRIMARY_TRACK_INCOMPLETE: optional tracks may skip, primary L1 may not"
         )
+
     model_manifest = loaded.context.write("model_artifacts", result.models, coordinates)
     oof_manifest = loaded.context.write(
         "development_oof_predictions", result.oof_predictions, coordinates
@@ -233,14 +257,14 @@ def main() -> int:
     receipt: dict[str, object] = {
         "status": "PASS",
         "reason_code": None,
-        "track_a_status": track_a.models["status"],
-        "track_b_status": fits[1].models["status"]
-        if selected_measurement is not None
-        else "NOT_SELECTED",
+        "required_primary_track": str(primary_track["track_id"]),
+        "required_primary_status": track_l1.models["status"],
+        "track_statuses": track_statuses,
+        "optional_track_failure_policy": "skip_track_not_pipeline",
         "anchor_pu_statuses": [fit.models["status"] for fit in pu_results]
         if pu_results
         else ["UNAVAILABLE_BY_DESIGN"],
-        "selected_measurement": selected_measurement or "none",
+        "selected_measurement": primary,
         "tuning_valid_configuration_counts": {
             str(item["model_id"]): item.get("valid_configuration_count")
             for item in fitted_model_rows
@@ -268,7 +292,7 @@ def main() -> int:
     loaded.context.write("model_freeze_receipt", receipt, coordinates)
     print(
         f"P11 status={receipt['status']} fold={args.outer_fold} "
-        f"models={len(sequence(result.models['models'], 'fitted models'))}"
+        f"tracks={track_statuses} models={len(fitted_model_rows)}"
     )
     return 0
 

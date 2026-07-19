@@ -1,4 +1,4 @@
-"""P10 CLI: fold-specific development-only measurement selection."""
+"""P10 CLI: build fold-specific sequential measurement-track plans."""
 
 from __future__ import annotations
 
@@ -12,8 +12,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from core.fold_control import production_path_blockers, require_primary_target
 from core.pipeline import load_run, mapping, sequence
 from core.rng import generator
-from core.semantic_keys import CHANNEL_ID, OUTER_FOLD
+from core.semantic_keys import CHANNEL_ID, MEASUREMENT_ID, OUTER_FOLD
 from selection.service import fit_l3_fold_candidate, select_measurement
+from selection.track_plan import build_sequential_track_plan
 
 
 def main() -> int:
@@ -57,16 +58,20 @@ def main() -> int:
         raise RuntimeError(
             f"P10_PRODUCTION_PATH_BLOCKED: fold={args.outer_fold} blockers={','.join(blockers)}"
         )
-    raw_candidates = sequence(
-        measurement.get("selection_candidates"), "measurement.selection_candidates"
-    )
-    candidates = [str(value) for value in raw_candidates]
+
+    candidates = [
+        str(value)
+        for value in sequence(
+            measurement.get("selection_candidates"), "measurement.selection_candidates"
+        )
+    ]
     missingness = mapping(measurement.get("l2_missingness"), "measurement.l2_missingness")
     minimum_channels = missingness.get("minimum_observed_channels")
     if minimum_channels is not None and (
         not isinstance(minimum_channels, int) or minimum_channels < 1
     ):
         raise ValueError("measurement.l2_missingness.minimum_observed_channels must be positive")
+
     l3_fold_result: dict[str, Any] | None = None
     if (
         "L3_fixed_pi" in candidates
@@ -77,7 +82,8 @@ def main() -> int:
         l3_model = mapping(measurement.get("l3_model"), "measurement.l3_model")
         operational = mapping(l3_model.get("operational"), "measurement.l3_model.operational")
         fixed_pi_grid = [
-            float(value) for value in sequence(operational.get("fixed_pi_grid"), "L3 fixed-pi grid")
+            float(value)
+            for value in sequence(operational.get("fixed_pi_grid"), "L3 fixed-pi grid")
         ]
         source_channels, accuracy_priors = _l3_bindings(
             registry=loaded.registry,
@@ -107,6 +113,7 @@ def main() -> int:
                 "l3_fold_local_channel_selection",
             ),
         )
+
     result = select_measurement(
         matrices=matrices,
         outer_year=int(args.outer_fold),
@@ -115,12 +122,43 @@ def main() -> int:
         l3_fold_result=l3_fold_result,
         minimum_observed_channels=minimum_channels,
     )
-    loaded.context.write("measurement_candidate_results", result.candidates, coordinates)
-    loaded.context.write("measurement_selection_registry", result.selection, coordinates)
-    loaded.context.write("channel_measurement_selection", result.channel_selection, coordinates)
-    print(
-        f"P10 status=PASS fold={args.outer_fold} selected={result.selection['selected_measurement']}"
+    execution = mapping(measurement.get("execution_tracks"), "measurement.execution_tracks")
+    order = [str(value) for value in sequence(execution.get("order"), "execution_tracks.order")]
+    track_ids = {
+        str(key): str(value)
+        for key, value in mapping(execution.get("track_ids"), "execution_tracks.track_ids").items()
+    }
+    plan = build_sequential_track_plan(
+        primary_target_id=primary_target_id,
+        outer_fold=args.outer_fold,
+        candidate_results=result.candidates,
+        execution_order=order,
+        track_ids=track_ids,
     )
+    selection_registry = {
+        **plan,
+        "selected_measurement": primary_target_id,
+        "optional_candidate_selected_for_diagnostics": result.selection.get("selected_measurement"),
+        "optional_selection_scope": result.selection.get("selection_scope"),
+    }
+    channel_selection = dict(result.channel_selection)
+    if l3_fold_result is not None and l3_fold_result.get("status") == "PASS":
+        channel_selection.update(
+            {
+                "l3_target_rows": l3_fold_result.get("target_rows", []),
+                "l3_selected_fixed_pi": l3_fold_result.get("selected_fixed_pi"),
+                "l3_selection_objective": l3_fold_result.get("selection_objective"),
+                "l3_full_fit_diagnostics": l3_fold_result.get("full_fit_diagnostics"),
+                "l3_source_accuracy": l3_fold_result.get("source_accuracy"),
+                "l3_channel_random_effect_sd": l3_fold_result.get("channel_random_effect_sd"),
+            }
+        )
+
+    loaded.context.write("measurement_candidate_results", result.candidates, coordinates)
+    loaded.context.write("measurement_selection_registry", selection_registry, coordinates)
+    loaded.context.write("channel_measurement_selection", channel_selection, coordinates)
+    statuses = ",".join(f"{item[MEASUREMENT_ID]}={item['status']}" for item in plan["tracks"])
+    print(f"P10 status=PASS fold={args.outer_fold} tracks={statuses}")
     return 0
 
 
