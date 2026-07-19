@@ -17,6 +17,7 @@ from .config_model import CompiledRegistry
 from .config_validation import validate_methodology, validate_references
 from .decision_traceability import validate_decisions, validate_test_registry
 from .hashing import protocol_hash
+from .l3_scenarios import locked_l3_scenario_registry
 from .schema_registry import compile_schemas
 
 COMPILER_VERSION = "0.2.0"
@@ -34,6 +35,7 @@ def compile_registry(config_path: Path, snapshot_path: Path | None = None) -> Co
     )
     validate_references(registry)
     validate_methodology(registry)
+    locked_l3_scenario_registry(registry)
     registry["decision_traceability"] = validate_decisions(registry)
     validate_test_registry(registry, PROJECT_ROOT)
     registry["access_matrix"] = compile_access_matrix(
