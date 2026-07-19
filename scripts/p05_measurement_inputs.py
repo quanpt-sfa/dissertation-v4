@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import pandas as pd
 
 from core.evidence_registry import logical_evidence_sources
+from core.l3_scenarios import L3ScenarioRegistry, locked_l3_scenario_registry
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.rng import generator
 from core.semantic_keys import FISCAL_YEAR, MATURE
@@ -113,6 +114,7 @@ def main() -> int:
         source_channels=primary_expected_sources,
         source_profiles=primary_source_profiles,
         measurement=measurement,
+        scenario_registry=locked_l3_scenario_registry(loaded.registry),
         initial_outer_year=int(
             mapping(loaded.registry.get("folds"), "folds")["initial_outer_year"]
         ),
@@ -169,7 +171,6 @@ def main() -> int:
     return 0
 
 
-
 def _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:
     source_set_id = measurement.get("primary_source_set_id")
     if not isinstance(source_set_id, str) or not source_set_id:
@@ -216,6 +217,7 @@ def _execute_l3_pilot(
     source_channels: dict[str, str],
     source_profiles: dict[str, str],
     measurement: dict[str, object],
+    scenario_registry: L3ScenarioRegistry,
     initial_outer_year: int,
     robust_fraction: float,
     rng: object,
@@ -227,33 +229,9 @@ def _execute_l3_pilot(
     if not l3_channel_capability_allows_pilot(capability):
         return
     model = mapping(measurement.get("l3_model"), "measurement.l3_model")
+    if model.get("scenario_selection_rule") != "preregistered_primary_only":
+        raise ValueError("L3 model must use preregistered_primary_only scenario selection")
     operational = mapping(model.get("operational"), "measurement.l3_model.operational")
-    grid = sequence(operational.get("fixed_pi_grid"), "l3 fixed_pi_grid")
-    priors_by_profile = mapping(
-        operational.get("accuracy_priors_by_profile"), "L3 priors by profile"
-    )
-    if not grid:
-        capability.update(
-            {
-                "status": "EMPIRICALLY_PENDING",
-                "pilot_executed": False,
-                "reason_code": "L3_FIXED_PI_GRID_NOT_LOCKED",
-                "required_config_key": "measurement.l3_model.operational.fixed_pi_grid",
-            }
-        )
-        return
-    missing_profiles = sorted(set(source_profiles.values()) - set(priors_by_profile))
-    if missing_profiles:
-        capability.update(
-            {
-                "status": "EMPIRICALLY_PENDING",
-                "pilot_executed": False,
-                "reason_code": "L3_ACCURACY_PRIORS_NOT_LOCKED",
-                "missing_profile_ids": missing_profiles,
-                "required_config_key": "measurement.l3_model.operational.accuracy_priors_by_profile",
-            }
-        )
-        return
     raw_rows = matrices.get("rows")
     if not isinstance(raw_rows, list):
         raise ValueError("L3 pilot requires matrix rows")
@@ -274,23 +252,29 @@ def _execute_l3_pilot(
                 "pilot_executed": False,
                 "reason_code": "NO_MATURE_DEVELOPMENT_ROWS_FOR_L3_PILOT",
                 "fit_scope": f"mature_development_years_before_{initial_outer_year}",
+                "scenario_selection_rule": "PRE_REGISTERED_PRIMARY",
+                "performance_based_scenario_selection": False,
                 "outer_outcomes_accessed": False,
+                "known_cases_accessed": False,
             }
         )
         return
     mcmc = mapping(operational.get("mcmc"), "L3 MCMC controls")
-    priors: dict[str, dict[str, float]] = {}
-    for source_id, profile_id in source_profiles.items():
-        raw_prior = mapping(priors_by_profile[profile_id], f"L3 prior profile={profile_id}")
-        priors[source_id] = {str(key): float(value) for key, value in raw_prior.items()}
     scenario_results: list[dict[str, object]] = []
-    for index, raw_pi in enumerate(grid):
-        fixed_pi = float(raw_pi)
+    for index, scenario in enumerate(scenario_registry.scenarios):
+        priors: dict[str, dict[str, float]] = {}
+        for source_id, profile_id in source_profiles.items():
+            raw_prior = scenario.accuracy_priors_by_profile.get(profile_id)
+            if raw_prior is None:
+                raise ValueError(
+                    f"scenario={scenario.scenario_id}: missing prior profile={profile_id}"
+                )
+            priors[source_id] = dict(raw_prior)
         fit = fit_fixed_pi_latent_class(
             rows=eligible_rows,
             source_channels=source_channels,
             accuracy_priors=priors,
-            fixed_pi=fixed_pi,
+            fixed_pi=scenario.fixed_pi,
             chains=int(mcmc["chains"]),
             warmup=int(mcmc["warmup_per_chain"]),
             draws=int(mcmc["draws_per_chain"]),
@@ -304,12 +288,15 @@ def _execute_l3_pilot(
         )
         attach_l3_pilot_posterior(
             rows=eligible_rows,
-            fixed_pi=fixed_pi,
+            fixed_pi=scenario.fixed_pi,
             posterior_mean=fit.posterior_mean,
         )
         scenario_results.append(
             {
-                "fixed_pi": fixed_pi,
+                "scenario_id": scenario.scenario_id,
+                "role": scenario.role,
+                "fixed_pi": scenario.fixed_pi,
+                "prior_set_id": scenario.prior_set_id,
                 "diagnostics": fit.diagnostics,
                 "source_accuracy": fit.source_accuracy,
                 "channel_random_effect_sd": fit.channel_random_effect_sd,
@@ -318,9 +305,11 @@ def _execute_l3_pilot(
                     "mean_max": max(fit.posterior_mean),
                     "retained_draws": len(fit.posterior_draws),
                 },
+                "diagnostic_role": "capability_and_reporting_only",
             }
         )
     eligible_fixed_pi: list[float] = []
+    eligible_scenario_ids: list[str] = []
     for item in scenario_results:
         if mapping(item["diagnostics"], "L3 diagnostics").get("eligible_for_gate1") is not True:
             continue
@@ -328,27 +317,31 @@ def _execute_l3_pilot(
         if not isinstance(raw_fixed_pi, (int, float)) or isinstance(raw_fixed_pi, bool):
             raise ValueError("L3 fixed-pi scenario must be numeric")
         eligible_fixed_pi.append(float(raw_fixed_pi))
+        eligible_scenario_ids.append(str(item["scenario_id"]))
     finalize_l3_pilot_posteriors(
         rows=eligible_rows,
         eligible_fixed_pi=eligible_fixed_pi,
     )
-    eligible_count = sum(
-        mapping(item["diagnostics"], "L3 diagnostics").get("eligible_for_gate1") is True
-        for item in scenario_results
-    )
-    eligible_fraction = eligible_count / len(scenario_results)
+    eligible_fraction = len(eligible_scenario_ids) / len(scenario_results)
+    primary_available = scenario_registry.primary_scenario_id in eligible_scenario_ids
+    available = primary_available and eligible_fraction >= robust_fraction
     capability.update(
         {
-            "status": "AVAILABLE"
-            if eligible_fraction >= robust_fraction
-            else "UNAVAILABLE_BY_DESIGN",
+            "status": "AVAILABLE" if available else "UNAVAILABLE_BY_DESIGN",
             "pilot_executed": True,
             "reason_code": None
-            if eligible_fraction >= robust_fraction
-            else "L3_DIAGNOSTICS_OR_ROBUSTNESS_FAILED",
+            if available
+            else "L3_PRIMARY_SCENARIO_DIAGNOSTICS_FAILED"
+            if not primary_available
+            else "L3_REGISTERED_SCENARIO_ROBUSTNESS_FAILED",
             "fit_scope": f"mature_development_years_before_{initial_outer_year}",
             "outer_outcomes_accessed": False,
-            "fixed_pi_scenarios": scenario_results,
+            "known_cases_accessed": False,
+            "scenario_registry_status": "LOCKED_AT_P0",
+            "primary_scenario_id": scenario_registry.primary_scenario_id,
+            "scenario_selection_rule": "PRE_REGISTERED_PRIMARY",
+            "performance_based_scenario_selection": False,
+            "registered_scenarios": scenario_results,
             "eligible_scenario_fraction": eligible_fraction,
             "required_robust_fraction": robust_fraction,
         }
