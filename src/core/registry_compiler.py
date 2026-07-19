@@ -17,6 +17,7 @@ from .config_model import CompiledRegistry
 from .config_validation import validate_methodology, validate_references
 from .decision_traceability import validate_decisions, validate_test_registry
 from .hashing import protocol_hash
+from .l3_assurance import apply_l3_preregistered_assurance
 from .l3_scenarios import locked_l3_scenario_registry
 from .schema_registry import compile_schemas
 
@@ -30,6 +31,7 @@ def compile_registry(config_path: Path, snapshot_path: Path | None = None) -> Co
     if snapshot_path is not None:
         registry = inject_snapshot(registry, snapshot_path)
         source_hashes["external/data_snapshot.json"] = _file_sha256(snapshot_path) or ""
+    apply_l3_preregistered_assurance(registry)
     registry["schemas"] = dict(
         compile_schemas(registry.get("schemas"), registry.get("columns")).schemas
     )
