@@ -389,7 +389,11 @@ def _incomplete_batch_commands(
         batch_key = coordinates.get("batch_" + "key", "")
         job = jobs_by_keys.get((sk, mk))
         if job is None:
-            continue  # orphan from a removed job — ignore
+            raise ValueError(
+                f"Incomplete batch/diagnostics coordinate mismatch at scenario_key={sk}, "
+                f"method_key={mk}, batch_key={batch_key} has no corresponding active job "
+                "configured in the execution profile. Please clean up the orphan artifacts."
+            )
         batch_size = int(job["batch_size"])
         batch_index = int(batch_key.removeprefix("b"))
         start = batch_index * batch_size
