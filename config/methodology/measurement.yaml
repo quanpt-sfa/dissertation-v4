@@ -57,7 +57,7 @@ measurement:
     upper_bound_sources:
     - coverage
     - likelihood
-    primary_prior: fixed_pi_grid
+    primary_prior: preregistered_l3_scenario_registry
     hierarchical_prior_role: sensitivity_only
   objectives:
     L2:
@@ -65,9 +65,13 @@ measurement:
     L3:
     - soft_cross_entropy
     - posterior_draws
-    ranking_loss_role: robustness
+    ranking_loss_role: capability_and_reporting_only
   l3_model:
     primary: fixed_pi_latent_class
+    scenario_registry_module: l3_scenarios
+    scenario_execution: run_all_registered_scenarios
+    scenario_selection_rule: preregistered_primary_only
+    performance_based_scenario_selection_forbidden: true
     source_specific_sensitivity_specificity: true
     channel_random_effect: true
     estimation: MCMC
@@ -76,8 +80,6 @@ measurement:
       estimated_parameter_bias_only: true
     pairwise_dependence_role: sensitivity_only
     operational:
-      fixed_pi_grid: []
-      accuracy_priors_by_profile: {}
       pilot_max_rows: 2000
       mcmc:
         chains: 4
