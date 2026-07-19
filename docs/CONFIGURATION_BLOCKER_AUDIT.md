@@ -5,10 +5,11 @@ table is imputed from outer outcomes or changed by this implementation.
 
 | Setting | Current value | Status | Effect |
 | --- | --- | --- | --- |
-| `measurement.primary_target_id` | `null` | `LEGACY_NULL_MIGRATION` | P10-P12 resolve the locked primary from `measurement.execution_tracks.primary_target_id`; the legacy field no longer blocks sequential execution. |
+| `measurement.primary_target_id` | `null` | `LEGACY_NULL_MIGRATION` | P09-P12 resolve the locked primary from `measurement.execution_tracks.primary_target_id`; the legacy field no longer blocks sequential execution. |
 | `measurement.execution_tracks.primary_target_id` | `L1_ANNUAL` | `LOCKED_PRIMARY_TRACK` | L1 is required and executes first; outer-performance target selection is forbidden. |
-| S1 materiality thresholds | `null` | `BLOCKING_PRIMARY_TRACK` | L1 audit-adjustment components cannot become confirmatory until the thresholds are locked. |
-| S1 denominator floor | `null` | `BLOCKING_PRIMARY_TRACK` | S1 materiality denominator remains unresolved. |
+| S1 profit materiality threshold | `0.10` | `LOCKED_PRIMARY_RULE` | A profit adjustment is positive when the absolute pre/post-audit difference exceeds 10% of absolute post-audit profit. |
+| S1 revenue materiality threshold | `0.01` | `LOCKED_PRIMARY_RULE` | A revenue adjustment is positive when the absolute pre/post-audit difference exceeds 1% of absolute post-audit revenue. |
+| S1 denominator floor | `0.0` | `LOCKED_ZERO_ONLY_GUARD` | No arbitrary VND floor is imposed; exact zero denominators remain invalid under the existing fail-closed rule. |
 | L2 formula | `null` | `SKIP_OPTIONAL_TRACK` | L2 is recorded as unavailable and skipped without blocking L1. |
 | L2 minimum observed channels | `null` | `SKIP_OPTIONAL_TRACK` | L2 eligibility is not locked; only the L2 track is skipped. |
 | L2 source quality | empty mapping | `SKIP_OPTIONAL_TRACK` | Quality-weighted L2 scoring is unavailable; only the L2 track is skipped. |

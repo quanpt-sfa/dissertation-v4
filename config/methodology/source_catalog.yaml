@@ -180,18 +180,18 @@ source_catalog:
           expected_unit: VND
           expected_scope: consolidated
           denominator: absolute_post_audit_value
-          minimum_absolute_denominator: null
+          minimum_absolute_denominator: 0.0
         logical_sources:
         - source_id: S1_profit_adjustment
           endpoint_id: profit_adjustment
           canonical_item: income_statement__18_loi_nhuan_sau_thue_thu_nhap_doanh_nghiep
           statement_family: income_statement
-          materiality_threshold: null
+          materiality_threshold: 0.10
         - source_id: S1_revenue_adjustment
           endpoint_id: revenue_adjustment
           canonical_item: income_statement__3_doanh_thu_thuan
           statement_family: income_statement
-          materiality_threshold: null
+          materiality_threshold: 0.01
       panel_mapping:
         enabled: true
         core_predictor: true
