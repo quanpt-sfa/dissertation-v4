@@ -9,10 +9,11 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from core.evidence_registry import logical_evidence_sources
 from core.fold_control import production_path_blockers, require_primary_target
 from core.pipeline import load_run, mapping, sequence
 from core.rng import generator
-from core.semantic_keys import CHANNEL_ID, MEASUREMENT_ID, OUTER_FOLD
+from core.semantic_keys import MEASUREMENT_ID, OUTER_FOLD
 from selection.service import fit_l3_fold_candidate, select_measurement
 from selection.track_plan import build_sequential_track_plan
 
@@ -167,30 +168,24 @@ def _l3_bindings(
     registry: dict[str, object],
     priors_by_profile: dict[str, Any],
 ) -> tuple[dict[str, str], dict[str, dict[str, float]]]:
-    data_sources = mapping(registry.get("data_sources"), "data_sources")
-    source_registry = mapping(data_sources.get("source_registry"), "source_registry")
-    sources = mapping(source_registry.get("sources"), "source_registry.sources")
+    """Bind L3 to logical endpoints, not physical snapshot file identifiers."""
+    sources = logical_evidence_sources(registry)
     source_channels: dict[str, str] = {}
     accuracy_priors: dict[str, dict[str, float]] = {}
-    for source_id, raw_source in sources.items():
-        source = mapping(raw_source, f"source={source_id}")
-        if source.get("role") != "evidence" or source.get("enabled") is not True:
-            continue
-        channel = source.get(CHANNEL_ID)
-        profile_id = source.get("profile_id")
-        if not isinstance(channel, str) or not isinstance(profile_id, str):
-            raise ValueError(f"source={source_id}: L3 channel and profile bindings required")
-        raw_prior: object = priors_by_profile.get(profile_id)
-        prior = mapping(raw_prior, f"L3 accuracy prior profile={profile_id}")
-        source_channels[source_id] = channel
+    for logical_source_id, source in sorted(sources.items()):
+        raw_prior: object = priors_by_profile.get(source.profile_id)
+        prior = mapping(raw_prior, f"L3 accuracy prior profile={source.profile_id}")
         parsed_prior: dict[str, float] = {}
         for key, value in prior.items():
             if not isinstance(value, (int, float)) or isinstance(value, bool):
-                raise ValueError(f"profile={profile_id}: L3 prior values must be numeric")
+                raise ValueError(
+                    f"profile={source.profile_id}: L3 prior values must be numeric"
+                )
             parsed_prior[str(key)] = float(value)
-        accuracy_priors[source_id] = parsed_prior
+        source_channels[logical_source_id] = source.channel_id
+        accuracy_priors[logical_source_id] = parsed_prior
     if not source_channels:
-        raise ValueError("P10 L3 selection requires registered evidence sources")
+        raise ValueError("P10 L3 selection requires registered logical evidence sources")
     return source_channels, accuracy_priors
 
 
