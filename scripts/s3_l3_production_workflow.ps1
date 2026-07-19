@@ -25,9 +25,10 @@ function Invoke-UvPython {
 
 switch ($Mode) {
     "Migrate" {
-        Invoke-UvPython scripts/apply_s3_l3_production_hardening.py --check
+        Write-Host "+ uv run python scripts/apply_s3_l3_production_hardening.py --check"
+        & uv run python scripts/apply_s3_l3_production_hardening.py --check
         if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 2) {
-            throw "Hardening check failed"
+            throw "Hardening check failed with exit code $LASTEXITCODE"
         }
         Invoke-UvPython scripts/apply_s3_l3_production_hardening.py --apply
         Invoke-UvPython scripts/finalize_s3_l3_production_hardening.py --apply
