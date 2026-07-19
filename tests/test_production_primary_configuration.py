@@ -6,18 +6,53 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
-from core.evidence_registry import logical_evidence_sources
+from core.evidence_registry import LogicalEvidenceSource
 from core.fold_control import require_primary_target
 from core.registry_compiler import compile_registry
 from evidence.annual import AdjustmentRow, build_audit_adjustment_records
 
 ROOT = Path(__file__).resolve().parents[1]
+S1_PROFILE_ID = "financial_statement_core_long"
 
 
 def _registry() -> dict[str, Any]:
     return cast(
         dict[str, Any],
         compile_registry(ROOT / "config" / "pipeline.yaml").registry,
+    )
+
+
+def _s1_catalog_configuration() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    registry = _registry()
+    catalog = cast(dict[str, Any], registry["source_catalog"])
+    profiles = cast(dict[str, Any], catalog["profiles"])
+    profile = cast(dict[str, Any], profiles[S1_PROFILE_ID])
+    evidence = cast(dict[str, Any], profile["evidence_mapping"])
+    logical_sources = {
+        str(item["source_id"]): cast(dict[str, Any], item)
+        for item in cast(list[dict[str, Any]], evidence["logical_sources"])
+    }
+    return profile, logical_sources
+
+
+def _logical_s1_source(source_id: str) -> LogicalEvidenceSource:
+    profile, logical_sources = _s1_catalog_configuration()
+    evidence = cast(dict[str, Any], profile["evidence_mapping"])
+    logical = logical_sources[source_id]
+    return LogicalEvidenceSource(
+        source_id=source_id,
+        endpoint_id=str(logical["endpoint_id"]),
+        channel_id=str(profile["channel_id"]),
+        physical_source_id=S1_PROFILE_ID,
+        profile_id=S1_PROFILE_ID,
+        processor=str(evidence["processor"]),
+        temporal_role=str(evidence["temporal_role"]),
+        availability_rule=str(evidence["availability_rule"]),
+        explicit_negative_allowed=bool(evidence["explicit_negative_allowed"]),
+        verification_status=str(profile["verification_status"]),
+        opportunity_semantic=str(evidence["opportunity_semantic"]),
+        logical_config=dict(logical),
+        processor_config=dict(evidence),
     )
 
 
@@ -28,17 +63,17 @@ def test_production_primary_target_resolves_to_l1_annual() -> None:
 
 
 def test_s1_materiality_rules_are_locked_in_registry() -> None:
-    sources = logical_evidence_sources(_registry())
-    profit = sources["S1_profit_adjustment"]
-    revenue = sources["S1_revenue_adjustment"]
+    profile, logical_sources = _s1_catalog_configuration()
+    evidence = cast(dict[str, Any], profile["evidence_mapping"])
+    adjustment = cast(dict[str, Any], evidence["audit_adjustment"])
 
-    assert profit.logical_config["materiality_threshold"] == 0.10
-    assert revenue.logical_config["materiality_threshold"] == 0.01
-    assert profit.processor_config["audit_adjustment"]["minimum_absolute_denominator"] == 0.0
+    assert logical_sources["S1_profit_adjustment"]["materiality_threshold"] == 0.10
+    assert logical_sources["S1_revenue_adjustment"]["materiality_threshold"] == 0.01
+    assert adjustment["minimum_absolute_denominator"] == 0.0
 
 
 def test_zero_floor_means_only_zero_denominator_is_invalid() -> None:
-    source = logical_evidence_sources(_registry())["S1_profit_adjustment"]
+    source = _logical_s1_source("S1_profit_adjustment")
     anchor = {("F1", 2020): datetime(2021, 3, 31)}
     common = {
         "firm_id": "F1",
