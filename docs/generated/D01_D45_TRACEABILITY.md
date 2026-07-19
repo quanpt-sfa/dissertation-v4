@@ -9,7 +9,7 @@ Source: config/pipeline.yaml
 | D03 | Tập nguồn J | Chỉ kênh có ngày khả dụng rõ và liên kết firm-year đủ tin cậy. | T003 | raw_audit, channel_measurement_selection |
 | D04 | Nguồn neo | Nguồn chính thức hoặc tư pháp có độ xác nhận cao theo tiêu chí. | T004 | raw_audit, l3_pilot_capability |
 | D05 | Outcome chính | L1: BJ_i,t,h đã trưởng thành và follow-up đầy đủ. | T005 | l0_l1_inputs, evaluation_metrics |
-| D06 | Miền prior/accuracy | Lower bound từ nguồn xác nhận cao; upper bound từ coverage và likelihood. | T006 | l3_pilot_capability, simulation_scenario_registry |
+| D06 | Miền prior/accuracy | Các kịch bản fixed-π và prior Beta theo profile nguồn được đăng ký trước trong l3_scenarios, đưa vào protocol hash và khóa tại P0; neutral_pi_03 là kịch bản chính. | T006 | l3_pilot_capability, channel_measurement_selection |
 | D07 | Ngân sách rà soát | Top 5% tập rủi ro. | T007 | utility_scenarios |
 | D08 | Learner roster | Elastic-net logistic, random forest, một boosting chính; nhánh Anchor-PU. | T008 | model_artifacts |
 | D09 | Tuning budget | Không quá 50 cấu hình hợp lệ mỗi learner/inner fold hoặc ngân sách tương đương. | T009 | model_freeze_receipt |
