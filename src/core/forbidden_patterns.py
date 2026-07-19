@@ -138,15 +138,16 @@ def validate_source_patterns(
             for pattern in (*FORBIDDEN_IO, *FORBIDDEN_APPEND):
                 if pattern in text:
                     violations.append(
-                        f"source={path}: forbidden pattern {pattern}; "
+                        f"source={relative}: forbidden pattern {pattern}; "
                         "use the registered raw-reader or core runtime layer"
                     )
 
         try:
-            tree = ast.parse(text, filename=str(path))
+            tree = ast.parse(text, filename=relative)
         except SyntaxError as exc:
             violations.append(
-                f"source={path}: Python syntax error at line={exc.lineno} offset={exc.offset}"
+                f"source={relative}: Python syntax error at line={exc.lineno} "
+                f"offset={exc.offset}"
             )
             continue
 
@@ -160,14 +161,15 @@ def validate_source_patterns(
             copied_columns = sorted(physical_names & literals)
             if copied_columns:
                 violations.append(
-                    f"source={path}: registered physical columns "
+                    f"source={relative}: registered physical columns "
                     f"copied into source: {copied_columns}"
                 )
 
         copied_paths = sorted(artifact_paths & literals)
         if copied_paths:
             violations.append(
-                f"source={path}: registered artifact paths copied into source: {copied_paths}"
+                f"source={relative}: registered artifact paths copied into source: "
+                f"{copied_paths}"
             )
 
         if relative not in REPOSITORY_MAINTENANCE_SCRIPTS:
@@ -183,7 +185,7 @@ def validate_source_patterns(
             )
             if direct_config_paths:
                 violations.append(
-                    f"source={path}: direct source-config paths are forbidden: "
+                    f"source={relative}: direct source-config paths are forbidden: "
                     f"{direct_config_paths}"
                 )
 
