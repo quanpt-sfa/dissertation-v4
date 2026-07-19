@@ -6,6 +6,9 @@ import pytest
 
 from core.errors import ConfigurationError
 from core.forbidden_patterns import validate_source_patterns
+from core.registry_compiler import compile_registry
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _registry() -> dict[str, object]:
@@ -14,7 +17,15 @@ def _registry() -> dict[str, object]:
             "scenario_id": {
                 "physical_name": "scenario_id",
                 "semantic_role": "simulation_scenario",
-            }
+            },
+            "outer_fold": {
+                "physical_name": "outer_fold",
+                "semantic_role": "fold_key",
+            },
+            "firm_id": {
+                "physical_name": "firm_master_id",
+                "semantic_role": "entity_key",
+            },
         },
         "artifacts": {},
     }
@@ -26,24 +37,38 @@ def _write(root: Path, relative: str, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def test_scenario_metadata_literal_exception_is_path_specific(tmp_path: Path) -> None:
+def test_control_plane_metadata_roles_are_not_data_bindings(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        "scripts/p05_measurement_inputs.py",
-        'payload = {"scenario_id": "neutral_pi_03"}\n',
+        "scripts/control_plane.py",
+        'payload = {"scenario_id": "neutral_pi_03", "outer_fold": "2020"}\n',
     )
-    _write(
-        tmp_path,
-        "src/selection/preregistered_l3.py",
-        'payload = {"scenario_id": "neutral_pi_03"}\n',
-    )
-
     validate_source_patterns(tmp_path, _registry())
 
     _write(
         tmp_path,
-        "scripts/unregistered_production_stage.py",
-        'payload = {"scenario_id": "neutral_pi_03"}\n',
+        "scripts/data_binding.py",
+        'payload = {"firm_master_id": "F1"}\n',
     )
     with pytest.raises(ConfigurationError, match="registered physical columns"):
         validate_source_patterns(tmp_path, _registry())
+
+
+def test_exception_is_semantic_role_based_not_name_based(tmp_path: Path) -> None:
+    registry = {
+        "columns": {
+            "misclassified": {
+                "physical_name": "scenario_id",
+                "semantic_role": "entity_key",
+            }
+        },
+        "artifacts": {},
+    }
+    _write(tmp_path, "scripts/stage.py", 'payload = {"scenario_id": "F1"}\n')
+    with pytest.raises(ConfigurationError, match="registered physical columns"):
+        validate_source_patterns(tmp_path, registry)
+
+
+def test_current_repository_passes_complete_static_source_scan() -> None:
+    compiled = compile_registry(ROOT / "config" / "pipeline.yaml")
+    validate_source_patterns(ROOT, dict(compiled.registry))
