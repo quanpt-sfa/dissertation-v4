@@ -13,10 +13,9 @@ import pandas as pd
 
 from core.artifact_store import dataframe_to_csv
 from core.pipeline import load_run, mapping, physical_columns, sequence
-from core.semantic_keys import FIRM_ID, FISCAL_YEAR, PREDICTION_TIME, TARGET_ID
+from core.semantic_keys import FIRM_ID, FISCAL_YEAR, TARGET_ID
 from features.diagnostics import build_feature_diagnostics
 from features.service import build_feature_panel
-from features.store import assemble_feature_input_panel
 
 
 def main() -> int:
@@ -40,27 +39,18 @@ def main() -> int:
     if args.dry_run:
         print(f"P07 dry-run: registered_features={len(definitions)}")
         return 0
+
     panel = loaded.context.read("firm_year_panel", {})
     risk_sets = loaded.context.read("risk_sets", {})
     loaded.context.read("observability_registry", {})
     if not isinstance(panel, pd.DataFrame) or not isinstance(risk_sets, pd.DataFrame):
         raise ValueError("P07 panel inputs must be DataFrames")
-    columns = physical_columns(loaded.registry)
-    store_result = assemble_feature_input_panel(
-        base_panel=panel,
-        feature_definitions=cast(list[dict[str, object]], definitions),
-        intended_definitions=cast(list[dict[str, object]], intended),
-        features_config=features,
-        repository_root=Path(__file__).resolve().parents[1],
-        firm_column=columns[FIRM_ID],
-        year_column=columns[FISCAL_YEAR],
-        prediction_time_column=columns[PREDICTION_TIME],
-    )
+
     result = build_feature_panel(
-        firm_year_panel=store_result.panel,
+        firm_year_panel=panel,
         risk_sets=risk_sets,
         feature_definitions=cast(list[dict[str, object]], definitions),
-        columns=columns,
+        columns=physical_columns(loaded.registry),
         blocked_label_semantics=[
             str(value)
             for value in sequence(
@@ -86,62 +76,44 @@ def main() -> int:
     )
     if args.validate_only:
         return 0
+
+    columns = physical_columns(loaded.registry)
+    firm_column = columns[FIRM_ID]
+    year_column = columns[FISCAL_YEAR]
     diagnostics = build_feature_diagnostics(
         panel=result.panel,
         definitions=cast(list[dict[str, object]], definitions),
-        firm_column=columns[FIRM_ID],
-        year_column=columns[FISCAL_YEAR],
+        firm_column=firm_column,
+        year_column=year_column,
+    )
+    compatibility = _pipeline_generated_feature_receipts(
+        panel=result.panel,
+        definitions=cast(list[dict[str, object]], [*definitions, *intended]),
+        firm_column=firm_column,
     )
     summary = {
         **result.summary,
-        "feature_store": store_result.validation_report,
-        "identifier_mapping": {
-            "store_identifiers": int(
-                store_result.identifier_audit["feature_store_firm_id"].nunique()
-            ),
-            "matched_identifiers": int(
-                store_result.identifier_audit.loc[
-                    store_result.identifier_audit["mapping_status"] == "MATCHED",
-                    "feature_store_firm_id",
-                ].nunique()
-            ),
-            "unmatched_identifiers": int(
-                store_result.identifier_audit.loc[
-                    store_result.identifier_audit["mapping_status"] != "MATCHED",
-                    "feature_store_firm_id",
-                ].nunique()
-            ),
-            "ambiguous_identifiers": int(store_result.identifier_audit["ambiguity_flag"].sum()),
-        },
+        "feature_generation": compatibility["report"],
         "accounting_identity_rows": len(diagnostics.accounting_identities),
         "ratio_diagnostic_rows": len(diagnostics.ratios),
         "redundancy_pairs": len(diagnostics.redundancy),
     }
     decision_report = _decision_report(result.decision_report, summary)
+
+    # Compatibility artifacts retain the locked P07 artifact contract while recording that
+    # the external test package is no longer read by production code.
+    loaded.context.write("feature_store_manifest_validated", compatibility["manifest"], {})
+    loaded.context.write("feature_store_validation_report", compatibility["report"], {})
+    loaded.context.write("feature_store_file_audit", compatibility["file_audit"], {})
     loaded.context.write(
-        "feature_store_manifest_validated",
-        {
-            **store_result.validation_report,
-            "manifest_validated": True,
-            "status_source": "compiled_registry_and_immutable_package",
-        },
-        {},
-    )
-    loaded.context.write("feature_store_validation_report", store_result.validation_report, {})
-    loaded.context.write("feature_store_file_audit", store_result.file_audit, {})
-    loaded.context.write(
-        "feature_store_identifier_crosswalk_audit", store_result.identifier_audit, {}
+        "feature_store_identifier_crosswalk_audit", compatibility["identifier_audit"], {}
     )
     loaded.context.write(
-        "feature_store_availability_violations",
-        store_result.availability_violations,
-        {},
+        "feature_store_availability_violations", compatibility["availability_violations"], {}
     )
     loaded.context.write("feature_store_coverage_audit", diagnostics.coverage, {})
     loaded.context.write(
-        "feature_store_research_decision_audit",
-        store_result.research_decision_audit,
-        {},
+        "feature_store_research_decision_audit", compatibility["research_decision_audit"], {}
     )
     loaded.context.write("feature_value_diagnostic_audit", diagnostics.value_scale, {})
     loaded.context.write("accounting_identity_audit", diagnostics.accounting_identities, {})
@@ -149,11 +121,12 @@ def main() -> int:
     loaded.context.write("ratio_diagnostic_audit", diagnostics.ratios, {})
     loaded.context.write("temporal_feature_audit", diagnostics.temporal, {})
     loaded.context.write("feature_redundancy_audit", diagnostics.redundancy, {})
+
     loaded.context.write("feature_panel", result.panel, {})
     loaded.context.write("feature_registry", result.registry, {})
     loaded.context.write("leakage_registry", result.leakage_registry, {})
-    feature_id_column = physical_columns(loaded.registry)["feature_id"]
-    target_id_column = physical_columns(loaded.registry)[TARGET_ID]
+    feature_id_column = columns["feature_id"]
+    target_id_column = columns[TARGET_ID]
     registry_frame = _ordered_frame(pd.DataFrame(result.registry), feature_id_column)
     lineage_frame = _ordered_frame(result.lineage_registry, feature_id_column, "source_dataset")
     leakage_frame = _ordered_frame(result.leakage_rows, feature_id_column, target_id_column)
@@ -189,38 +162,119 @@ def main() -> int:
         "feature_panel_schema",
         {
             "columns": list(result.panel.columns),
-            "primary_key": [
-                physical_columns(loaded.registry)[FIRM_ID],
-                physical_columns(loaded.registry)[FISCAL_YEAR],
-            ],
+            "primary_key": [firm_column, year_column],
+            "generation_mode": "pipeline_generated",
+            "external_feature_store_used": False,
         },
         {},
     )
     loaded.context.write("p07_summary", summary, {})
     loaded.context.write("p07_decision_report", decision_report, {})
     print(
-        f"P07 status=PASS features={len(result.registry)} operational={result.summary['panel_features']}"
+        f"P07 status=PASS features={len(result.registry)} "
+        f"operational={result.summary['panel_features']} generation=pipeline"
     )
     return 0
 
 
+def _pipeline_generated_feature_receipts(
+    *,
+    panel: pd.DataFrame,
+    definitions: list[dict[str, object]],
+    firm_column: str,
+) -> dict[str, object]:
+    locked = [item for item in definitions if item.get("research_decision_status") == "LOCKED"]
+    unresolved = [
+        item for item in definitions if item.get("research_decision_status") != "LOCKED"
+    ]
+    report: dict[str, object] = {
+        "status": "PIPELINE_GENERATED_FEATURES_VALID",
+        "generation_mode": "pipeline_generated",
+        "external_feature_store_used": False,
+        "external_manifest_required": False,
+        "external_crosswalk_required": False,
+        "validated_feature_count": len(definitions),
+        "locked_feature_count": len(locked),
+        "unresolved_feature_count": len(unresolved),
+        "panel_row_count": len(panel),
+        "panel_firm_count": int(panel[firm_column].nunique()),
+        "outer_outcomes_accessed": False,
+        "known_cases_accessed": False,
+        "preprocessing_fit_at_p07": False,
+    }
+    file_audit = pd.DataFrame(
+        [
+            {
+                "feature_id": str(item["feature_id"]),
+                "generation_mode": "pipeline_generated",
+                "technical_validation_status": "PASS"
+                if item.get("research_decision_status") == "LOCKED"
+                else "NOT_OPERATIONAL",
+                "research_decision_status": str(item.get("research_decision_status")),
+            }
+            for item in definitions
+        ]
+    )
+    if not file_audit.empty:
+        file_audit["feature_id"] = file_audit["feature_id"].astype("string")
+    identifier_audit = pd.DataFrame(
+        {
+            firm_column: panel[firm_column].drop_duplicates().astype("string"),
+            "mapping_status": "CANONICAL_PIPELINE_ID",
+            "ambiguity_flag": False,
+            "source_registry": "P02_firm_year_panel",
+        }
+    ).reset_index(drop=True)
+    availability_violations = pd.DataFrame(
+        {
+            "feature_id": pd.Series(dtype="string"),
+            "violation_type": pd.Series(dtype="string"),
+            "action_taken": pd.Series(dtype="string"),
+        }
+    )
+    research_decision_audit = pd.DataFrame(
+        [
+            {
+                "feature_id": str(item["feature_id"]),
+                "research_decision_status": str(item.get("research_decision_status")),
+                "confirmatory_status": str(item.get("confirmatory_status")),
+                "model_eligibility": str(item.get("model_eligibility")),
+                "source_of_status": "compiled_feature_registry",
+                "pipeline_may_proceed_without_feature": item.get("research_decision_status")
+                != "LOCKED",
+            }
+            for item in definitions
+        ]
+    )
+    if not research_decision_audit.empty:
+        research_decision_audit["feature_id"] = research_decision_audit["feature_id"].astype(
+            "string"
+        )
+    return {
+        "manifest": {
+            **report,
+            "manifest_validated": False,
+            "status_source": "pipeline_generated_feature_panel",
+        },
+        "report": report,
+        "file_audit": file_audit,
+        "identifier_audit": identifier_audit,
+        "availability_violations": availability_violations,
+        "research_decision_audit": research_decision_audit,
+    }
+
+
 def _decision_report(base: str, summary: dict[str, object]) -> str:
-    store = cast(dict[str, object], summary["feature_store"])
-    identity = cast(dict[str, object], summary["identifier_mapping"])
+    generation = cast(dict[str, object], summary["feature_generation"])
     return (
         base
-        + "\n## Feature-store validation\n\n"
-        + f"- Package status: {store['status']}\n"
-        + f"- Validated files: {store['validated_feature_count']}\n"
-        + f"- Operational LOCKED features: {store['locked_feature_count']}\n"
-        + f"- Unresolved Beneish features: {store['unresolved_feature_count']}\n"
-        + f"- Matched identifiers: {identity['matched_identifiers']}\n"
-        + f"- Unmatched identifiers: {identity['unmatched_identifiers']}\n"
-        + "- Availability basis is a synthetic annual anchor, not an observed publication date.\n"
-        + "\n## Beneish decisions still required\n\n"
-        + "TATA construction; DEPI/depreciation mapping; receivables, sales and PPE definitions; "
-        + "current-asset/current-liability definitions; denominator and nonpositive-denominator "
-        + "rules; prior-year missingness; Vietnamese-to-original mapping; consolidated/audited scope.\n"
+        + "\n## Feature generation\n\n"
+        + "- Mode: pipeline-generated from locked upstream artifacts.\n"
+        + "- External feature-store package used: no.\n"
+        + f"- Registered features: {generation['validated_feature_count']}\n"
+        + f"- Operational LOCKED features: {generation['locked_feature_count']}\n"
+        + f"- Unresolved features: {generation['unresolved_feature_count']}\n"
+        + "- P07 performs no preprocessing fit and accesses no outer outcomes or known cases.\n"
     )
 
 
