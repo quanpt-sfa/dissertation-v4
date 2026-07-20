@@ -16,6 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from core.l3_scenarios import locked_l3_scenario_registry  # noqa: E402
 from core.pipeline import load_run, mapping  # noqa: E402
 from core.registry_compiler import compile_registry  # noqa: E402
+from simulation.execution_batching import (  # noqa: E402
+    DEFAULT_BATCH_MULTIPLIER,
+    validate_batch_multiplier,
+)
 
 
 def _run(command: list[str], *, cwd: Path, capture: bool = False) -> str:
@@ -72,9 +76,15 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _parse_prefixed_json(output: str, prefix: str) -> dict[str, Any]:
-    matches = [line[len(prefix) :] for line in output.splitlines() if line.startswith(prefix)]
+    matches = [
+        line[len(prefix) :]
+        for line in output.splitlines()
+        if line.startswith(prefix)
+    ]
     if len(matches) != 1:
-        raise RuntimeError(f"expected exactly one {prefix} line, found {len(matches)}")
+        raise RuntimeError(
+            f"expected exactly one {prefix} line, found {len(matches)}"
+        )
     raw: object = json.loads(matches[0])
     if not isinstance(raw, dict):
         raise ValueError(f"{prefix} payload must be a JSON object")
@@ -93,16 +103,28 @@ def _validate_preregistered_config(config_path: Path) -> dict[str, Any]:
     if measurement.get("primary_s3_endpoint") != "S3_CONTENT":
         raise ValueError("final run requires primary_s3_endpoint=S3_CONTENT")
     source_set_id = measurement.get("primary_source_set_id")
-    source_sets = mapping(measurement.get("source_sets"), "measurement.source_sets")
+    source_sets = mapping(
+        measurement.get("source_sets"),
+        "measurement.source_sets",
+    )
     if not isinstance(source_set_id, str):
         raise ValueError("primary source set is not locked")
-    primary = mapping(source_sets.get(source_set_id), f"measurement.source_sets.{source_set_id}")
+    primary = mapping(
+        source_sets.get(source_set_id),
+        f"measurement.source_sets.{source_set_id}",
+    )
     raw_sources = primary.get("sources")
     if not isinstance(raw_sources, list):
         raise ValueError("primary source set is malformed")
-    s3_sources = sorted(str(value) for value in raw_sources if str(value).startswith("S3_"))
+    s3_sources = sorted(
+        str(value)
+        for value in raw_sources
+        if str(value).startswith("S3_")
+    )
     if s3_sources != ["S3_CONTENT"]:
-        raise ValueError("final primary source set must contain S3_CONTENT and no other S3 endpoint")
+        raise ValueError(
+            "final primary source set must contain S3_CONTENT and no other S3 endpoint"
+        )
     l3_model = mapping(measurement.get("l3_model"), "measurement.l3_model")
     if l3_model.get("scenario_registry_module") != "l3_scenarios":
         raise ValueError("L3 model must bind the l3_scenarios protocol module")
@@ -113,23 +135,33 @@ def _validate_preregistered_config(config_path: Path) -> dict[str, Any]:
     scenario_registry = locked_l3_scenario_registry(registry)
     return {
         "primary_scenario_id": scenario_registry.primary_scenario_id,
-        "registered_scenario_ids": [item.scenario_id for item in scenario_registry.scenarios],
+        "registered_scenario_ids": [
+            item.scenario_id for item in scenario_registry.scenarios
+        ],
         "scenario_registry_status": "LOCKED_AT_P0",
         "scenario_selection_rule": "PRE_REGISTERED_PRIMARY",
         "performance_based_scenario_selection": False,
     }
 
 
-def _audit_blockers(s3: dict[str, Any], calibration: dict[str, Any]) -> list[str]:
+def _audit_blockers(
+    s3: dict[str, Any],
+    calibration: dict[str, Any],
+) -> list[str]:
     result: list[str] = []
     required_s3_fields = {
         "development_positive_count_by_endpoint",
         "sanction_year_unresolved_firm_year_count",
         "excluded_source_rule_row_count",
     }
-    missing_s3_fields = sorted(field for field in required_s3_fields if field not in s3)
+    missing_s3_fields = sorted(
+        field for field in required_s3_fields if field not in s3
+    )
     if missing_s3_fields:
-        result.append("S3_AUDIT_SCHEMA_NOT_HARDENED:" + ",".join(missing_s3_fields))
+        result.append(
+            "S3_AUDIT_SCHEMA_NOT_HARDENED:"
+            + ",".join(missing_s3_fields)
+        )
     for key in (
         "p03_p05_outcome_mismatch_count",
         "p03_p05_missing_key_count",
@@ -155,9 +187,13 @@ def _l3_unavailable_reasons(
         result.append("S3_AUDIT_ENDPOINT_COUNTS_MALFORMED")
     elif int(positives.get("S3_CONTENT") or 0) <= 0:
         result.append("NO_DEVELOPMENT_S3_CONTENT_POSITIVES")
-    if capability.get("status") != "AVAILABLE" or capability.get("pilot_executed") is not True:
+    if (
+        capability.get("status") != "AVAILABLE"
+        or capability.get("pilot_executed") is not True
+    ):
         result.append(
-            f"L3_CAPABILITY_{capability.get('status', 'UNKNOWN')}_{capability.get('reason_code')}"
+            f"L3_CAPABILITY_{capability.get('status', 'UNKNOWN')}_"
+            f"{capability.get('reason_code')}"
         )
     return result
 
@@ -167,17 +203,33 @@ def main() -> int:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--raw-root", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
-    parser.add_argument("--config", type=Path, default=Path("config/pipeline.yaml"))
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config/pipeline.yaml"),
+    )
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument(
+        "--batch-multiplier",
+        type=int,
+        default=DEFAULT_BATCH_MULTIPLIER,
+    )
     parser.add_argument("--skip-tests", action="store_true")
     args = parser.parse_args()
 
     workers = _validate_workers(args.workers)
-    # P08 parallelism is an execution-only control. The locked simulation seeds
-    # remain keyed by protocol/scenario/method/replication, not by worker count.
+    batch_multiplier = validate_batch_multiplier(args.batch_multiplier)
+    # P08 worker count and batch compaction are execution controls. Locked
+    # simulation seeds remain keyed by protocol/scenario/method/replication.
     os.environ["P08_WORKERS"] = str(workers)
+    os.environ["P08_BATCH_MULTIPLIER"] = str(batch_multiplier)
     print(
-        f"P08 workers={workers} scope=P08B_subprocesses protocol_hashed=false",
+        "P08 execution "
+        f"workers={workers} "
+        f"batch_multiplier={batch_multiplier} "
+        "scope=P08B_subprocesses "
+        "replications_changed=false "
+        "protocol_hashed=false",
         flush=True,
     )
 
@@ -236,32 +288,63 @@ def main() -> int:
         cwd=project_root,
         capture=True,
     )
-    calibration = _parse_prefixed_json(calibration_output, "MEASUREMENT_CALIBRATION_JSON=")
+    calibration = _parse_prefixed_json(
+        calibration_output,
+        "MEASUREMENT_CALIBRATION_JSON=",
+    )
     calibration_dir.mkdir(parents=True, exist_ok=True)
     (calibration_dir / "measurement_calibration_summary.json").write_text(
-        json.dumps(calibration, ensure_ascii=False, indent=2, sort_keys=True),
+        json.dumps(
+            calibration,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
     s3 = _load_json(s3_dir / "s3_year_audit_summary.json")
     blockers = _audit_blockers(s3, calibration)
 
-    p06 = load_run(registry_path=registry_path, run_id=args.run_id, step_id="P06", state="MEASURED")
-    capability = mapping(p06.context.read("l3_pilot_capability", {}), "L3 capability")
-    matrices = mapping(p06.context.read("source_channel_matrices", {}), "source matrices")
+    p06 = load_run(
+        registry_path=registry_path,
+        run_id=args.run_id,
+        step_id="P06",
+        state="MEASURED",
+    )
+    capability = mapping(
+        p06.context.read("l3_pilot_capability", {}),
+        "L3 capability",
+    )
+    matrices = mapping(
+        p06.context.read("source_channel_matrices", {}),
+        "source matrices",
+    )
     unavailable_reasons = _l3_unavailable_reasons(s3, capability)
-    if capability.get("status") not in {"AVAILABLE", "UNAVAILABLE_BY_DESIGN"}:
+    if capability.get("status") not in {
+        "AVAILABLE",
+        "UNAVAILABLE_BY_DESIGN",
+    }:
         blockers.append(
-            f"L3_CAPABILITY_NOT_RESOLVED_{capability.get('status', 'UNKNOWN')}_{capability.get('reason_code')}"
+            f"L3_CAPABILITY_NOT_RESOLVED_"
+            f"{capability.get('status', 'UNKNOWN')}_"
+            f"{capability.get('reason_code')}"
         )
     primary_sources = matrices.get("primary_measurement_sources")
     if not isinstance(primary_sources, list):
         blockers.append("PRIMARY_MEASUREMENT_SOURCE_RECEIPT_MISSING")
     else:
-        s3_sources = sorted(str(value) for value in primary_sources if str(value).startswith("S3_"))
+        s3_sources = sorted(
+            str(value)
+            for value in primary_sources
+            if str(value).startswith("S3_")
+        )
         if s3_sources != ["S3_CONTENT"]:
             blockers.append("PRIMARY_MEASUREMENT_S3_ENDPOINT_DRIFT")
 
-    l3_available = not unavailable_reasons and capability.get("status") == "AVAILABLE"
+    l3_available = (
+        not unavailable_reasons
+        and capability.get("status") == "AVAILABLE"
+    )
     preflight_dir = run_root / "PREFLIGHT"
     preflight_dir.mkdir(parents=True, exist_ok=True)
     preflight = {
@@ -275,41 +358,88 @@ def main() -> int:
         "l3_unavailable_reasons": unavailable_reasons,
         "protocol_hash": s3.get("protocol_hash"),
         "l3_capability": capability,
-        "l3_execution_status": "PENDING" if l3_available else "SKIPPED_UNAVAILABLE_BY_DESIGN",
+        "l3_execution_status": (
+            "PENDING"
+            if l3_available
+            else "SKIPPED_UNAVAILABLE_BY_DESIGN"
+        ),
         "primary_measurement_sources": primary_sources,
         "p08_workers": workers,
         "p08_parallelism_scope": "P08B_SUBPROCESSES",
         "p08_worker_count_protocol_hashed": False,
+        "p08_batch_multiplier": batch_multiplier,
+        "p08_batch_compaction_scope": "ARTIFACT_PARTITION_ONLY",
+        "p08_batch_multiplier_protocol_hashed": False,
+        "p08_replication_budgets_changed": False,
         "outer_outcomes_accessed": False,
         "known_cases_accessed": False,
         **scenario_receipt,
     }
     (preflight_dir / "l3_preflight_receipt.json").write_text(
-        json.dumps(preflight, ensure_ascii=False, indent=2, sort_keys=True),
+        json.dumps(
+            preflight,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
     if blockers:
-        print("L3_PREFLIGHT_JSON=" + json.dumps(preflight, ensure_ascii=False, sort_keys=True))
+        print(
+            "L3_PREFLIGHT_JSON="
+            + json.dumps(
+                preflight,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
         return 4
 
     p10_output = _run(
-        [*base_command, "--through", "P10", "--resume"], cwd=project_root, capture=True
+        [*base_command, "--through", "P10", "--resume"],
+        cwd=project_root,
+        capture=True,
     )
-    p10_lines = [line for line in p10_output.splitlines() if line.startswith("P10 status=PASS")]
+    p10_lines = [
+        line
+        for line in p10_output.splitlines()
+        if line.startswith("P10 status=PASS")
+    ]
     if l3_available and (
-        not p10_lines or any("L3_fixed_pi=AVAILABLE" not in line for line in p10_lines)
+        not p10_lines
+        or any(
+            "L3_fixed_pi=AVAILABLE" not in line
+            for line in p10_lines
+        )
     ):
         preflight["status"] = "FAIL"
-        preflight["blockers"] = ["L3_NOT_AVAILABLE_IN_EVERY_P10_FOLD"]
+        preflight["blockers"] = [
+            "L3_NOT_AVAILABLE_IN_EVERY_P10_FOLD"
+        ]
         preflight["p10_status_lines"] = p10_lines
         (preflight_dir / "l3_preflight_receipt.json").write_text(
-            json.dumps(preflight, ensure_ascii=False, indent=2, sort_keys=True),
+            json.dumps(
+                preflight,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+            ),
             encoding="utf-8",
         )
-        print("L3_PREFLIGHT_JSON=" + json.dumps(preflight, ensure_ascii=False, sort_keys=True))
+        print(
+            "L3_PREFLIGHT_JSON="
+            + json.dumps(
+                preflight,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
         return 5
 
-    _run([*base_command, "--through", "P17", "--resume"], cwd=project_root)
+    _run(
+        [*base_command, "--through", "P17", "--resume"],
+        cwd=project_root,
+    )
     preflight["status"] = "PASS_P00_P17"
     preflight["l3_execution_status"] = (
         "EXECUTED_ALL_REGISTERED_SCENARIOS"
@@ -318,10 +448,22 @@ def main() -> int:
     )
     preflight["p10_status_lines"] = p10_lines
     (preflight_dir / "l3_preflight_receipt.json").write_text(
-        json.dumps(preflight, ensure_ascii=False, indent=2, sort_keys=True),
+        json.dumps(
+            preflight,
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
-    print("L3_PRODUCTION_JSON=" + json.dumps(preflight, ensure_ascii=False, sort_keys=True))
+    print(
+        "L3_PRODUCTION_JSON="
+        + json.dumps(
+            preflight,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
     return 0
 
 
