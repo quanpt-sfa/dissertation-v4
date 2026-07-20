@@ -8,6 +8,7 @@ param(
     [string]$OutputRoot,
     [string]$Config,
     [int]$Workers = 1,
+    [int]$BatchMultiplier = 5,
     [switch]$SkipTests
 )
 
@@ -15,6 +16,9 @@ $ErrorActionPreference = "Stop"
 
 if ($Workers -lt 1) {
     throw "Workers must be a positive integer"
+}
+if ($BatchMultiplier -lt 1) {
+    throw "BatchMultiplier must be a positive integer"
 }
 
 # Derive all default paths from the checked-out repository containing this script.
@@ -73,7 +77,8 @@ Write-Host "RawRoot:     $RawRoot"
 Write-Host "OutputRoot:  $OutputRoot"
 Write-Host "Config:      $Config"
 if ($Mode -eq "Final") {
-    Write-Host "P08 Workers: $Workers"
+    Write-Host "P08 Workers:          $Workers"
+    Write-Host "P08 BatchMultiplier:  $BatchMultiplier"
 }
 
 Push-Location $ProjectRoot
@@ -89,6 +94,7 @@ try {
                 tests/assurance/test_appendix_b_decisions.py::test_T006_prior_accuracy `
                 tests/features/test_pipeline_feature_generator.py `
                 tests/features/test_pipeline_feature_registry_grammar.py `
+                tests/stages/test_p08_batch_compaction.py `
                 tests/stages/test_p08_worker_configuration.py `
                 tests/stages/test_s3_decision_ledger_grain.py `
                 tests/stages/test_s3_calendar_year_targets.py `
@@ -127,7 +133,8 @@ try {
                 "--raw-root", $RawRoot,
                 "--output-root", $OutputRoot,
                 "--config", $Config,
-                "--workers", [string]$Workers
+                "--workers", [string]$Workers,
+                "--batch-multiplier", [string]$BatchMultiplier
             )
             if ($SkipTests) { $runnerArgs += "--skip-tests" }
             Invoke-UvPython @runnerArgs
