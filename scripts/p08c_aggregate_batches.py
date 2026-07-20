@@ -14,14 +14,14 @@ import pandas as pd
 
 from core.pipeline import load_run, mapping, sequence
 from core.semantic_keys import (
+    BATCH_KEY,
     LEARNER_ID,
     METHOD_ID,
+    METHOD_KEY,
     METRIC_ID,
     REPLICATION_ID,
     SCENARIO_ID,
     SCENARIO_KEY,
-    METHOD_KEY,
-    BATCH_KEY,
 )
 from simulation.method_contract import (
     ANALYSIS_ROLE,
@@ -33,8 +33,55 @@ from simulation.method_contract import (
     profile_expected_counts,
     required_metric_ids,
 )
-from simulation.service import summarize_mcse
 from simulation.replication_contract import replication_plan as _replication_plan
+from simulation.service import summarize_mcse
+
+
+def _coordinate_tuple(coordinates: dict[str, str]) -> tuple[tuple[str, str], ...]:
+    return tuple(sorted(coordinates.items()))
+
+
+def _artifact_batch_size(
+    *,
+    plan: dict[str, int],
+    diagnostics: dict[str, object],
+) -> int:
+    """Resolve artifact partition size from the worker's execution receipt.
+
+    Legacy, non-compacted artifacts do not contain ``execution_batching`` and
+    therefore retain the configured replication batch size. Compacted workers
+    record both sizes, allowing P08C to validate coordinates without changing
+    replication budgets or MCSE rules.
+    """
+    configured = int(plan["batch_size"])
+    batching = diagnostics.get("execution_batching")
+    if batching is None:
+        return configured
+    if not isinstance(batching, dict):
+        raise ValueError("model diagnostics execution_batching must be an object")
+
+    recorded_configured = int(str(batching.get("configured_batch_size")))
+    artifact_size = int(str(batching.get("artifact_batch_size")))
+    minimum = int(plan["minimum"])
+    maximum = int(plan["maximum"])
+
+    if recorded_configured != configured:
+        raise ValueError(
+            "model diagnostics configured batch size differs from the locked "
+            f"replication plan: recorded={recorded_configured}, locked={configured}"
+        )
+    if artifact_size < configured or artifact_size % configured != 0:
+        raise ValueError(
+            "artifact batch size must be a positive integer multiple of the "
+            "configured batch size"
+        )
+    if artifact_size > maximum:
+        raise ValueError("artifact batch size exceeds maximum replications")
+    if minimum % artifact_size != 0:
+        raise ValueError(
+            "minimum replications must end on an artifact batch boundary"
+        )
+    return artifact_size
 
 
 def main() -> int:
@@ -68,12 +115,31 @@ def main() -> int:
 
     batches: list[pd.DataFrame] = []
     coordinates_seen: list[dict[str, str]] = []
+    batch_partition_receipts: list[dict[str, object]] = []
     simulation = mapping(loaded.registry.get("simulation"), "simulation")
 
-    # Call inventory exactly once; reuse for both the batch scan loop and the
-    # bijection check below.  inventory() may decode/validate each artifact, so
-    # calling it twice doubles I/O per MCSE check wave.
+    # Call inventory exactly once. Inventory may decode and validate each
+    # artifact, so repeated calls substantially increase every MCSE polling wave.
     inventory = list(loaded.context.store.inventory())
+    diagnostics_coordinates: dict[
+        tuple[tuple[str, str], ...], dict[str, str]
+    ] = {}
+    for item in inventory:
+        if item.get("artifact_id") != "model_diagnostics":
+            continue
+        raw = item.get("coordinates")
+        if not isinstance(raw, dict):
+            raise ValueError("model diagnostics manifest coordinates required")
+        coordinates = {
+            str(key): str(value)
+            for key, value in cast(dict[object, object], raw).items()
+        }
+        key = _coordinate_tuple(coordinates)
+        if key in diagnostics_coordinates:
+            raise ValueError(
+                f"duplicate model diagnostics coordinates={coordinates}"
+            )
+        diagnostics_coordinates[key] = coordinates
 
     for item in inventory:
         if item.get("artifact_id") != "simulation_batches":
@@ -85,43 +151,60 @@ def main() -> int:
             str(key): str(value)
             for key, value in cast(dict[object, object], raw).items()
         }
+        coordinate_key = _coordinate_tuple(coordinates)
+        diagnostic_coordinates = diagnostics_coordinates.get(coordinate_key)
+        if diagnostic_coordinates is None:
+            raise ValueError(
+                "P08 batch-diagnostics coordinate mismatch — batch exists but "
+                f"diagnostics are missing at coordinates={coordinates}"
+            )
+        diagnostics = loaded.context.read(
+            "model_diagnostics",
+            diagnostic_coordinates,
+        )
+        if not isinstance(diagnostics, dict):
+            raise ValueError("model_diagnostics artifact must be a JSON object")
+
         value = loaded.context.read("simulation_batches", coordinates)
         if not isinstance(value, pd.DataFrame):
             raise ValueError("simulation_batches artifact must be a DataFrame")
-
         if value.empty:
             continue
 
         scenario_ids = set(value[SCENARIO_ID].dropna().astype(str))
         method_ids = set(value[METHOD_ID].dropna().astype(str))
         if len(scenario_ids) != 1 or len(method_ids) != 1:
-            raise ValueError("Each simulation batch must contain exactly one scenario and method")
+            raise ValueError(
+                "Each simulation batch must contain exactly one scenario and method"
+            )
 
         scenario_id = next(iter(scenario_ids))
         method_id = next(iter(method_ids))
-
         scenario = scenario_by_id.get(scenario_id)
         if scenario is None:
             raise ValueError(f"batch scenario_id={scenario_id} is not registered")
 
         method_spec = next(
-            (m for m in scenario.get("method_registry", []) if m.get(METHOD_ID) == method_id),
+            (
+                method
+                for method in scenario.get("method_registry", [])
+                if method.get(METHOD_ID) == method_id
+            ),
             None,
         )
         if method_spec is None:
             raise ValueError(
-                f"batch method_id={method_id} is not registered under scenario={scenario_id}"
+                f"batch method_id={method_id} is not registered under "
+                f"scenario={scenario_id}"
             )
 
         expected_scenario_key = str(scenario[SCENARIO_KEY])
         expected_method_key = str(method_spec[METHOD_KEY])
-
         if coordinates.get(SCENARIO_KEY) != expected_scenario_key:
             raise ValueError(
-                f"batch scenario_key={coordinates.get(SCENARIO_KEY)} does not match "
-                f"scenario registry scenario_id={scenario_id}"
+                f"batch scenario_key={coordinates.get(SCENARIO_KEY)} does not "
+                f"match scenario registry scenario_id={scenario_id}"
             )
-
         if coordinates.get(METHOD_KEY) != expected_method_key:
             raise ValueError(
                 f"batch method_key={coordinates.get(METHOD_KEY)} does not match "
@@ -129,37 +212,51 @@ def main() -> int:
             )
 
         plan = _replication_plan(simulation, method_spec)
-        batch_size = int(plan["batch_size"])
+        artifact_batch_size = _artifact_batch_size(
+            plan=plan,
+            diagnostics=cast(dict[str, object], diagnostics),
+        )
         replication_ids = value[REPLICATION_ID].dropna().astype(int)
-        for r_id in replication_ids:
-            expected_batch_key = f"b{r_id // batch_size:04d}"
+        for replication_id in replication_ids:
+            expected_batch_key = (
+                f"b{replication_id // artifact_batch_size:04d}"
+            )
             if coordinates.get(BATCH_KEY) != expected_batch_key:
                 raise ValueError(
-                    f"replication_id={r_id} in batch maps to batch_key={expected_batch_key}, "
-                    f"but coordinate is batch_key={coordinates.get(BATCH_KEY)}"
+                    f"replication_id={replication_id} in batch maps to "
+                    f"batch_key={expected_batch_key} using "
+                    f"artifact_batch_size={artifact_batch_size}, but coordinate "
+                    f"is batch_key={coordinates.get(BATCH_KEY)}"
                 )
 
+        batching = diagnostics.get("execution_batching")
+        batch_partition_receipts.append(
+            {
+                SCENARIO_ID: scenario_id,
+                METHOD_ID: method_id,
+                BATCH_KEY: coordinates.get(BATCH_KEY),
+                "configured_batch_size": int(plan["batch_size"]),
+                "artifact_batch_size": artifact_batch_size,
+                "batch_multiplier": (
+                    int(str(batching.get("batch_multiplier")))
+                    if isinstance(batching, dict)
+                    else 1
+                ),
+            }
+        )
         batches.append(value)
         coordinates_seen.append(coordinates)
 
-    # Full bijection check using the already-fetched inventory (no second call).
-    # batch → diagnostics: interrupted write (batch exists, diagnostics missing).
-    # diagnostics → batch: orphan artifact (should not happen, but detect anyway).
-    diagnostics_coords: set[tuple[str, ...]] = {
-        tuple(sorted((str(k), str(v)) for k, v in cast(dict[object, object], item["coordinates"]).items()))
-        for item in inventory
-        if item.get("artifact_id") == "model_diagnostics"
-        and isinstance(item.get("coordinates"), dict)
+    diagnostics_coord_set = set(diagnostics_coordinates)
+    batch_coord_set = {
+        _coordinate_tuple(coordinates) for coordinates in coordinates_seen
     }
-    batch_coord_set: set[tuple[str, ...]] = {
-        tuple(sorted(coords.items())) for coords in coordinates_seen
-    }
-    missing_diagnostics = batch_coord_set - diagnostics_coords
-    orphan_diagnostics = diagnostics_coords - batch_coord_set
+    missing_diagnostics = batch_coord_set - diagnostics_coord_set
+    orphan_diagnostics = diagnostics_coord_set - batch_coord_set
     if missing_diagnostics or orphan_diagnostics:
         raise ValueError(
-            "P08 batch-diagnostics coordinate mismatch — batch write was likely interrupted; "
-            "re-run affected batches before aggregating. "
+            "P08 batch-diagnostics coordinate mismatch — batch write was likely "
+            "interrupted; re-run affected batches before aggregating. "
             f"missing_diagnostics={sorted(str(dict(c)) for c in missing_diagnostics)}, "
             f"orphan_diagnostics={sorted(str(dict(c)) for c in orphan_diagnostics)}"
         )
@@ -173,7 +270,6 @@ def main() -> int:
         scenario_by_id=scenario_by_id,
     )
 
-    simulation = mapping(loaded.registry.get("simulation"), "simulation")
     core = mapping(simulation.get("core"), "simulation.core")
     l3 = mapping(simulation.get("l3"), "simulation.l3")
     extended = mapping(
@@ -207,8 +303,12 @@ def main() -> int:
         l3_minimum_replications=int(l3["initial_replications"]),
         l3_maximum_replications=int(l3["maximum_replications"]),
         l3_pass_fail_mcse_maximum=float(l3["pass_fail_mcse_max"]),
-        extended_minimum_replications=int(extended["minimum_replications"]),
-        extended_maximum_replications=int(extended["maximum_replications"]),
+        extended_minimum_replications=int(
+            extended["minimum_replications"]
+        ),
+        extended_maximum_replications=int(
+            extended["maximum_replications"]
+        ),
         extended_pass_fail_mcse_maximum=float(
             extended["pass_fail_mcse_max"]
         ),
@@ -239,6 +339,8 @@ def main() -> int:
     report["batch_artifact_count"] = len(batches)
     report["active_batch_count"] = len(active_batches)
     report["batch_coordinates"] = coordinates_seen
+    report["batch_partition_receipts"] = batch_partition_receipts
+    report["batch_compaction_changes_replications_or_mcse"] = False
     if methodology["status"] != "PASS":
         report["status"] = "FAIL"
         report["reason_code"] = (
@@ -278,7 +380,6 @@ def main() -> int:
             raise RuntimeError(
                 "Final P08 aggregation reached while additional replications remain"
             )
-
         if report.get("precision_target_met") is not True:
             report["status"] = "FAIL"
             report["reason_code"] = "CONFIRMATORY_MCSE_TARGET_NOT_MET"
