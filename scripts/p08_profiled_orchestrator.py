@@ -512,6 +512,10 @@ def _incomplete_batch_commands(
         count = min(batch_size, int(job["maximum"]) - start)
         if count <= 0:
             continue
+        # Unit fixtures and legacy callers may provide the pre-compaction job
+        # shape. In that case batch_size already describes the artifact
+        # partition, so multiplier=1 preserves its coordinate semantics.
+        repair_batch_multiplier = int(job.get("batch_multiplier", 1))
         commands.append(
             _worker_command(
                 python=python,
@@ -521,7 +525,7 @@ def _incomplete_batch_commands(
                 method_id=str(job[METHOD_ID]),
                 start=start,
                 count=count,
-                batch_multiplier=int(job["batch_multiplier"]),
+                batch_multiplier=repair_batch_multiplier,
             )
         )
     return commands
