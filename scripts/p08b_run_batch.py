@@ -30,6 +30,11 @@ from core.semantic_keys import (
     REPLICATION_ID,
     SCENARIO_ID,
 )
+from simulation.execution_batching import (
+    DEFAULT_BATCH_MULTIPLIER,
+    execution_batch_size,
+    validate_batch_multiplier,
+)
 from simulation.l3_variants import (
     L3_VARIANT_IDS,
     run_l3_variant_batch,
@@ -75,11 +80,17 @@ def main() -> int:
     parser.add_argument("--batch-id", required=True)
     parser.add_argument("--start", type=int, required=True)
     parser.add_argument("--count", type=int, required=True)
+    parser.add_argument(
+        "--batch-multiplier",
+        type=int,
+        default=DEFAULT_BATCH_MULTIPLIER,
+    )
     args = parser.parse_args()
     if args.start < 0 or args.count < 1:
         raise ValueError(
             "start must be nonnegative and count must be positive"
         )
+    batch_multiplier = validate_batch_multiplier(args.batch_multiplier)
 
     coordinates = {
         SCENARIO_ID: args.scenario_id,
@@ -123,7 +134,15 @@ def main() -> int:
     method_spec = method_by_id(scenario, args.method_id)
 
     plan = _replication_plan(simulation, method_spec)
-    batch_size = int(plan["batch_size"])
+    configured_batch_size = int(plan["batch_size"])
+    minimum_replications = int(plan["minimum"])
+    maximum_replications = int(plan["maximum"])
+    artifact_batch_size = execution_batch_size(
+        configured_batch_size=configured_batch_size,
+        minimum_replications=minimum_replications,
+        maximum_replications=maximum_replications,
+        batch_multiplier=batch_multiplier,
+    )
 
     expected_batch_id = (
         f"{args.start:06d}-"
@@ -136,15 +155,17 @@ def main() -> int:
             f"start/count-derived value={expected_batch_id}"
         )
 
-    if args.start % batch_size != 0:
+    if args.start % artifact_batch_size != 0:
         raise ValueError(
-            "batch start must align with the replication batch size"
+            "batch start must align with the execution artifact batch size"
         )
 
-    if args.count > batch_size:
+    if args.count > artifact_batch_size:
         raise ValueError(
-            "batch count exceeds the locked batch size"
+            "batch count exceeds the execution artifact batch size"
         )
+    if args.start + args.count > maximum_replications:
+        raise ValueError("batch exceeds the locked maximum replications")
 
     import numpy as np
 
@@ -294,6 +315,18 @@ def main() -> int:
                 f"unexpected_metrics={unexpected}"
             )
 
+    diagnostics["execution_batching"] = {
+        "batch_multiplier": batch_multiplier,
+        "configured_batch_size": configured_batch_size,
+        "artifact_batch_size": artifact_batch_size,
+        "minimum_replications": minimum_replications,
+        "maximum_replications": maximum_replications,
+        "replication_start": args.start,
+        "replication_count": args.count,
+        "changes_replication_ids_or_seeds": False,
+        "protocol_hashed": False,
+    }
+
     scenario_key_str = "scenario_" + "key"
     method_key_str = "method_" + "key"
     batch_key_str = "batch_" + "key"
@@ -305,7 +338,7 @@ def main() -> int:
             method_spec[method_key_str]
         ),
         batch_key_str: (
-            f"b{args.start // batch_size:04d}"
+            f"b{args.start // artifact_batch_size:04d}"
         ),
     }
     loaded.context.write(
@@ -319,10 +352,12 @@ def main() -> int:
         write_coordinates,
     )
     print(
-        f"P08B batch status=PASS "
+        "P08B status=PASS "
         f"scenario={args.scenario_id} "
         f"profile={method_spec[EXECUTION_PROFILE]} "
         f"method={args.method_id} "
+        f"replications={args.count} "
+        f"artifact_batch_size={artifact_batch_size} "
         f"rows={len(batch)}"
     )
     return 0
