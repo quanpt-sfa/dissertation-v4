@@ -55,7 +55,11 @@ REPOSITORY_MAINTENANCE_SCRIPTS = {
     "scripts/repair_s3_l3_hardening_regressions.py",
 }
 PRODUCTION_DATA_BOUNDARIES = {
-    "src/features/store.py",
+    # P07 reads the P01-audited financial-statement source only through
+    # p01.registry.resolve_source and p01.readers.iter_rows. It materializes
+    # registered features directly onto the P02 firm-year spine and performs no
+    # free-form path resolution or pandas file I/O.
+    "src/features/generator.py",
     # Explicit documentation-export boundaries. These scripts read only verified
     # runtime artifacts and write researcher-facing audit/calibration tables outside
     # the immutable production artifact namespace.
