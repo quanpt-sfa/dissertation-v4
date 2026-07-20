@@ -80,6 +80,7 @@ try {
                 tests/core/test_forbidden_pattern_metadata_exceptions.py `
                 tests/assurance/test_appendix_b_decisions.py::test_T006_prior_accuracy `
                 tests/features/test_pipeline_feature_generator.py `
+                tests/features/test_pipeline_feature_registry_grammar.py `
                 tests/stages/test_s3_decision_ledger_grain.py `
                 tests/stages/test_s3_calendar_year_targets.py `
                 tests/stages/test_l3_latent_class.py `
