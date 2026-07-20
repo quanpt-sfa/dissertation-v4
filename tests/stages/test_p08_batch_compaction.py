@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts.p08c_aggregate_batches import _artifact_batch_size
 from simulation.execution_batching import (
     DEFAULT_BATCH_MULTIPLIER,
     execution_batch_size,
@@ -79,12 +80,65 @@ def test_invalid_batch_plans_fail_closed() -> None:
         )
 
 
+def test_p08c_uses_recorded_artifact_batch_size_for_compacted_batches() -> None:
+    plan = {
+        "minimum": 2500,
+        "batch_size": 250,
+        "maximum": 10000,
+    }
+    diagnostics = {
+        "execution_batching": {
+            "batch_multiplier": 10,
+            "configured_batch_size": 250,
+            "artifact_batch_size": 2500,
+        }
+    }
+
+    artifact_size = _artifact_batch_size(
+        plan=plan,
+        diagnostics=diagnostics,
+    )
+    assert artifact_size == 2500
+    assert f"b{0 // artifact_size:04d}" == "b0000"
+    assert f"b{2499 // artifact_size:04d}" == "b0000"
+
+
+def test_p08c_retains_legacy_noncompacted_batch_coordinates() -> None:
+    plan = {
+        "minimum": 2500,
+        "batch_size": 250,
+        "maximum": 10000,
+    }
+    assert _artifact_batch_size(plan=plan, diagnostics={}) == 250
+
+
+def test_p08c_rejects_diagnostics_that_conflict_with_locked_plan() -> None:
+    plan = {
+        "minimum": 2500,
+        "batch_size": 250,
+        "maximum": 10000,
+    }
+    with pytest.raises(ValueError, match="differs from the locked"):
+        _artifact_batch_size(
+            plan=plan,
+            diagnostics={
+                "execution_batching": {
+                    "configured_batch_size": 100,
+                    "artifact_batch_size": 1000,
+                }
+            },
+        )
+
+
 def test_worker_records_execution_batching_without_touching_seed_keys() -> None:
     worker_source = (ROOT / "scripts/p08b_run_batch.py").read_text(
         encoding="utf-8"
     )
     orchestrator_source = (
         ROOT / "scripts/p08_profiled_orchestrator.py"
+    ).read_text(encoding="utf-8")
+    aggregate_source = (
+        ROOT / "scripts/p08c_aggregate_batches.py"
     ).read_text(encoding="utf-8")
 
     assert 'diagnostics["execution_batching"]' in worker_source
@@ -95,3 +149,5 @@ def test_worker_records_execution_batching_without_touching_seed_keys() -> None:
     assert '"--batch-multiplier"' in worker_source
     assert '"--batch-multiplier"' in orchestrator_source
     assert "_validate_resume_batch_multiplier" in orchestrator_source
+    assert "_artifact_batch_size" in aggregate_source
+    assert 'report["batch_compaction_changes_replications_or_mcse"] = False' in aggregate_source
