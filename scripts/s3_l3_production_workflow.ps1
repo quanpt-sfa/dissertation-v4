@@ -82,6 +82,7 @@ try {
                 tests/stages/test_s3_decision_ledger_grain.py `
                 tests/stages/test_s3_calendar_year_targets.py `
                 tests/stages/test_l3_latent_class.py `
+                tests/stages/test_p07_pipeline_generated_features.py `
                 tests/stages/test_remaining_stage_invariants.py `
                 tests/test_l2_l3_calibration.py `
                 tests/test_l3_preregistered_scenarios.py
