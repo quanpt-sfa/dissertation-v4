@@ -18,11 +18,11 @@ from core.semantic_keys import (
     VALUE,
 )
 from features.generator import (
-    _source_controls,
+    _SourceControls,
     feature_source_id,
     materialize_registered_features,
 )
-from p01.models import SourceSpec
+from p01.models import RawSchemaSpec, SourceSpec
 from p02.models import EntityResolutionSpec
 
 
@@ -154,23 +154,121 @@ def _definitions() -> list[dict[str, object]]:
     return result
 
 
+def _source_spec() -> SourceSpec:
+    return SourceSpec(
+        source_id="financial_statement_core_long",
+        enabled=True,
+        channel_id="S1",
+        source_type="financial_statement_core_long",
+        source_agency="fixture",
+        original_unit="firm-year-audit-status-item",
+        related_period_field="fiscal_year",
+        availability_date_field=None,
+        availability_date_source="fixture",
+        coverage_dimensions=(),
+        role="evidence",
+        verification_status="observed_opportunity_only",
+        data_risks=(),
+        relative_path="fixture.csv",
+        format="csv",
+        encoding="utf-8",
+        delimiter=",",
+        sheet_name=None,
+        header_row=None,
+        locked_sha256="0" * 64,
+        schema=RawSchemaSpec(
+            required_columns=(),
+            optional_columns=(),
+            key_columns=(),
+            date_columns=(),
+            required_date_columns=(),
+            numeric_columns={},
+            allow_extra_columns=True,
+            key_unique=False,
+            row_count_min=1,
+        ),
+    )
+
+
+def _source_entry() -> dict[str, object]:
+    return {
+        "source_id": "financial_statement_core_long",
+        "profile_id": "financial_statement_core_long",
+        "enabled": True,
+        "channel_id": "S1",
+        "source_type": "financial_statement_core_long",
+        "source_agency": "fixture",
+        "original_unit": "firm-year-audit-status-item",
+        "related_period_field": "fiscal_year",
+        "availability_date_field": None,
+        "availability_date_source": "fixture",
+        "coverage_dimensions": [],
+        "role": "evidence",
+        "verification_status": "observed_opportunity_only",
+        "data_risks": [],
+        "relative_path": "fixture.csv",
+        "format": "csv",
+        "encoding": "utf-8",
+        "delimiter": ",",
+        "sheet_name": None,
+        "header_row": None,
+        "locked_sha256": "0" * 64,
+        "resolved_semantics": {
+            FIRM_ID: "issuer_ticker",
+            FISCAL_YEAR: "fiscal_year",
+            AUDIT_STATUS: "audit_status",
+            ITEM_ID: "source_item_id",
+            VALUE: "value_numeric",
+            UNIT: "unit",
+            STATEMENT_SCOPE: "scope",
+        },
+        "schema": {
+            "required_columns": [],
+            "optional_columns": [],
+            "key_columns": [],
+            "date_columns": [],
+            "required_date_columns": [],
+            "numeric_columns": {},
+            "allow_extra_columns": True,
+            "key_unique": False,
+            "row_count_min": 1,
+        },
+        "evidence_mapping": {
+            "audit_adjustment": {
+                "expected_scope": "consolidated",
+                "expected_unit": "VND",
+            }
+        },
+    }
+
+
 def _source_setup() -> tuple[
     dict[str, Any],
     str,
-    dict[str, Any],
     SourceSpec,
     EntityResolutionSpec,
+    _SourceControls,
+    dict[str, Any],
 ]:
     registry = _registry()
-    source_id = feature_source_id(registry)
-    sources = mapping(
-        mapping(registry.get("data_sources"), "data_sources").get("source_registry"),
-        "source_registry",
-    ).get("sources")
-    source = mapping(mapping(sources, "sources").get(source_id), f"source={source_id}")
-    spec = SourceSpec.from_mapping(source_id, source)
     entity = EntityResolutionSpec.from_mapping(registry.get("entity_resolution"))
-    return registry, source_id, source, spec, entity
+    semantics: dict[str, Any] = {
+        FIRM_ID: "issuer_ticker",
+        FISCAL_YEAR: "fiscal_year",
+        AUDIT_STATUS: "audit_status",
+        ITEM_ID: "source_item_id",
+        VALUE: "value_numeric",
+        UNIT: "unit",
+        STATEMENT_SCOPE: "scope",
+    }
+    return (
+        registry,
+        "financial_statement_core_long",
+        _source_spec(),
+        entity,
+        _SourceControls(expected_scope="consolidated", expected_unit="VND"),
+        semantics,
+    )
 
 
 def _row(
@@ -223,9 +321,22 @@ def _rows(semantics: dict[str, Any]) -> list[dict[str, object]]:
     ]
 
 
+def test_feature_source_resolver_requires_snapshot_injection() -> None:
+    registry = _registry()
+    with pytest.raises(ValueError, match="found=0"):
+        feature_source_id(registry)
+
+    source_registry = mapping(
+        mapping(registry.get("data_sources"), "data_sources").get("source_registry"),
+        "data_sources.source_registry",
+    )
+    sources = mapping(source_registry.get("sources"), "data_sources.source_registry.sources")
+    sources["financial_statement_core_long"] = _source_entry()
+    assert feature_source_id(registry) == "financial_statement_core_long"
+
+
 def test_registered_source_generator_builds_atomic_derived_and_observability_features() -> None:
-    registry, source_id, source, spec, entity = _source_setup()
-    semantics = mapping(source.get("resolved_semantics"), "resolved_semantics")
+    registry, source_id, spec, entity, controls, semantics = _source_setup()
     panel = pd.DataFrame(
         {
             physical_columns(registry)[FIRM_ID]: pd.Series(["A", "A", "A"], dtype="string"),
@@ -242,7 +353,7 @@ def test_registered_source_generator_builds_atomic_derived_and_observability_fea
         source_spec=spec,
         semantics=semantics,
         entity=entity,
-        controls=_source_controls(source),
+        controls=controls,
         columns=physical_columns(registry),
     )
     generated = result.panel.set_index(physical_columns(registry)[FISCAL_YEAR])
@@ -264,8 +375,7 @@ def test_registered_source_generator_builds_atomic_derived_and_observability_fea
 
 
 def test_registered_source_generator_rejects_duplicate_measurement_keys() -> None:
-    registry, source_id, source, spec, entity = _source_setup()
-    semantics = mapping(source.get("resolved_semantics"), "resolved_semantics")
+    registry, source_id, spec, entity, controls, semantics = _source_setup()
     rows = _rows(semantics)
     rows.append(dict(rows[0]))
     panel = pd.DataFrame(
@@ -285,6 +395,6 @@ def test_registered_source_generator_rejects_duplicate_measurement_keys() -> Non
             source_spec=spec,
             semantics=semantics,
             entity=entity,
-            controls=_source_controls(source),
+            controls=controls,
             columns=physical_columns(registry),
         )
