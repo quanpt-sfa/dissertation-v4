@@ -1,4 +1,4 @@
-"""P07 CLI: validate the feature registry and publish the as-of feature panel."""
+"""P07 CLI: generate, validate, and publish the as-of feature panel."""
 
 from __future__ import annotations
 
@@ -13,8 +13,9 @@ import pandas as pd
 
 from core.artifact_store import dataframe_to_csv
 from core.pipeline import load_run, mapping, physical_columns, sequence
-from core.semantic_keys import FIRM_ID, FISCAL_YEAR, TARGET_ID
+from core.semantic_keys import FIRM_ID, FISCAL_YEAR, SOURCE_ID, TARGET_ID
 from features.diagnostics import build_feature_diagnostics
+from features.generator import build_pipeline_feature_input, feature_source_id
 from features.service import build_feature_panel
 
 
@@ -46,11 +47,24 @@ def main() -> int:
     if not isinstance(panel, pd.DataFrame) or not isinstance(risk_sets, pd.DataFrame):
         raise ValueError("P07 panel inputs must be DataFrames")
 
+    columns = physical_columns(loaded.registry)
+    source_id = feature_source_id(loaded.registry)
+    raw_audit = mapping(
+        loaded.context.read("raw_audit", {SOURCE_ID: source_id}),
+        f"raw_audit source={source_id}",
+    )
+    generated = build_pipeline_feature_input(
+        base_panel=panel,
+        feature_definitions=cast(list[dict[str, object]], definitions),
+        registry=loaded.registry,
+        raw_audit=raw_audit,
+        columns=columns,
+    )
     result = build_feature_panel(
-        firm_year_panel=panel,
+        firm_year_panel=generated.panel,
         risk_sets=risk_sets,
         feature_definitions=cast(list[dict[str, object]], definitions),
-        columns=physical_columns(loaded.registry),
+        columns=columns,
         blocked_label_semantics=[
             str(value)
             for value in sequence(
@@ -77,7 +91,6 @@ def main() -> int:
     if args.validate_only:
         return 0
 
-    columns = physical_columns(loaded.registry)
     firm_column = columns[FIRM_ID]
     year_column = columns[FISCAL_YEAR]
     diagnostics = build_feature_diagnostics(
@@ -90,6 +103,7 @@ def main() -> int:
         panel=result.panel,
         definitions=cast(list[dict[str, object]], [*definitions, *intended]),
         firm_column=firm_column,
+        generation_audit=generated.audit,
     )
     summary = {
         **result.summary,
@@ -100,8 +114,9 @@ def main() -> int:
     }
     decision_report = _decision_report(result.decision_report, summary)
 
-    # Compatibility artifacts retain the locked P07 artifact contract while recording that
-    # the external test package is no longer read by production code.
+    # Compatibility artifact IDs remain locked at P0. Their receipts now state that
+    # production features are generated from registered pipeline sources, not an
+    # external prebuilt package, manifest, or ticker crosswalk.
     loaded.context.write("feature_store_manifest_validated", compatibility["manifest"], {})
     loaded.context.write("feature_store_validation_report", compatibility["report"], {})
     loaded.context.write("feature_store_file_audit", compatibility["file_audit"], {})
@@ -163,8 +178,9 @@ def main() -> int:
         {
             "columns": list(result.panel.columns),
             "primary_key": [firm_column, year_column],
-            "generation_mode": "pipeline_generated",
+            "generation_mode": "pipeline_generated_from_registered_source",
             "external_feature_store_used": False,
+            "generation_audit": generated.audit,
         },
         {},
     )
@@ -182,6 +198,7 @@ def _pipeline_generated_feature_receipts(
     panel: pd.DataFrame,
     definitions: list[dict[str, object]],
     firm_column: str,
+    generation_audit: dict[str, object],
 ) -> dict[str, object]:
     locked = [item for item in definitions if item.get("research_decision_status") == "LOCKED"]
     unresolved = [
@@ -189,7 +206,7 @@ def _pipeline_generated_feature_receipts(
     ]
     report: dict[str, object] = {
         "status": "PIPELINE_GENERATED_FEATURES_VALID",
-        "generation_mode": "pipeline_generated",
+        "generation_mode": "registered_source_to_feature_panel",
         "external_feature_store_used": False,
         "external_manifest_required": False,
         "external_crosswalk_required": False,
@@ -201,6 +218,7 @@ def _pipeline_generated_feature_receipts(
         "outer_outcomes_accessed": False,
         "known_cases_accessed": False,
         "preprocessing_fit_at_p07": False,
+        "generation_audit": generation_audit,
     }
     file_audit = pd.DataFrame(
         [
@@ -269,7 +287,7 @@ def _decision_report(base: str, summary: dict[str, object]) -> str:
     return (
         base
         + "\n## Feature generation\n\n"
-        + "- Mode: pipeline-generated from locked upstream artifacts.\n"
+        + "- Mode: generated from locked registered pipeline sources.\n"
         + "- External feature-store package used: no.\n"
         + f"- Registered features: {generation['validated_feature_count']}\n"
         + f"- Operational LOCKED features: {generation['locked_feature_count']}\n"
