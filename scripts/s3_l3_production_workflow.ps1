@@ -7,10 +7,15 @@ param(
     [string]$RawRoot,
     [string]$OutputRoot,
     [string]$Config,
+    [int]$Workers = 1,
     [switch]$SkipTests
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Workers -lt 1) {
+    throw "Workers must be a positive integer"
+}
 
 # Derive all default paths from the checked-out repository containing this script.
 # This keeps the workflow portable across machines, drive letters, and checkout folders.
@@ -67,6 +72,9 @@ Write-Host "ProjectRoot: $ProjectRoot"
 Write-Host "RawRoot:     $RawRoot"
 Write-Host "OutputRoot:  $OutputRoot"
 Write-Host "Config:      $Config"
+if ($Mode -eq "Final") {
+    Write-Host "P08 Workers: $Workers"
+}
 
 Push-Location $ProjectRoot
 try {
@@ -81,6 +89,7 @@ try {
                 tests/assurance/test_appendix_b_decisions.py::test_T006_prior_accuracy `
                 tests/features/test_pipeline_feature_generator.py `
                 tests/features/test_pipeline_feature_registry_grammar.py `
+                tests/stages/test_p08_worker_configuration.py `
                 tests/stages/test_s3_decision_ledger_grain.py `
                 tests/stages/test_s3_calendar_year_targets.py `
                 tests/stages/test_l3_latent_class.py `
@@ -117,7 +126,8 @@ try {
                 "--run-id", $RunId,
                 "--raw-root", $RawRoot,
                 "--output-root", $OutputRoot,
-                "--config", $Config
+                "--config", $Config,
+                "--workers", [string]$Workers
             )
             if ($SkipTests) { $runnerArgs += "--skip-tests" }
             Invoke-UvPython @runnerArgs
