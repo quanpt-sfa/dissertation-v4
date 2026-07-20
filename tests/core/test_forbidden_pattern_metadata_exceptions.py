@@ -69,6 +69,23 @@ def test_exception_is_semantic_role_based_not_name_based(tmp_path: Path) -> None
         validate_source_patterns(tmp_path, registry)
 
 
+def test_p07_generator_is_the_exact_registered_feature_data_boundary(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "src/features/generator.py",
+        'payload = {"firm_master_id": "F1"}\n',
+    )
+    validate_source_patterns(tmp_path, _registry())
+
+    _write(
+        tmp_path,
+        "src/features/unregistered_reader.py",
+        'payload = {"firm_master_id": "F2"}\n',
+    )
+    with pytest.raises(ConfigurationError, match="registered physical columns"):
+        validate_source_patterns(tmp_path, _registry())
+
+
 def test_static_guard_reports_all_files_with_portable_paths(tmp_path: Path) -> None:
     _write(tmp_path, "scripts/first.py", 'payload = {"firm_master_id": "F1"}\n')
     _write(tmp_path, "src/second.py", 'payload = {"firm_master_id": "F2"}\n')
