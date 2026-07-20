@@ -1,10 +1,12 @@
 """Run P08A/P08B/P08C for the config-locked execution profile.
 
 This script is the profile-aware replacement for legacy orchestration that
-iterated over `simulation.methods`. Those values are label strategies, not
+iterated over ``simulation.methods``. Those values are label strategies, not
 fully qualified method IDs.
 
 Parallelism is across P08B subprocesses. Each worker remains single-threaded.
+Execution batch compaction changes only subprocess and artifact granularity;
+replication IDs, RNG seeds, MCSE rules, and replication budgets remain locked.
 """
 
 from __future__ import annotations
@@ -22,6 +24,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from core.pipeline import load_run, mapping, sequence
 from core.semantic_keys import METHOD_ID, SCENARIO_ID
+from simulation.execution_batching import (
+    DEFAULT_BATCH_MULTIPLIER,
+    execution_batch_size,
+    planned_batch_count,
+    validate_batch_multiplier,
+)
 from simulation.method_contract import (
     IMBALANCE_TREATMENT_ID,
     LEARNER_TIER,
@@ -38,11 +46,22 @@ def main() -> int:
     parser.add_argument("--registry", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument(
+        "--batch-multiplier",
+        type=int,
+        default=int(
+            os.environ.get(
+                "P08_BATCH_MULTIPLIER",
+                str(DEFAULT_BATCH_MULTIPLIER),
+            )
+        ),
+    )
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--project-root", type=Path)
     args = parser.parse_args()
     if args.workers < 1:
         raise ValueError("--workers must be positive")
+    batch_multiplier = validate_batch_multiplier(args.batch_multiplier)
 
     project_root = (
         args.project_root.resolve()
@@ -83,6 +102,12 @@ def main() -> int:
         step_id="P08",
         state="FEATURED",
     )
+    if args.resume:
+        _validate_resume_batch_multiplier(
+            loaded,
+            expected=batch_multiplier,
+        )
+
     scenarios = [
         mapping(item, "simulation scenario")
         for item in sequence(
@@ -100,6 +125,13 @@ def main() -> int:
             spec = method_by_id(scenario, method_id)
             method_key = str(spec["method_" + "key"])
             plan = _replication_plan(simulation, spec)
+            configured_batch_size = int(plan["batch_size"])
+            artifact_batch_size = execution_batch_size(
+                configured_batch_size=configured_batch_size,
+                minimum_replications=int(plan["minimum"]),
+                maximum_replications=int(plan["maximum"]),
+                batch_multiplier=batch_multiplier,
+            )
             jobs.append(
                 {
                     SCENARIO_ID: scenario_id,
@@ -107,11 +139,47 @@ def main() -> int:
                     "scenario_" + "key": scenario_key,
                     "method_" + "key": method_key,
                     **plan,
+                    "configured_batch_size": configured_batch_size,
+                    "batch_size": artifact_batch_size,
+                    "batch_multiplier": batch_multiplier,
                 }
             )
 
     if not jobs:
         raise ValueError("P08 active execution profile has no jobs")
+
+    initial_batch_count = sum(
+        planned_batch_count(
+            replications=int(job["minimum"]),
+            batch_size=int(job["batch_size"]),
+        )
+        for job in jobs
+    )
+    maximum_batch_count = sum(
+        planned_batch_count(
+            replications=int(job["maximum"]),
+            batch_size=int(job["batch_size"]),
+        )
+        for job in jobs
+    )
+    print(
+        "P08_BATCH_PLAN_JSON="
+        + json.dumps(
+            {
+                "run_id": args.run_id,
+                "workers": args.workers,
+                "batch_multiplier": batch_multiplier,
+                "job_count": len(jobs),
+                "initial_artifact_batch_count": initial_batch_count,
+                "maximum_artifact_batch_count": maximum_batch_count,
+                "replication_budgets_changed": False,
+                "rng_seeds_changed": False,
+                "mcse_rules_changed": False,
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
 
     initial_commands: list[list[str]] = []
     for job in jobs:
@@ -127,6 +195,7 @@ def main() -> int:
                 method_id=str(job[METHOD_ID]),
                 start=start,
                 count=count,
+                batch_multiplier=batch_multiplier,
             )
             if args.resume and _batch_exists(
                 loaded,
@@ -146,8 +215,8 @@ def main() -> int:
 
     if args.resume:
         # After initial phase, reload inventory and repair any incomplete
-        # batch/diagnostics pairs that exist in the store — this covers
-        # adaptive batches beyond `minimum` that were interrupted mid-write.
+        # batch/diagnostics pairs that exist in the store. This covers adaptive
+        # batches beyond ``minimum`` that were interrupted between writes.
         repair_loaded = load_run(
             registry_path=registry_path,
             run_id=args.run_id,
@@ -221,6 +290,7 @@ def main() -> int:
                     method_id=method_id,
                     start=completed,
                     count=count,
+                    batch_multiplier=batch_multiplier,
                 )
             )
 
@@ -257,6 +327,7 @@ def _worker_command(
     method_id: str,
     start: int,
     count: int,
+    batch_multiplier: int,
 ) -> list[str]:
     batch_id = f"{start:06d}-{start + count - 1:06d}"
     return [
@@ -278,6 +349,8 @@ def _worker_command(
         str(start),
         "--count",
         str(count),
+        "--batch-multiplier",
+        str(batch_multiplier),
     ]
 
 
@@ -325,7 +398,11 @@ def _artifact_exists(
 ) -> bool:
     context = getattr(loaded, "context")
     if not hasattr(context.store, "_inventory_cache"):
-        setattr(context.store, "_inventory_cache", list(context.store.inventory()))
+        setattr(
+            context.store,
+            "_inventory_cache",
+            list(context.store.inventory()),
+        )
     inventory = getattr(context.store, "_inventory_cache")
     for item in inventory:
         if item.get("artifact_id") != artifact_id:
@@ -339,6 +416,41 @@ def _artifact_exists(
     return False
 
 
+def _validate_resume_batch_multiplier(
+    loaded: object,
+    *,
+    expected: int,
+) -> None:
+    """Prevent one immutable run from mixing artifact partition schemes."""
+    context = getattr(loaded, "context")
+    for item in context.store.inventory():
+        if item.get("artifact_id") != "model_diagnostics":
+            continue
+        raw = item.get("coordinates")
+        if not isinstance(raw, dict):
+            continue
+        coordinates = {
+            str(key): str(value)
+            for key, value in raw.items()
+        }
+        diagnostics = context.read("model_diagnostics", coordinates)
+        if not isinstance(diagnostics, dict):
+            raise ValueError("P08 model diagnostics must be an object")
+        batching = diagnostics.get("execution_batching")
+        if not isinstance(batching, dict):
+            raise ValueError(
+                "resume is incompatible with legacy P08 diagnostics that do not "
+                "record execution batching"
+            )
+        actual = int(str(batching.get("batch_multiplier")))
+        if actual != expected:
+            raise ValueError(
+                "resume batch multiplier differs from existing P08 artifacts: "
+                f"existing={actual}, requested={expected}"
+            )
+        return
+
+
 def _incomplete_batch_commands(
     loaded: object,
     *,
@@ -347,13 +459,7 @@ def _incomplete_batch_commands(
     registry_path: Path,
     run_id: str,
 ) -> list[list[str]]:
-    """Return worker commands for every batch/diagnostics pair that is incomplete.
-
-    A pair is incomplete when exactly one of the two artifacts exists at a given
-    coordinate — which happens when the worker process was killed between the two
-    immutable writes.  This includes adaptive batches beyond ``minimum`` that the
-    initial-range resume check does not cover.
-    """
+    """Return worker commands for every incomplete batch/diagnostics pair."""
     inventory = list(loaded.context.store.inventory())
 
     def _coords_set(artifact_id: str) -> set[tuple[str, ...]]:
@@ -364,7 +470,12 @@ def _incomplete_batch_commands(
             raw = item.get("coordinates")
             if isinstance(raw, dict):
                 result.add(
-                    tuple(sorted((str(k), str(v)) for k, v in raw.items()))
+                    tuple(
+                        sorted(
+                            (str(key), str(value))
+                            for key, value in raw.items()
+                        )
+                    )
                 )
         return result
 
@@ -384,15 +495,16 @@ def _incomplete_batch_commands(
     commands: list[list[str]] = []
     for coordinate_tuple in sorted(incomplete):
         coordinates = dict(coordinate_tuple)
-        sk = coordinates.get("scenario_" + "key", "")
-        mk = coordinates.get("method_" + "key", "")
+        scenario_key = coordinates.get("scenario_" + "key", "")
+        method_key = coordinates.get("method_" + "key", "")
         batch_key = coordinates.get("batch_" + "key", "")
-        job = jobs_by_keys.get((sk, mk))
+        job = jobs_by_keys.get((scenario_key, method_key))
         if job is None:
             raise ValueError(
-                f"Incomplete batch/diagnostics coordinate mismatch at scenario_key={sk}, "
-                f"method_key={mk}, batch_key={batch_key} has no corresponding active job "
-                "configured in the execution profile. Please clean up the orphan artifacts."
+                "Incomplete batch/diagnostics coordinate mismatch at "
+                f"scenario_key={scenario_key}, method_key={method_key}, "
+                f"batch_key={batch_key} has no corresponding active job. "
+                "Please clean up the orphan artifacts."
             )
         batch_size = int(job["batch_size"])
         batch_index = int(batch_key.removeprefix("b"))
@@ -409,6 +521,7 @@ def _incomplete_batch_commands(
                 method_id=str(job[METHOD_ID]),
                 start=start,
                 count=count,
+                batch_multiplier=int(job["batch_multiplier"]),
             )
         )
     return commands
@@ -425,20 +538,24 @@ def _batch_exists(
     batch_index = start // batch_size
     batch_key = f"b{batch_index:04d}"
 
-    scenario_key_str = "scenario_" + "key"
-    method_key_str = "method_" + "key"
-    batch_key_str = "batch_" + "key"
-
     coordinates = {
-        scenario_key_str: scenario_key,
-        method_key_str: method_key,
-        batch_key_str: batch_key,
+        "scenario_" + "key": scenario_key,
+        "method_" + "key": method_key,
+        "batch_" + "key": batch_key,
     }
 
-    batch_written = _artifact_exists(loaded, "simulation_batches", coordinates)
-    diagnostics_written = _artifact_exists(loaded, "model_diagnostics", coordinates)
-    # Both must exist: if process died between the two writes, diagnostics_written is False
-    # and the worker re-runs.  Immutable re-write of identical content is idempotent.
+    batch_written = _artifact_exists(
+        loaded,
+        "simulation_batches",
+        coordinates,
+    )
+    diagnostics_written = _artifact_exists(
+        loaded,
+        "model_diagnostics",
+        coordinates,
+    )
+    # Both must exist. If the process died between writes, the worker re-runs;
+    # immutable re-write of identical content is idempotent.
     return batch_written and diagnostics_written
 
 
