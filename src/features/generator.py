@@ -5,9 +5,8 @@ from __future__ import annotations
 import ast
 import math
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
@@ -34,6 +33,7 @@ _OBSERVABILITY_STEPS = frozenset({"coverage_count"})
 _DEPENDENCY_PATTERN = re.compile(
     r"^(?P<base>[A-Za-z_][A-Za-z0-9_]*)(?:\[(?P<period>t|t-1)\])?$"
 )
+_ALLOWED_FORMULA_FUNCTIONS = frozenset({"abs", "average"})
 
 
 @dataclass(frozen=True)
@@ -74,6 +74,8 @@ def build_pipeline_feature_input(
     decision = _mapping(raw_audit.get("decision"), f"raw_audit source={source_id}.decision")
     if decision.get("pipeline_may_advance") is not True:
         raise ValueError(f"source={source_id}: passing P01 audit required before P07 generation")
+    if raw_audit.get("status") not in {"PASS", "PASS_WITH_ISSUES"}:
+        raise ValueError(f"source={source_id}: invalid P01 audit status {raw_audit.get('status')}")
     spec, path = resolve_source(registry, source_id)
     semantics = _mapping(source.get("resolved_semantics"), f"source={source_id}.resolved_semantics")
     controls = _source_controls(source)
@@ -159,8 +161,9 @@ def materialize_registered_features(
     feature_series: dict[str, pd.Series] = {}
     panel_index = pd.MultiIndex.from_frame(panel[[firm_column, year_column]])
     for definition in atomic_specs:
-        values = _atomic_series(definition, source_values, panel_index)
-        feature_series[definition.feature_id] = values
+        feature_series[definition.feature_id] = _atomic_series(
+            definition, source_values, panel_index
+        )
 
     pending = list(derived)
     while pending:
@@ -337,7 +340,7 @@ def _atomic_definition(definition: dict[str, object]) -> _AtomicDefinition:
     return _AtomicDefinition(
         feature_id=cast(str, feature_id),
         physical_column=cast(str, physical),
-        audit_status=cast(str, audit_status),
+        audit_status=cast(str, audit_status).casefold(),
         item_ids=tuple(items),
     )
 
@@ -380,7 +383,7 @@ def _collect_source_values(
     for row in source_rows:
         scanned += 1
         item = _text(row.get(str(semantics[ITEM_ID])))
-        status = _text(row.get(str(semantics[AUDIT_STATUS])))
+        status = _text(row.get(str(semantics[AUDIT_STATUS]))).casefold()
         if item not in needed_items or status not in needed_statuses:
             continue
         candidate += 1
@@ -445,17 +448,20 @@ def _atomic_series(
             if status == definition.audit_status and source_item == item
         }
         components.append(
-            pd.Series(mapped, index=pd.MultiIndex.from_tuples(mapped), dtype="float64").reindex(
-                panel_index
-            )
+            pd.Series(
+                mapped,
+                index=pd.MultiIndex.from_tuples(mapped.keys()),
+                dtype="float64",
+            ).reindex(panel_index)
             if mapped
             else pd.Series(index=panel_index, dtype="float64")
         )
     frame = pd.concat(components, axis=1)
-    if len(components) == 1:
-        result = frame.iloc[:, 0]
-    else:
-        result = frame.sum(axis=1, min_count=len(components))
+    result = (
+        frame.iloc[:, 0]
+        if len(components) == 1
+        else frame.sum(axis=1, min_count=len(components))
+    )
     result.index = pd.RangeIndex(len(result))
     return result.astype("float64")
 
@@ -490,6 +496,15 @@ def _evaluate_registered_formula(
     formula = definition.get("formula")
     if not isinstance(formula, str) or not formula.strip():
         raise ValueError(f"feature={definition.get('feature_id')}: registered formula required")
+    try:
+        expression = ast.parse(formula, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(
+            f"feature={definition.get('feature_id')}: invalid registered formula syntax"
+        ) from exc
+    referenced_names = {
+        node.id for node in ast.walk(expression) if isinstance(node, ast.Name)
+    } - _ALLOWED_FORMULA_FUNCTIONS
     environment: dict[str, pd.Series] = {}
     for token in dependencies:
         base, lag = _dependency_parts(token)
@@ -504,20 +519,20 @@ def _evaluate_registered_formula(
             if lag
             else series
         )
-        if lag == 0:
+        if base in referenced_names:
             environment[base] = resolved
         alias = _formula_alias(base, lag)
-        if alias in environment and not environment[alias].equals(resolved):
-            raise ValueError(
-                f"feature={definition.get('feature_id')}: ambiguous formula alias {alias}"
-            )
-        environment[alias] = resolved
-    try:
-        expression = ast.parse(formula, mode="eval")
-    except SyntaxError as exc:
+        if alias in referenced_names:
+            if alias in environment and not environment[alias].equals(resolved):
+                raise ValueError(
+                    f"feature={definition.get('feature_id')}: ambiguous formula alias {alias}"
+                )
+            environment[alias] = resolved
+    unknown = sorted(referenced_names - set(environment))
+    if unknown:
         raise ValueError(
-            f"feature={definition.get('feature_id')}: invalid registered formula syntax"
-        ) from exc
+            f"feature={definition.get('feature_id')}: formula names are not registered dependencies {unknown}"
+        )
     result = _evaluate_expression(expression.body, environment, panel.index)
     return _as_series(result, panel.index).astype("float64")
 
@@ -585,8 +600,7 @@ def _evaluate_expression(node: ast.AST, environment: dict[str, pd.Series], index
 
 def _safe_divide(left: Value, right: Value, index: pd.Index) -> pd.Series:
     numerator = _as_series(left, index)
-    denominator = _as_series(right, index)
-    denominator = denominator.where(denominator.ne(0.0))
+    denominator = _as_series(right, index).where(lambda value: value.ne(0.0))
     return (numerator / denominator).astype("float64")
 
 
@@ -641,10 +655,11 @@ def _materialize_observability(
     unaudited_count = (
         pd.concat([feature_series[value] for value in unaudited], axis=1).notna().sum(axis=1)
     )
-    pair_count = sum(
-        feature_series[audited_id].notna() & feature_series[unaudited_id].notna()
-        for audited_id, unaudited_id in pair_dependencies
-    )
+    pair_count = pd.Series(0.0, index=audited_count.index, dtype="float64")
+    for audited_id, unaudited_id in pair_dependencies:
+        pair_count = pair_count + (
+            feature_series[audited_id].notna() & feature_series[unaudited_id].notna()
+        ).astype("float64")
     for definition in definitions:
         feature_id = str(definition["feature_id"])
         normalized = feature_id.casefold()
