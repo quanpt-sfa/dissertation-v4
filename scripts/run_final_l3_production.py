@@ -24,15 +24,21 @@ def _run(command: list[str], *, cwd: Path, capture: bool = False) -> str:
         cwd=cwd,
         text=True,
         capture_output=capture,
-        check=True,
+        check=False,
     )
     if capture:
         if result.stdout:
             print(result.stdout, end="", flush=True)
         if result.stderr:
             print(result.stderr, end="", file=sys.stderr, flush=True)
-        return result.stdout
-    return ""
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            command,
+            output=result.stdout if capture else None,
+            stderr=result.stderr if capture else None,
+        )
+    return result.stdout if capture else ""
 
 
 def _run_tests(project_root: Path) -> None:
@@ -285,7 +291,11 @@ def main() -> int:
 
     _run([*base_command, "--through", "P17", "--resume"], cwd=project_root)
     preflight["status"] = "PASS_P00_P17"
-    preflight["l3_execution_status"] = "EXECUTED_ALL_REGISTERED_SCENARIOS" if l3_available else "SKIPPED_UNAVAILABLE_BY_DESIGN"
+    preflight["l3_execution_status"] = (
+        "EXECUTED_ALL_REGISTERED_SCENARIOS"
+        if l3_available
+        else "SKIPPED_UNAVAILABLE_BY_DESIGN"
+    )
     preflight["p10_status_lines"] = p10_lines
     (preflight_dir / "l3_preflight_receipt.json").write_text(
         json.dumps(preflight, ensure_ascii=False, indent=2, sort_keys=True),
