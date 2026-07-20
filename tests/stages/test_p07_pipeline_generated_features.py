@@ -23,6 +23,7 @@ def test_p07_production_source_has_no_external_feature_store_dependency() -> Non
     ).read_text(encoding="utf-8")
     assert "assemble_feature_input_panel" not in source
     assert "from features.store" not in source
+    assert "build_pipeline_feature_input" in source
     assert "external_feature_store_used" in source
 
 
@@ -49,10 +50,16 @@ def test_pipeline_generated_receipts_preserve_legacy_artifact_contract() -> None
             "model_eligibility": "blocked_until_locked",
         },
     ]
+    generation_audit = {
+        "status": "PIPELINE_FEATURE_GENERATION_VALID",
+        "source_id": "registered_financial_statement_source",
+        "generated_feature_count": 1,
+    }
     receipts = module._pipeline_generated_feature_receipts(
         panel=panel,
         definitions=definitions,
         firm_column="firm_master_id",
+        generation_audit=generation_audit,
     )
     report = receipts["report"]
     assert report["status"] == "PIPELINE_GENERATED_FEATURES_VALID"
@@ -61,6 +68,7 @@ def test_pipeline_generated_receipts_preserve_legacy_artifact_contract() -> None
     assert report["external_crosswalk_required"] is False
     assert report["locked_feature_count"] == 1
     assert report["unresolved_feature_count"] == 1
+    assert report["generation_audit"] == generation_audit
     assert list(receipts["file_audit"]["feature_id"]) == ["feature_a", "feature_b"]
     assert set(receipts["identifier_audit"]["mapping_status"]) == {
         "CANONICAL_PIPELINE_ID"
