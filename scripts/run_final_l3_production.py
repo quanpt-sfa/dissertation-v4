@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -78,6 +79,12 @@ def _parse_prefixed_json(output: str, prefix: str) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError(f"{prefix} payload must be a JSON object")
     return raw
+
+
+def _validate_workers(value: int) -> int:
+    if value < 1:
+        raise ValueError("--workers must be a positive integer")
+    return value
 
 
 def _validate_preregistered_config(config_path: Path) -> dict[str, Any]:
@@ -161,8 +168,18 @@ def main() -> int:
     parser.add_argument("--raw-root", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=Path("config/pipeline.yaml"))
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--skip-tests", action="store_true")
     args = parser.parse_args()
+
+    workers = _validate_workers(args.workers)
+    # P08 parallelism is an execution-only control. The locked simulation seeds
+    # remain keyed by protocol/scenario/method/replication, not by worker count.
+    os.environ["P08_WORKERS"] = str(workers)
+    print(
+        f"P08 workers={workers} scope=P08B_subprocesses protocol_hashed=false",
+        flush=True,
+    )
 
     config = args.config.resolve()
     project_root = config.parent.parent
@@ -260,6 +277,9 @@ def main() -> int:
         "l3_capability": capability,
         "l3_execution_status": "PENDING" if l3_available else "SKIPPED_UNAVAILABLE_BY_DESIGN",
         "primary_measurement_sources": primary_sources,
+        "p08_workers": workers,
+        "p08_parallelism_scope": "P08B_SUBPROCESSES",
+        "p08_worker_count_protocol_hashed": False,
         "outer_outcomes_accessed": False,
         "known_cases_accessed": False,
         **scenario_receipt,
