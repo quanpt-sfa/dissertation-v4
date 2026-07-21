@@ -81,9 +81,16 @@ def _validate_replication_artifact_ranges(
 
 
 def _sanitize_normalized_cost_regret(frame: pd.DataFrame) -> pd.DataFrame:
-    """Recompute legacy normalized regret without the former 1e-12 denominator."""
+    """Recompute legacy normalized regret with vectorized long-to-wide operations."""
     metric_values = frame[METRIC_ID].astype(str)
-    normalized_mask = metric_values.str.endswith("::normalized_cost_regret")
+    normalized_suffix = "normalized_cost_regret"
+    companion_suffixes = {
+        normalized_suffix,
+        "cost_regret_vs_oracle",
+        "cost_savings_vs_all_negative",
+    }
+    suffixes = metric_values.str.rsplit("::", n=1).str[-1]
+    normalized_mask = suffixes.eq(normalized_suffix)
     if not bool(normalized_mask.any()):
         return frame
 
@@ -93,40 +100,70 @@ def _sanitize_normalized_cost_regret(frame: pd.DataFrame) -> pd.DataFrame:
             "Cannot sanitize normalized cost regret with duplicate replication-metric rows"
         )
 
-    output = frame.copy()
-    lookup = {
-        (
-            str(row[SCENARIO_ID]),
-            str(row[METHOD_ID]),
-            int(row[REPLICATION_ID]),
-            str(row[METRIC_ID]),
-        ): float(row["estimate"])
-        for _, row in output.iterrows()
-    }
+    relevant_mask = suffixes.isin(companion_suffixes)
+    relevant = frame.loc[
+        relevant_mask,
+        [SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID, "estimate"],
+    ].copy()
+    relevant["_metric_suffix"] = suffixes.loc[relevant_mask].to_numpy()
+    relevant["_metric_prefix"] = (
+        relevant[METRIC_ID].astype(str).str.rsplit("::", n=1).str[0]
+    )
 
-    for index, row in output.loc[normalized_mask].iterrows():
-        metric_id = str(row[METRIC_ID])
-        prefix = metric_id.rsplit("::", 1)[0]
-        base = (
-            str(row[SCENARIO_ID]),
-            str(row[METHOD_ID]),
-            int(row[REPLICATION_ID]),
-        )
-        regret_key = (*base, f"{prefix}::cost_regret_vs_oracle")
-        savings_key = (*base, f"{prefix}::cost_savings_vs_all_negative")
-        if regret_key not in lookup or savings_key not in lookup:
+    index_columns = [
+        SCENARIO_ID,
+        METHOD_ID,
+        REPLICATION_ID,
+        "_metric_prefix",
+    ]
+    wide = relevant.pivot(
+        index=index_columns,
+        columns="_metric_suffix",
+        values="estimate",
+    )
+    for required in companion_suffixes:
+        if required not in wide.columns:
             raise ValueError(
-                f"normalized cost regret companions missing for metric={metric_id}"
+                f"normalized cost regret companion metric missing: {required}"
             )
-        regret = lookup[regret_key]
-        savings = lookup[savings_key]
-        avoidable_cost = abs(regret + savings)
-        scale = max(abs(regret), abs(savings), 1.0)
-        output.at[index, "estimate"] = (
-            math.nan
-            if avoidable_cost <= 1e-10 * scale
-            else regret / avoidable_cost
+
+    normalized_present = wide[normalized_suffix].notna()
+    companion_missing = (
+        wide["cost_regret_vs_oracle"].isna()
+        | wide["cost_savings_vs_all_negative"].isna()
+    )
+    if bool((normalized_present & companion_missing).any()):
+        raise ValueError(
+            "normalized cost regret companions missing for one or more replications"
         )
+
+    regret = pd.to_numeric(
+        wide["cost_regret_vs_oracle"], errors="coerce"
+    )
+    savings = pd.to_numeric(
+        wide["cost_savings_vs_all_negative"], errors="coerce"
+    )
+    avoidable_cost = (regret + savings).abs()
+    scale = pd.concat(
+        [regret.abs(), savings.abs()], axis=1
+    ).max(axis=1).clip(lower=1.0)
+    replacement_values = regret / avoidable_cost
+    replacement_values = replacement_values.mask(
+        avoidable_cost <= 1e-10 * scale
+    )
+
+    output = frame.copy()
+    target = output.loc[
+        normalized_mask,
+        [SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID],
+    ].copy()
+    target["_metric_prefix"] = (
+        target[METRIC_ID].astype(str).str.rsplit("::", n=1).str[0]
+    )
+    target_index = pd.MultiIndex.from_frame(target[index_columns])
+    output.loc[normalized_mask, "estimate"] = (
+        replacement_values.reindex(target_index).to_numpy()
+    )
     return output
 
 
