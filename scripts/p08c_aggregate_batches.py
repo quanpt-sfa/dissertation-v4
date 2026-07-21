@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 from typing import cast
@@ -35,6 +36,56 @@ from simulation.method_contract import (
 )
 from simulation.service import summarize_mcse
 from simulation.replication_contract import replication_plan as _replication_plan
+
+
+def _sanitize_normalized_cost_regret(frame: pd.DataFrame) -> pd.DataFrame:
+    """Recompute legacy normalized regret without the former 1e-12 denominator."""
+    metric_values = frame[METRIC_ID].astype(str)
+    normalized_mask = metric_values.str.endswith("::normalized_cost_regret")
+    if not bool(normalized_mask.any()):
+        return frame
+
+    key_columns = [SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID]
+    if frame.duplicated(key_columns, keep=False).any():
+        raise ValueError(
+            "Cannot sanitize normalized cost regret with duplicate replication-metric rows"
+        )
+
+    output = frame.copy()
+    lookup = {
+        (
+            str(row[SCENARIO_ID]),
+            str(row[METHOD_ID]),
+            int(row[REPLICATION_ID]),
+            str(row[METRIC_ID]),
+        ): float(row["estimate"])
+        for _, row in output.iterrows()
+    }
+
+    for index, row in output.loc[normalized_mask].iterrows():
+        metric_id = str(row[METRIC_ID])
+        prefix = metric_id.rsplit("::", 1)[0]
+        base = (
+            str(row[SCENARIO_ID]),
+            str(row[METHOD_ID]),
+            int(row[REPLICATION_ID]),
+        )
+        regret_key = (*base, f"{prefix}::cost_regret_vs_oracle")
+        savings_key = (*base, f"{prefix}::cost_savings_vs_all_negative")
+        if regret_key not in lookup or savings_key not in lookup:
+            raise ValueError(
+                f"normalized cost regret companions missing for metric={metric_id}"
+            )
+        regret = lookup[regret_key]
+        savings = lookup[savings_key]
+        avoidable_cost = abs(regret + savings)
+        scale = max(abs(regret), abs(savings), 1.0)
+        output.at[index, "estimate"] = (
+            math.nan
+            if avoidable_cost <= 1e-10 * scale
+            else regret / avoidable_cost
+        )
+    return output
 
 
 def main() -> int:
@@ -92,6 +143,7 @@ def main() -> int:
         if value.empty:
             continue
 
+        value = _sanitize_normalized_cost_regret(value)
         scenario_ids = set(value[SCENARIO_ID].dropna().astype(str))
         method_ids = set(value[METHOD_ID].dropna().astype(str))
         if len(scenario_ids) != 1 or len(method_ids) != 1:

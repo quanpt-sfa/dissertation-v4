@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from core.semantic_keys import ESTIMATE, METHOD_ID, METRIC_ID, REPLICATION_ID, SCENARIO_ID
+from scripts.p08c_aggregate_batches import _sanitize_normalized_cost_regret
 from simulation.service import (
     _classification_cost,
     _mcse_gate_required,
@@ -107,3 +108,30 @@ def test_undefined_non_gated_metric_does_not_block_completion() -> None:
     assert diagnostic["undefined_replications"] == 1000
     assert diagnostic["mcse_gate_required"] is False
     assert report["status"] == "PASS"
+
+
+def test_legacy_normalized_regret_is_recomputed_during_aggregation() -> None:
+    prefix = "budget_cost::top_05pct::high_fn"
+    frame = pd.DataFrame(
+        {
+            SCENARIO_ID: ["s", "s", "s", "s", "s", "s"],
+            METHOD_ID: ["m", "m", "m", "m", "m", "m"],
+            REPLICATION_ID: [0, 0, 0, 1, 1, 1],
+            METRIC_ID: [
+                f"{prefix}::normalized_cost_regret",
+                f"{prefix}::cost_regret_vs_oracle",
+                f"{prefix}::cost_savings_vs_all_negative",
+                f"{prefix}::normalized_cost_regret",
+                f"{prefix}::cost_regret_vs_oracle",
+                f"{prefix}::cost_savings_vs_all_negative",
+            ],
+            ESTIMATE: [1.0e12, 2.0, -2.0, 999.0, 2.0, 3.0],
+        }
+    )
+    clean = _sanitize_normalized_cost_regret(frame)
+    normalized = clean.loc[
+        clean[METRIC_ID].astype(str).str.endswith("::normalized_cost_regret"),
+        ESTIMATE,
+    ].tolist()
+    assert math.isnan(normalized[0])
+    assert normalized[1] == 0.4
