@@ -1,0 +1,141 @@
+name: Apply vectorized P08 sanitizer
+
+on:
+  push:
+    branches:
+      - fix/p08-mcse-dissertation-budget
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[p08-vectorized-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/p08-mcse-dissertation-budget
+          fetch-depth: 0
+
+      - name: Replace row-wise sanitizer
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('scripts/p08c_aggregate_batches.py')
+          text = path.read_text(encoding='utf-8')
+
+          replacement = '''def _sanitize_normalized_cost_regret(frame: pd.DataFrame) -> pd.DataFrame:
+              """Recompute legacy normalized regret with vectorized long-to-wide operations."""
+              metric_values = frame[METRIC_ID].astype(str)
+              normalized_suffix = "normalized_cost_regret"
+              companion_suffixes = {
+                  normalized_suffix,
+                  "cost_regret_vs_oracle",
+                  "cost_savings_vs_all_negative",
+              }
+              suffixes = metric_values.str.rsplit("::", n=1).str[-1]
+              normalized_mask = suffixes.eq(normalized_suffix)
+              if not bool(normalized_mask.any()):
+                  return frame
+
+              key_columns = [SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID]
+              if frame.duplicated(key_columns, keep=False).any():
+                  raise ValueError(
+                      "Cannot sanitize normalized cost regret with duplicate replication-metric rows"
+                  )
+
+              relevant_mask = suffixes.isin(companion_suffixes)
+              relevant = frame.loc[
+                  relevant_mask,
+                  [SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID, "estimate"],
+              ].copy()
+              relevant["_metric_suffix"] = suffixes.loc[relevant_mask].to_numpy()
+              relevant["_metric_prefix"] = (
+                  relevant[METRIC_ID].astype(str).str.rsplit("::", n=1).str[0]
+              )
+
+              index_columns = [
+                  SCENARIO_ID,
+                  METHOD_ID,
+                  REPLICATION_ID,
+                  "_metric_prefix",
+              ]
+              wide = relevant.pivot(
+                  index=index_columns,
+                  columns="_metric_suffix",
+                  values="estimate",
+              )
+              for required in companion_suffixes:
+                  if required not in wide.columns:
+                      raise ValueError(
+                          f"normalized cost regret companion metric missing: {required}"
+                      )
+
+              normalized_present = wide[normalized_suffix].notna()
+              companion_missing = (
+                  wide["cost_regret_vs_oracle"].isna()
+                  | wide["cost_savings_vs_all_negative"].isna()
+              )
+              if bool((normalized_present & companion_missing).any()):
+                  raise ValueError(
+                      "normalized cost regret companions missing for one or more replications"
+                  )
+
+              regret = pd.to_numeric(
+                  wide["cost_regret_vs_oracle"], errors="coerce"
+              )
+              savings = pd.to_numeric(
+                  wide["cost_savings_vs_all_negative"], errors="coerce"
+              )
+              avoidable_cost = (regret + savings).abs()
+              scale = pd.concat(
+                  [regret.abs(), savings.abs()], axis=1
+              ).max(axis=1).clip(lower=1.0)
+              replacement_values = regret / avoidable_cost
+              replacement_values = replacement_values.mask(
+                  avoidable_cost <= 1e-10 * scale
+              )
+
+              output = frame.copy()
+              target = output.loc[
+                  normalized_mask,
+                  [SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID],
+              ].copy()
+              target["_metric_prefix"] = (
+                  target[METRIC_ID].astype(str).str.rsplit("::", n=1).str[0]
+              )
+              target_index = pd.MultiIndex.from_frame(target[index_columns])
+              output.loc[normalized_mask, "estimate"] = (
+                  replacement_values.reindex(target_index).to_numpy()
+              )
+              return output
+
+
+          def main('''
+
+          pattern = re.compile(
+              r'def _sanitize_normalized_cost_regret\(.*?\n\n\ndef main\(',
+              re.S,
+          )
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'sanitizer replacement count={count}')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Syntax check
+        run: python -m compileall -q scripts/p08c_aggregate_batches.py
+
+      - name: Commit vectorized sanitizer
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-p08-vectorized-sanitizer.yml
+          git add scripts/p08c_aggregate_batches.py
+          git commit -m "perf(p08): vectorize legacy cost-regret sanitation [p08-vectorized-applied]"
+          git push origin HEAD:fix/p08-mcse-dissertation-budget
