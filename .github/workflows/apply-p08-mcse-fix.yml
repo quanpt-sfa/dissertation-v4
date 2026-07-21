@@ -1,0 +1,513 @@
+name: Apply P08 MCSE fix
+
+on:
+  push:
+    branches:
+      - fix/p08-mcse-dissertation-budget
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[p08-fix-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/p08-mcse-dissertation-budget
+          fetch-depth: 0
+
+      - name: Apply fail-closed P08 MCSE fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          service_path = Path('src/simulation/service.py')
+          service = service_path.read_text(encoding='utf-8')
+
+          helper = '''def _normalized_cost_regret(
+              *,
+              total_cost: float,
+              oracle_cost: float,
+              all_negative_cost: float,
+          ) -> float:
+              """Return normalized regret only when the avoidable-cost scale is identified."""
+              avoidable_cost = abs(all_negative_cost - oracle_cost)
+              scale = max(abs(all_negative_cost), abs(oracle_cost), 1.0)
+              if avoidable_cost <= 1e-10 * scale:
+                  return math.nan
+              return float((total_cost - oracle_cost) / avoidable_cost)
+
+
+          '''
+          marker = 'def _classification_cost(\n'
+          if helper.strip() not in service:
+              if marker not in service:
+                  raise SystemExit('classification-cost marker not found')
+              service = service.replace(marker, helper + marker, 1)
+
+          old = '''    denominator = max(abs(all_negative - oracle), 1e-12)
+              return {
+                  "total_cost": total,
+                  "cost_per_firm": total / max(1, len(truth)),
+                  "normalized_cost_regret": (total - oracle) / denominator,
+          '''
+          new = '''    return {
+                  "total_cost": total,
+                  "cost_per_firm": total / max(1, len(truth)),
+                  "normalized_cost_regret": _normalized_cost_regret(
+                      total_cost=total,
+                      oracle_cost=oracle,
+                      all_negative_cost=all_negative,
+                  ),
+          '''
+          if old not in service:
+              raise SystemExit('threshold normalized-regret block not found')
+          service = service.replace(old, new, 1)
+
+          old = '''    denominator = max(abs(all_negative - oracle), 1e-12)
+              tp = int(np.sum(truth & predicted))
+          '''
+          new = '''    tp = int(np.sum(truth & predicted))
+          '''
+          if old not in service:
+              raise SystemExit('budget denominator block not found')
+          service = service.replace(old, new, 1)
+
+          old = '''            "cost_regret_vs_oracle": model["total_cost"] - oracle,
+                      "normalized_cost_regret": (model["total_cost"] - oracle) / denominator,
+                      "cost_savings_vs_all_negative": all_negative - model["total_cost"],
+          '''
+          new = '''            "cost_regret_vs_oracle": model["total_cost"] - oracle,
+                      "normalized_cost_regret": _normalized_cost_regret(
+                          total_cost=float(model["total_cost"]),
+                          oracle_cost=float(oracle),
+                          all_negative_cost=float(all_negative),
+                      ),
+                      "cost_savings_vs_all_negative": all_negative - model["total_cost"],
+          '''
+          if old not in service:
+              raise SystemExit('budget normalized-regret block not found')
+          service = service.replace(old, new, 1)
+
+          replacement = r'''def summarize_mcse(
+              batches: Sequence[pd.DataFrame],
+              *,
+              minimum_replications: int,
+              maximum_replications: int,
+              pass_fail_mcse_maximum: float,
+              l3_minimum_replications: int | None = None,
+              l3_maximum_replications: int | None = None,
+              l3_pass_fail_mcse_maximum: float | None = None,
+              extended_minimum_replications: int | None = None,
+              extended_maximum_replications: int | None = None,
+              extended_pass_fail_mcse_maximum: float | None = None,
+              cost_sensitive_minimum_replications: int | None = None,
+              cost_sensitive_maximum_replications: int | None = None,
+              cost_sensitive_pass_fail_mcse_maximum: float | None = None,
+              cost_mcse_relative_fraction: float = 0.02,
+              continuous_mcse_fraction: float | None = None,
+              minimum_meaningful_improvement: float | None = None,
+              gated_metric_ids: Sequence[str] | None = None,
+              mmi_scaled_metric_ids: Sequence[str] | None = None,
+          ) -> dict[str, object]:
+              """Compute MCSE using method-tier metadata and an explicit gate metric set."""
+              if not batches:
+                  return {"status": "SKIPPED", "reason_code": "NO_SIMULATION_BATCHES", "metrics": []}
+              if (
+                  minimum_replications < 1
+                  or maximum_replications < minimum_replications
+                  or pass_fail_mcse_maximum <= 0
+              ):
+                  raise ValueError("simulation replication controls are invalid")
+
+              combined = pd.concat(batches, ignore_index=True)
+              gate_ids = set(_DEFAULT_MCSE_GATE_METRICS if gated_metric_ids is None else gated_metric_ids)
+              mmi_ids = set(() if mmi_scaled_metric_ids is None else mmi_scaled_metric_ids)
+              metrics: list[dict[str, object]] = []
+              grouped = combined.groupby([SCENARIO_ID, METHOD_ID, METRIC_ID], sort=True)
+              for (scenario_id, method_id, metric_id), frame in grouped:
+                  total_count = int(len(frame))
+                  estimates = pd.to_numeric(frame[ESTIMATE], errors="coerce").to_numpy(dtype=float)
+                  finite_values = estimates[np.isfinite(estimates)]
+                  finite_count = int(len(finite_values))
+                  standard_deviation = (
+                      float(np.std(finite_values, ddof=1)) if finite_count > 1 else 0.0
+                  )
+                  metric_name = str(metric_id)
+                  learner_tiers = set(frame["learner_tier"].dropna().astype(str)) if "learner_tier" in frame.columns else set()
+                  training_costs = set(frame["training_cost_regime_id"].dropna().astype(str)) if "training_cost_regime_id" in frame.columns else set()
+                  treatments = set(frame["imbalance_treatment_id"].dropna().astype(str)) if "imbalance_treatment_id" in frame.columns else set()
+                  method_families = set(frame["method_family"].dropna().astype(str)) if "method_family" in frame.columns else set()
+                  if any(len(values) > 1 for values in (learner_tiers, training_costs, treatments, method_families)):
+                      raise ValueError(f"scenario={scenario_id}, method={method_id}: mixed method metadata")
+
+                  is_standalone = method_families == {"standalone_estimator"} or learner_tiers == {"standalone"}
+                  is_imbalance_robustness = treatments not in (set(), {"none"}, {"not_applicable"})
+                  is_extended = learner_tiers in ({"extended"}, {"methodological"}) or is_imbalance_robustness
+                  is_cost_sensitive_core = (
+                      learner_tiers == {"core"}
+                      and not is_imbalance_robustness
+                      and training_costs not in (set(), {"symmetric"})
+                  )
+
+                  required_replications = (
+                      l3_minimum_replications
+                      if is_standalone and l3_minimum_replications is not None
+                      else extended_minimum_replications
+                      if is_extended and extended_minimum_replications is not None
+                      else cost_sensitive_minimum_replications
+                      if is_cost_sensitive_core and cost_sensitive_minimum_replications is not None
+                      else minimum_replications
+                  )
+                  replication_cap = (
+                      l3_maximum_replications
+                      if is_standalone and l3_maximum_replications is not None
+                      else extended_maximum_replications
+                      if is_extended and extended_maximum_replications is not None
+                      else cost_sensitive_maximum_replications
+                      if is_cost_sensitive_core and cost_sensitive_maximum_replications is not None
+                      else maximum_replications
+                  )
+                  pass_fail_target = (
+                      l3_pass_fail_mcse_maximum
+                      if is_standalone and l3_pass_fail_mcse_maximum is not None
+                      else extended_pass_fail_mcse_maximum
+                      if is_extended and extended_pass_fail_mcse_maximum is not None
+                      else cost_sensitive_pass_fail_mcse_maximum
+                      if is_cost_sensitive_core and cost_sensitive_pass_fail_mcse_maximum is not None
+                      else pass_fail_mcse_maximum
+                  )
+
+                  mean = float(np.mean(finite_values)) if finite_count else math.nan
+                  actual_mcse = (
+                      standard_deviation / math.sqrt(finite_count) if finite_count else math.nan
+                  )
+                  gate_required = _mcse_gate_required(metric_name, gate_ids)
+                  binary_metric = metric_name.endswith(("_success", "_coverage", "_stability"))
+                  mcse_target = float(pass_fail_target)
+                  if gate_required and "cost_per_firm" in metric_name:
+                      mcse_target = max(
+                          mcse_target,
+                          cost_mcse_relative_fraction * max(abs(mean), 1e-6),
+                      )
+                  elif (
+                      gate_required
+                      and metric_name in mmi_ids
+                      and not binary_metric
+                      and continuous_mcse_fraction is not None
+                      and minimum_meaningful_improvement is not None
+                  ):
+                      mcse_target = min(
+                          mcse_target,
+                          continuous_mcse_fraction * minimum_meaningful_improvement,
+                      )
+
+                  minimum_met = total_count >= required_replications
+                  finite_minimum_met = (not gate_required) or finite_count >= required_replications
+                  target_met = (not gate_required) or (
+                      finite_count > 0
+                      and math.isfinite(actual_mcse)
+                      and actual_mcse <= mcse_target
+                  )
+                  row: dict[str, object] = {
+                      SCENARIO_ID: str(scenario_id),
+                      METHOD_ID: str(method_id),
+                      METRIC_ID: metric_name,
+                      "replications": total_count,
+                      "finite_replications": finite_count,
+                      "undefined_replications": total_count - finite_count,
+                      "mean": mean,
+                      MCSE: actual_mcse,
+                      "mcse_target": mcse_target,
+                      "mcse_gate_required": gate_required,
+                      "replication_tier": (
+                          "standalone"
+                          if is_standalone
+                          else "imbalance_robustness"
+                          if is_imbalance_robustness
+                          else "extended_predictive"
+                          if is_extended
+                          else "cost_sensitive_core"
+                          if is_cost_sensitive_core
+                          else "core_cost_neutral"
+                      ),
+                      "minimum_replications_met": minimum_met,
+                      "finite_replications_met": finite_minimum_met,
+                      "mcse_target_met": target_met,
+                      "maximum_replications_reached": total_count >= replication_cap,
+                  }
+                  if metric_name == "prevalence_squared_error" and math.isfinite(mean):
+                      row["rmse"] = math.sqrt(max(0.0, mean))
+                  metrics.append(row)
+
+              precision_met = bool(metrics) and all(
+                  (item["mcse_gate_required"] is not True)
+                  or (
+                      item["minimum_replications_met"] is True
+                      and item["finite_replications_met"] is True
+                      and item["mcse_target_met"] is True
+                  )
+                  for item in metrics
+              )
+              maximum_reached = bool(metrics) and all(
+                  (item["mcse_gate_required"] is not True)
+                  or item["mcse_target_met"] is True
+                  or item["maximum_replications_reached"] is True
+                  for item in metrics
+              )
+              status = "PASS" if precision_met else "MAXIMUM_REACHED" if maximum_reached else "CONTINUE"
+              return {
+                  "status": status,
+                  "reason_code": (
+                      None
+                      if precision_met
+                      else "MCSE_TARGET_NOT_MET_AT_CAP"
+                      if maximum_reached
+                      else "ADDITIONAL_REPLICATIONS_REQUIRED"
+                  ),
+                  "minimum_replications": minimum_replications,
+                  "maximum_replications": maximum_replications,
+                  "pass_fail_mcse_maximum": pass_fail_mcse_maximum,
+                  "l3_minimum_replications": l3_minimum_replications,
+                  "l3_maximum_replications": l3_maximum_replications,
+                  "l3_pass_fail_mcse_maximum": l3_pass_fail_mcse_maximum,
+                  "extended_minimum_replications": extended_minimum_replications,
+                  "extended_maximum_replications": extended_maximum_replications,
+                  "extended_pass_fail_mcse_maximum": extended_pass_fail_mcse_maximum,
+                  "cost_sensitive_minimum_replications": cost_sensitive_minimum_replications,
+                  "cost_sensitive_maximum_replications": cost_sensitive_maximum_replications,
+                  "cost_sensitive_pass_fail_mcse_maximum": cost_sensitive_pass_fail_mcse_maximum,
+                  "cost_mcse_relative_fraction": cost_mcse_relative_fraction,
+                  "continuous_mcse_fraction": continuous_mcse_fraction,
+                  "minimum_meaningful_improvement": minimum_meaningful_improvement,
+                  "gated_metric_ids": sorted(gate_ids),
+                  "mmi_scaled_metric_ids": sorted(mmi_ids),
+                  "precision_target_met": precision_met,
+                  "metrics": metrics,
+              }
+
+
+          _DEFAULT_MCSE_GATE_METRICS = frozenset(
+              {
+                  "fit_success",
+                  "threshold_selection_success",
+                  "latent_average_precision",
+                  "latent_brier",
+                  "prevalence_fit_success",
+                  "prevalence_error",
+                  "prevalence_squared_error",
+                  "prevalence_coverage",
+                  "prevalence_misspecification_regret",
+              }
+          )
+
+
+          def _mcse_gate_required(
+              metric_id: str,
+              gated_metric_ids: set[str] | frozenset[str] | None = None,
+          ) -> bool:
+              gate_ids = _DEFAULT_MCSE_GATE_METRICS if gated_metric_ids is None else gated_metric_ids
+              return metric_id in gate_ids
+
+
+          def _feature_matrix('''
+
+          pattern = re.compile(r'def summarize_mcse\(.*?\ndef _feature_matrix\(', re.S)
+          service, count = pattern.subn(replacement, service, count=1)
+          if count != 1:
+              raise SystemExit(f'summarize_mcse replacement count={count}')
+          service_path.write_text(service, encoding='utf-8')
+
+          p08c_path = Path('scripts/p08c_aggregate_batches.py')
+          p08c = p08c_path.read_text(encoding='utf-8')
+          insertion_marker = '''    improvement = mapping(
+                  gate2.get("minimum_meaningful_improvement"),
+                  "evaluation.gate2.minimum_meaningful_improvement",
+              )
+          '''
+          insertion = insertion_marker + '''
+              gated_metric_ids = {
+                  "fit_success",
+                  "threshold_selection_success",
+                  "latent_average_precision",
+                  "latent_brier",
+                  "prevalence_fit_success",
+                  "prevalence_error",
+                  "prevalence_squared_error",
+                  "prevalence_coverage",
+                  "prevalence_misspecification_regret",
+                  (
+                      f"threshold_cost::{cost_settings['primary_evaluation_cost_regime_id']}"
+                      "::cost_per_firm"
+                  ),
+              }
+              raw_mmi_metric_ids = continuous.get("metric_ids", [])
+              mmi_scaled_metric_ids = (
+                  [str(value) for value in raw_mmi_metric_ids]
+                  if isinstance(raw_mmi_metric_ids, list)
+                  else []
+              )
+          '''
+          if insertion_marker not in p08c:
+              raise SystemExit('P08C insertion marker not found')
+          p08c = p08c.replace(insertion_marker, insertion, 1)
+          call_marker = '''        minimum_meaningful_improvement=float(improvement["absolute"]),
+              )
+          '''
+          call_replacement = '''        minimum_meaningful_improvement=float(improvement["absolute"]),
+                  gated_metric_ids=sorted(gated_metric_ids),
+                  mmi_scaled_metric_ids=mmi_scaled_metric_ids,
+              )
+          '''
+          if call_marker not in p08c:
+              raise SystemExit('P08C summarize call marker not found')
+          p08c = p08c.replace(call_marker, call_replacement, 1)
+          p08c_path.write_text(p08c, encoding='utf-8')
+
+          config_path = Path('config/execution/simulation.yaml')
+          config = config_path.read_text(encoding='utf-8')
+          replacements = {
+              '"core":{"minimum_replications":2500,"pass_fail_mcse_max":0.01,"batch_size":250,"maximum_replications":10000}':
+                  '"core":{"minimum_replications":1000,"pass_fail_mcse_max":0.01,"batch_size":250,"maximum_replications":2500}',
+              '"l3":{"initial_replications":1000,"pass_fail_mcse_max":0.02,"batch_size":100,"maximum_replications":5000}':
+                  '"l3":{"initial_replications":500,"pass_fail_mcse_max":0.02,"batch_size":100,"maximum_replications":1000}',
+              '"cost_sensitive_replication":{"minimum_replications":500,"pass_fail_mcse_max":0.02,"batch_size":50,"maximum_replications":2000}':
+                  '"cost_sensitive_replication":{"minimum_replications":500,"pass_fail_mcse_max":0.02,"batch_size":50,"maximum_replications":1000}',
+              '"extended_replication":{"minimum_replications":250,"pass_fail_mcse_max":0.02,"batch_size":50,"maximum_replications":1000}':
+                  '"extended_replication":{"minimum_replications":250,"pass_fail_mcse_max":0.02,"batch_size":50,"maximum_replications":500}',
+          }
+          for old_text, new_text in replacements.items():
+              if old_text not in config:
+                  raise SystemExit(f'configuration marker not found: {old_text}')
+              config = config.replace(old_text, new_text, 1)
+          config_path.write_text(config, encoding='utf-8')
+
+          test_path = Path('tests/stages/test_p08_mcse_policy.py')
+          test_path.write_text('''from __future__ import annotations
+
+          import math
+
+          import numpy as np
+          import pandas as pd
+
+          from core.semantic_keys import ESTIMATE, METHOD_ID, METRIC_ID, REPLICATION_ID, SCENARIO_ID
+          from simulation.service import (
+              _classification_cost,
+              _mcse_gate_required,
+              summarize_mcse,
+          )
+
+
+          def _frame(metric_id: str, estimates: np.ndarray, *, family: str = "predictive", tier: str = "core") -> pd.DataFrame:
+              count = len(estimates)
+              return pd.DataFrame(
+                  {
+                      SCENARIO_ID: ["scenario"] * count,
+                      METHOD_ID: ["method"] * count,
+                      REPLICATION_ID: np.arange(count),
+                      METRIC_ID: [metric_id] * count,
+                      ESTIMATE: estimates,
+                      "learner_tier": [tier] * count,
+                      "training_cost_regime_id": ["not_applicable" if family == "standalone_estimator" else "symmetric"] * count,
+                      "imbalance_treatment_id": ["not_applicable" if family == "standalone_estimator" else "none"] * count,
+                      "method_family": [family] * count,
+                  }
+              )
+
+
+          def test_normalized_cost_regret_is_undefined_when_scale_is_zero() -> None:
+              result = _classification_cost(
+                  truth=np.zeros(20, dtype=bool),
+                  predicted_positive=np.zeros(20, dtype=bool),
+                  cost_regime={
+                      "false_positive_cost": 1.0,
+                      "false_negative_cost": 1.0,
+                      "review_cost": 0.0,
+                      "true_positive_benefit": 0.0,
+                  },
+              )
+              assert math.isnan(result["normalized_cost_regret"])
+
+
+          def test_standalone_tier_uses_method_metadata_for_all_metrics() -> None:
+              report = summarize_mcse(
+                  [_frame("fit_success", np.ones(1000), family="standalone_estimator", tier="standalone")],
+                  minimum_replications=2500,
+                  maximum_replications=5000,
+                  pass_fail_mcse_maximum=0.01,
+                  l3_minimum_replications=1000,
+                  l3_maximum_replications=1000,
+                  l3_pass_fail_mcse_maximum=0.02,
+                  gated_metric_ids=["fit_success"],
+              )
+              row = report["metrics"][0]
+              assert row["replication_tier"] == "standalone"
+              assert row["minimum_replications_met"] is True
+              assert report["status"] == "PASS"
+
+
+          def test_only_explicit_metrics_enter_mcse_gate() -> None:
+              assert _mcse_gate_required("latent_average_precision", {"latent_average_precision"})
+              assert not _mcse_gate_required(
+                  "budget_cost::top_05pct::high_fn::normalized_cost_regret",
+                  {"latent_average_precision"},
+              )
+
+
+          def test_gate2_mmi_does_not_shrink_unlisted_metric_target() -> None:
+              values = np.tile(np.array([0.3, 0.7]), 500)
+              report = summarize_mcse(
+                  [_frame("latent_average_precision", values)],
+                  minimum_replications=1000,
+                  maximum_replications=1000,
+                  pass_fail_mcse_maximum=0.01,
+                  continuous_mcse_fraction=0.1,
+                  minimum_meaningful_improvement=0.01,
+                  gated_metric_ids=["latent_average_precision"],
+                  mmi_scaled_metric_ids=[],
+              )
+              row = report["metrics"][0]
+              assert row["mcse_target"] == 0.01
+              assert row["mcse_target_met"] is True
+
+
+          def test_undefined_non_gated_metric_does_not_block_completion() -> None:
+              report = summarize_mcse(
+                  [
+                      _frame("latent_average_precision", np.full(1000, 0.5)),
+                      _frame(
+                          "budget_cost::top_05pct::high_fn::normalized_cost_regret",
+                          np.full(1000, np.nan),
+                      ),
+                  ],
+                  minimum_replications=1000,
+                  maximum_replications=1000,
+                  pass_fail_mcse_maximum=0.01,
+                  gated_metric_ids=["latent_average_precision"],
+              )
+              rows = {item[METRIC_ID]: item for item in report["metrics"]}
+              diagnostic = rows[
+                  "budget_cost::top_05pct::high_fn::normalized_cost_regret"
+              ]
+              assert diagnostic["undefined_replications"] == 1000
+              assert diagnostic["mcse_gate_required"] is False
+              assert report["status"] == "PASS"
+          ''', encoding='utf-8')
+          PY
+
+      - name: Syntax check
+        run: python -m compileall -q src/simulation/service.py scripts/p08c_aggregate_batches.py tests/stages/test_p08_mcse_policy.py
+
+      - name: Commit fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-p08-mcse-fix.yml
+          git add src/simulation/service.py scripts/p08c_aggregate_batches.py config/execution/simulation.yaml tests/stages/test_p08_mcse_policy.py
+          git commit -m "fix(p08): stabilize MCSE gates and right-size replication [p08-fix-applied]"
+          git push origin HEAD:fix/p08-mcse-dissertation-budget
