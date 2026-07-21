@@ -1,0 +1,119 @@
+name: Add P08C progress logging
+
+on:
+  push:
+    branches:
+      - fix/p08-mcse-dissertation-budget
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[p08c-progress-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/p08-mcse-dissertation-budget
+          fetch-depth: 0
+
+      - name: Insert progress output
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/p08c_aggregate_batches.py')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''    inventory = list(loaded.context.store.inventory())
+
+    for item in inventory:
+        if item.get("artifact_id") != "simulation_batches":
+            continue
+'''
+          new = '''    inventory = list(loaded.context.store.inventory())
+    simulation_items = [
+        item
+        for item in inventory
+        if item.get("artifact_id") == "simulation_batches"
+    ]
+    print(
+        f"P08C scan start artifacts={len(simulation_items)}",
+        flush=True,
+    )
+
+    for artifact_index, item in enumerate(simulation_items, start=1):
+'''
+          if old not in text:
+              raise SystemExit('inventory loop marker not found')
+          text = text.replace(old, new, 1)
+
+          old = '''        batches.append(value)
+        coordinates_seen.append(coordinates)
+
+    _validate_replication_artifact_ranges(replication_artifacts)
+'''
+          new = '''        batches.append(value)
+        coordinates_seen.append(coordinates)
+        if (
+            artifact_index == 1
+            or artifact_index % 10 == 0
+            or artifact_index == len(simulation_items)
+        ):
+            print(
+                f"P08C scan progress={artifact_index}/{len(simulation_items)} "
+                f"scenario={scenario_id} method={method_id} rows={len(value)}",
+                flush=True,
+            )
+
+    print("P08C range validation start", flush=True)
+    _validate_replication_artifact_ranges(replication_artifacts)
+    print("P08C range validation complete", flush=True)
+'''
+          if old not in text:
+              raise SystemExit('post-artifact marker not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    report = summarize_mcse(
+        active_batches,
+'''
+          new = '''    print(
+        f"P08C MCSE aggregation start active_batches={len(active_batches)}",
+        flush=True,
+    )
+    report = summarize_mcse(
+        active_batches,
+'''
+          if old not in text:
+              raise SystemExit('summarize marker not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    mcse_status = str(report.get("status"))
+'''
+          new = '''    print(
+        f"P08C MCSE aggregation complete status={report.get('status')}",
+        flush=True,
+    )
+    mcse_status = str(report.get("status"))
+'''
+          if old not in text:
+              raise SystemExit('post-summarize marker not found')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Syntax check
+        run: python -m compileall -q scripts/p08c_aggregate_batches.py
+
+      - name: Commit progress logging
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/add-p08c-progress-logging.yml
+          git add scripts/p08c_aggregate_batches.py
+          git commit -m "chore(p08): add aggregation progress logging [p08c-progress-applied]"
+          git push origin HEAD:fix/p08-mcse-dissertation-budget
