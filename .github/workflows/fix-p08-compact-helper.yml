@@ -91,3 +91,5 @@ jobs:
           git add scripts/p08c_aggregate_batches.py
           git commit -m "fix(p08): add compact artifact range helper [compact-helper-applied]"
           git push origin HEAD:fix/p08-mcse-dissertation-budget
+
+# trigger: 2026-07-21T09:10Z
