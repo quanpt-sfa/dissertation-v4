@@ -4,9 +4,13 @@ import math
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from core.semantic_keys import ESTIMATE, METHOD_ID, METRIC_ID, REPLICATION_ID, SCENARIO_ID
-from scripts.p08c_aggregate_batches import _sanitize_normalized_cost_regret
+from scripts.p08c_aggregate_batches import (
+    _sanitize_normalized_cost_regret,
+    _validate_replication_artifact_ranges,
+)
 from simulation.service import (
     _classification_cost,
     _mcse_gate_required,
@@ -135,3 +139,52 @@ def test_legacy_normalized_regret_is_recomputed_during_aggregation() -> None:
     ].tolist()
     assert math.isnan(normalized[0])
     assert normalized[1] == 0.4
+
+
+def test_compact_artifact_ranges_use_artifact_ordinals() -> None:
+    _validate_replication_artifact_ranges(
+        [
+            {
+                SCENARIO_ID: "s",
+                METHOD_ID: "m",
+                "batch_key": "b0000",
+                "start": 0,
+                "end": 2499,
+                "replications": 2500,
+                "locked_worker_batch_size": 250,
+            },
+            {
+                SCENARIO_ID: "s",
+                METHOD_ID: "m",
+                "batch_key": "b0001",
+                "start": 2500,
+                "end": 4999,
+                "replications": 2500,
+                "locked_worker_batch_size": 250,
+            },
+        ]
+    )
+
+
+def test_compact_artifact_ranges_reject_gap_or_wrong_ordinal() -> None:
+    with pytest.raises(ValueError, match="expected compact-artifact ordinal=b0001"):
+        _validate_replication_artifact_ranges(
+            [
+                {
+                    SCENARIO_ID: "s",
+                    METHOD_ID: "m",
+                    "batch_key": "b0000",
+                    "start": 0,
+                    "end": 2499,
+                    "replications": 2500,
+                },
+                {
+                    SCENARIO_ID: "s",
+                    METHOD_ID: "m",
+                    "batch_key": "b0010",
+                    "start": 2500,
+                    "end": 4999,
+                    "replications": 2500,
+                },
+            ]
+        )

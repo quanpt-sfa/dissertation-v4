@@ -119,6 +119,7 @@ def main() -> int:
 
     batches: list[pd.DataFrame] = []
     coordinates_seen: list[dict[str, str]] = []
+    replication_artifacts: list[dict[str, object]] = []
     simulation = mapping(loaded.registry.get("simulation"), "simulation")
 
     # Call inventory exactly once; reuse for both the batch scan loop and the
@@ -182,17 +183,47 @@ def main() -> int:
 
         plan = _replication_plan(simulation, method_spec)
         batch_size = int(plan["batch_size"])
-        replication_ids = value[REPLICATION_ID].dropna().astype(int)
-        for r_id in replication_ids:
-            expected_batch_key = f"b{r_id // batch_size:04d}"
-            if coordinates.get(BATCH_KEY) != expected_batch_key:
-                raise ValueError(
-                    f"replication_id={r_id} in batch maps to batch_key={expected_batch_key}, "
-                    f"but coordinate is batch_key={coordinates.get(BATCH_KEY)}"
-                )
+        replication_ids = sorted(
+            set(value[REPLICATION_ID].dropna().astype(int))
+        )
+        if not replication_ids:
+            raise ValueError("simulation batch contains no replication IDs")
+        expected_ids = list(
+            range(replication_ids[0], replication_ids[-1] + 1)
+        )
+        if replication_ids != expected_ids:
+            raise ValueError(
+                f"scenario={scenario_id}, method={method_id}: "
+                "simulation artifact contains a non-contiguous replication range"
+            )
+        if replication_ids[0] % batch_size != 0:
+            raise ValueError(
+                f"scenario={scenario_id}, method={method_id}: "
+                f"artifact start={replication_ids[0]} is not aligned to "
+                f"locked worker batch_size={batch_size}"
+            )
+        if len(replication_ids) % batch_size != 0:
+            raise ValueError(
+                f"scenario={scenario_id}, method={method_id}: "
+                f"artifact replication count={len(replication_ids)} is not a "
+                f"whole multiple of locked worker batch_size={batch_size}"
+            )
+        replication_artifacts.append(
+            {
+                SCENARIO_ID: scenario_id,
+                METHOD_ID: method_id,
+                BATCH_KEY: str(coordinates.get(BATCH_KEY, "")),
+                "start": replication_ids[0],
+                "end": replication_ids[-1],
+                "replications": len(replication_ids),
+                "locked_worker_batch_size": batch_size,
+            }
+        )
 
         batches.append(value)
         coordinates_seen.append(coordinates)
+
+    _validate_replication_artifact_ranges(replication_artifacts)
 
     # Full bijection check using the already-fetched inventory (no second call).
     # batch → diagnostics: interrupted write (batch exists, diagnostics missing).
