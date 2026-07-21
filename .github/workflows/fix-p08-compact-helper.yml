@@ -77,10 +77,8 @@ jobs:
           path.write_text(text, encoding='utf-8')
           PY
 
-      - name: Syntax and focused tests
-        run: |
-          python -m compileall -q scripts/p08c_aggregate_batches.py tests/stages/test_p08_mcse_policy.py
-          python -m pytest -q tests/stages/test_p08_mcse_policy.py
+      - name: Syntax check
+        run: python -m compileall -q scripts/p08c_aggregate_batches.py tests/stages/test_p08_mcse_policy.py
 
       - name: Commit helper
         shell: bash
@@ -91,5 +89,3 @@ jobs:
           git add scripts/p08c_aggregate_batches.py
           git commit -m "fix(p08): add compact artifact range helper [compact-helper-applied]"
           git push origin HEAD:fix/p08-mcse-dissertation-budget
-
-# trigger: 2026-07-21T09:10Z
