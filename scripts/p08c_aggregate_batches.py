@@ -38,6 +38,48 @@ from simulation.service import summarize_mcse
 from simulation.replication_contract import replication_plan as _replication_plan
 
 
+def _validate_replication_artifact_ranges(
+    records: list[dict[str, object]],
+) -> None:
+    """Validate artifact ordinals independently of worker-batch compaction."""
+    grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+    for record in records:
+        key = (
+            str(record[SCENARIO_ID]),
+            str(record[METHOD_ID]),
+        )
+        grouped.setdefault(key, []).append(record)
+
+    for (scenario_id, method_id), items in sorted(grouped.items()):
+        ordered = sorted(items, key=lambda item: int(item["start"]))
+        expected_start = 0
+        for artifact_index, item in enumerate(ordered):
+            start = int(item["start"])
+            end = int(item["end"])
+            replications = int(item["replications"])
+            batch_key = str(item[BATCH_KEY])
+            expected_batch_key = f"b{artifact_index:04d}"
+
+            if batch_key != expected_batch_key:
+                raise ValueError(
+                    f"scenario={scenario_id}, method={method_id}: "
+                    f"artifact range={start}-{end} has batch_key={batch_key}; "
+                    f"expected compact-artifact ordinal={expected_batch_key}"
+                )
+            if start != expected_start:
+                raise ValueError(
+                    f"scenario={scenario_id}, method={method_id}: "
+                    f"replication artifact ranges are not contiguous; "
+                    f"expected start={expected_start}, actual start={start}"
+                )
+            if end < start or end - start + 1 != replications:
+                raise ValueError(
+                    f"scenario={scenario_id}, method={method_id}: "
+                    "replication artifact range metadata is inconsistent"
+                )
+            expected_start = end + 1
+
+
 def _sanitize_normalized_cost_regret(frame: pd.DataFrame) -> pd.DataFrame:
     """Recompute legacy normalized regret without the former 1e-12 denominator."""
     metric_values = frame[METRIC_ID].astype(str)
