@@ -1223,6 +1223,20 @@ def _weighted_feasible_cost(
     )
 
 
+def _normalized_cost_regret(
+    *,
+    total_cost: float,
+    oracle_cost: float,
+    all_negative_cost: float,
+) -> float:
+    """Return normalized regret only when the avoidable-cost scale is identified."""
+    avoidable_cost = abs(all_negative_cost - oracle_cost)
+    scale = max(abs(all_negative_cost), abs(oracle_cost), 1.0)
+    if avoidable_cost <= 1e-10 * scale:
+        return math.nan
+    return float((total_cost - oracle_cost) / avoidable_cost)
+
+
 def _classification_cost(
     *,
     truth: np.ndarray,
@@ -1242,11 +1256,14 @@ def _classification_cost(
     total = review_component + fp_component + fn_component - benefit_component
     all_negative = float(truth.sum()) * float(cost_regime["false_negative_cost"])
     oracle = _oracle_unconstrained_cost(truth, cost_regime)
-    denominator = max(abs(all_negative - oracle), 1e-12)
     return {
         "total_cost": total,
         "cost_per_firm": total / max(1, len(truth)),
-        "normalized_cost_regret": (total - oracle) / denominator,
+        "normalized_cost_regret": _normalized_cost_regret(
+            total_cost=total,
+            oracle_cost=oracle,
+            all_negative_cost=all_negative,
+        ),
         "cost_savings_vs_all_negative": all_negative - total,
         "cost_regret_vs_oracle": total - oracle,
         "false_negative_component": fn_component,
@@ -1309,14 +1326,17 @@ def _budget_cost(
         cost_regime=cost_regime,
     )["total_cost"]
     all_negative = float(np.sum(truth)) * float(cost_regime["false_negative_cost"])
-    denominator = max(abs(all_negative - oracle), 1e-12)
     tp = int(np.sum(truth & predicted))
     fp = int(np.sum((~truth) & predicted))
     fn = int(np.sum(truth & (~predicted)))
     model.update(
         {
             "cost_regret_vs_oracle": model["total_cost"] - oracle,
-            "normalized_cost_regret": (model["total_cost"] - oracle) / denominator,
+            "normalized_cost_regret": _normalized_cost_regret(
+                total_cost=float(model["total_cost"]),
+                oracle_cost=float(oracle),
+                all_negative_cost=float(all_negative),
+            ),
             "cost_savings_vs_all_negative": all_negative - model["total_cost"],
             "precision": tp / max(1, tp + fp),
             "recall": tp / max(1, tp + fn),
@@ -1648,8 +1668,10 @@ def summarize_mcse(
     cost_mcse_relative_fraction: float = 0.02,
     continuous_mcse_fraction: float | None = None,
     minimum_meaningful_improvement: float | None = None,
+    gated_metric_ids: Sequence[str] | None = None,
+    mmi_scaled_metric_ids: Sequence[str] | None = None,
 ) -> dict[str, object]:
-    """Compute MCSE with method-tier and metric-scale-aware precision gates."""
+    """Compute MCSE using method-tier metadata and an explicit gate metric set."""
     if not batches:
         return {"status": "SKIPPED", "reason_code": "NO_SIMULATION_BATCHES", "metrics": []}
     if (
@@ -1660,18 +1682,27 @@ def summarize_mcse(
         raise ValueError("simulation replication controls are invalid")
 
     combined = pd.concat(batches, ignore_index=True)
+    gate_ids = set(_DEFAULT_MCSE_GATE_METRICS if gated_metric_ids is None else gated_metric_ids)
+    mmi_ids = set(() if mmi_scaled_metric_ids is None else mmi_scaled_metric_ids)
     metrics: list[dict[str, object]] = []
     grouped = combined.groupby([SCENARIO_ID, METHOD_ID, METRIC_ID], sort=True)
     for (scenario_id, method_id, metric_id), frame in grouped:
-        count = int(len(frame))
-        standard_deviation = float(frame[ESTIMATE].std(ddof=1)) if count > 1 else 0.0
+        total_count = int(len(frame))
+        estimates = pd.to_numeric(frame[ESTIMATE], errors="coerce").to_numpy(dtype=float)
+        finite_values = estimates[np.isfinite(estimates)]
+        finite_count = int(len(finite_values))
+        standard_deviation = (
+            float(np.std(finite_values, ddof=1)) if finite_count > 1 else 0.0
+        )
         metric_name = str(metric_id)
-        is_standalone = metric_name.startswith("prevalence_") or metric_name == "interval_width"
         learner_tiers = set(frame["learner_tier"].dropna().astype(str)) if "learner_tier" in frame.columns else set()
         training_costs = set(frame["training_cost_regime_id"].dropna().astype(str)) if "training_cost_regime_id" in frame.columns else set()
         treatments = set(frame["imbalance_treatment_id"].dropna().astype(str)) if "imbalance_treatment_id" in frame.columns else set()
-        if len(learner_tiers) > 1 or len(training_costs) > 1 or len(treatments) > 1:
+        method_families = set(frame["method_family"].dropna().astype(str)) if "method_family" in frame.columns else set()
+        if any(len(values) > 1 for values in (learner_tiers, training_costs, treatments, method_families)):
             raise ValueError(f"scenario={scenario_id}, method={method_id}: mixed method metadata")
+
+        is_standalone = method_families == {"standalone_estimator"} or learner_tiers == {"standalone"}
         is_imbalance_robustness = treatments not in (set(), {"none"}, {"not_applicable"})
         is_extended = learner_tiers in ({"extended"}, {"methodological"}) or is_imbalance_robustness
         is_cost_sensitive_core = (
@@ -1708,15 +1739,21 @@ def summarize_mcse(
             else pass_fail_mcse_maximum
         )
 
-        mean = float(frame[ESTIMATE].mean())
-        actual_mcse = standard_deviation / math.sqrt(count)
-        gate_required = _mcse_gate_required(metric_name)
+        mean = float(np.mean(finite_values)) if finite_count else math.nan
+        actual_mcse = (
+            standard_deviation / math.sqrt(finite_count) if finite_count else math.nan
+        )
+        gate_required = _mcse_gate_required(metric_name, gate_ids)
         binary_metric = metric_name.endswith(("_success", "_coverage", "_stability"))
         mcse_target = float(pass_fail_target)
         if gate_required and "cost_per_firm" in metric_name:
-            mcse_target = max(mcse_target, cost_mcse_relative_fraction * max(abs(mean), 1e-6))
+            mcse_target = max(
+                mcse_target,
+                cost_mcse_relative_fraction * max(abs(mean), 1e-6),
+            )
         elif (
             gate_required
+            and metric_name in mmi_ids
             and not binary_metric
             and continuous_mcse_fraction is not None
             and minimum_meaningful_improvement is not None
@@ -1726,11 +1763,20 @@ def summarize_mcse(
                 continuous_mcse_fraction * minimum_meaningful_improvement,
             )
 
+        minimum_met = total_count >= required_replications
+        finite_minimum_met = (not gate_required) or finite_count >= required_replications
+        target_met = (not gate_required) or (
+            finite_count > 0
+            and math.isfinite(actual_mcse)
+            and actual_mcse <= mcse_target
+        )
         row: dict[str, object] = {
             SCENARIO_ID: str(scenario_id),
             METHOD_ID: str(method_id),
             METRIC_ID: metric_name,
-            "replications": count,
+            "replications": total_count,
+            "finite_replications": finite_count,
+            "undefined_replications": total_count - finite_count,
             "mean": mean,
             MCSE: actual_mcse,
             "mcse_target": mcse_target,
@@ -1746,20 +1792,28 @@ def summarize_mcse(
                 if is_cost_sensitive_core
                 else "core_cost_neutral"
             ),
-            "minimum_replications_met": count >= required_replications,
-            "mcse_target_met": (not gate_required) or actual_mcse <= mcse_target,
-            "maximum_replications_reached": count >= replication_cap,
+            "minimum_replications_met": minimum_met,
+            "finite_replications_met": finite_minimum_met,
+            "mcse_target_met": target_met,
+            "maximum_replications_reached": total_count >= replication_cap,
         }
-        if metric_name == "prevalence_squared_error":
+        if metric_name == "prevalence_squared_error" and math.isfinite(mean):
             row["rmse"] = math.sqrt(max(0.0, mean))
         metrics.append(row)
 
     precision_met = bool(metrics) and all(
-        item["minimum_replications_met"] is True and item["mcse_target_met"] is True
+        (item["mcse_gate_required"] is not True)
+        or (
+            item["minimum_replications_met"] is True
+            and item["finite_replications_met"] is True
+            and item["mcse_target_met"] is True
+        )
         for item in metrics
     )
     maximum_reached = bool(metrics) and all(
-        item["mcse_target_met"] is True or item["maximum_replications_reached"] is True
+        (item["mcse_gate_required"] is not True)
+        or item["mcse_target_met"] is True
+        or item["maximum_replications_reached"] is True
         for item in metrics
     )
     status = "PASS" if precision_met else "MAXIMUM_REACHED" if maximum_reached else "CONTINUE"
@@ -1787,33 +1841,35 @@ def summarize_mcse(
         "cost_mcse_relative_fraction": cost_mcse_relative_fraction,
         "continuous_mcse_fraction": continuous_mcse_fraction,
         "minimum_meaningful_improvement": minimum_meaningful_improvement,
+        "gated_metric_ids": sorted(gate_ids),
+        "mmi_scaled_metric_ids": sorted(mmi_ids),
         "precision_target_met": precision_met,
         "metrics": metrics,
     }
 
 
-def _mcse_gate_required(metric_id: str) -> bool:
-    descriptive_fragments = (
-        "training_rows",
-        "training_positive_rate",
-        "training_cost_weight_",
-        "selected_threshold",
-        "total_cost",
-        "cost_savings_vs_all_negative",
-        "cost_regret_vs_oracle",
-        "false_negative_component",
-        "false_positive_component",
-        "review_component",
-        "verification_rate",
-        "maturity_rate",
-        "realized_prevalence",
-        "latent_probability_mean",
-        "empirical_panel_rows",
-        "empirical_observed_positive_rate",
-        "empirical_known_label_rate",
-        "calibrated_latent_prevalence",
-    )
-    return not any(fragment in metric_id for fragment in descriptive_fragments)
+_DEFAULT_MCSE_GATE_METRICS = frozenset(
+    {
+        "fit_success",
+        "threshold_selection_success",
+        "latent_average_precision",
+        "latent_brier",
+        "prevalence_fit_success",
+        "prevalence_error",
+        "prevalence_squared_error",
+        "prevalence_coverage",
+        "prevalence_misspecification_regret",
+    }
+)
+
+
+def _mcse_gate_required(
+    metric_id: str,
+    gated_metric_ids: set[str] | frozenset[str] | None = None,
+) -> bool:
+    gate_ids = _DEFAULT_MCSE_GATE_METRICS if gated_metric_ids is None else gated_metric_ids
+    return metric_id in gate_ids
+
 
 def _feature_matrix(
     *,

@@ -199,6 +199,28 @@ def main() -> int:
         "evaluation.gate2.minimum_meaningful_improvement",
     )
 
+    gated_metric_ids = {
+        "fit_success",
+        "threshold_selection_success",
+        "latent_average_precision",
+        "latent_brier",
+        "prevalence_fit_success",
+        "prevalence_error",
+        "prevalence_squared_error",
+        "prevalence_coverage",
+        "prevalence_misspecification_regret",
+        (
+            f"threshold_cost::{cost_settings['primary_evaluation_cost_regime_id']}"
+            "::cost_per_firm"
+        ),
+    }
+    raw_mmi_metric_ids = continuous.get("metric_ids", [])
+    mmi_scaled_metric_ids = (
+        [str(value) for value in raw_mmi_metric_ids]
+        if isinstance(raw_mmi_metric_ids, list)
+        else []
+    )
+
     report = summarize_mcse(
         active_batches,
         minimum_replications=int(core["minimum_replications"]),
@@ -230,6 +252,8 @@ def main() -> int:
             ]
         ),
         minimum_meaningful_improvement=float(improvement["absolute"]),
+        gated_metric_ids=sorted(gated_metric_ids),
+        mmi_scaled_metric_ids=mmi_scaled_metric_ids,
     )
 
     mcse_status = str(report.get("status"))
