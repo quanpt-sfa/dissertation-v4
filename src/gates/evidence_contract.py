@@ -83,8 +83,8 @@ def prepare_gate2_inputs(
             blockers.append(f"GATE2_EVALUATION_STRUCTURE_INVALID:{fold}")
             continue
 
-        model_rows = _dict_rows(raw_models)
-        comparison_rows = _dict_rows(raw_comparisons)
+        model_rows = _dict_rows(cast(list[object], raw_models))
+        comparison_rows = _dict_rows(cast(list[object], raw_comparisons))
         model_index = _unique_index(model_rows, LEARNER_ID, fold, "MODEL", blockers)
         comparison_index = _unique_index(
             comparison_rows, "candidate", fold, "COMPARISON", blockers
