@@ -1,0 +1,83 @@
+name: apply-p08-type-fixes
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'agent/p08-production-mcse'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/p08-production-mcse
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - name: Apply strict typing fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p08c = Path('scripts/p08c_aggregate_batches.py')
+          text = p08c.read_text(encoding='utf-8')
+          old = '''    inventory = [
+              cast(dict[str, object], item)
+              for item in loaded.context.store.inventory()
+              if isinstance(item, dict)
+          ]
+          '''
+          new = '''    inventory = loaded.context.store.inventory()
+          '''
+          if old not in text:
+              raise SystemExit('P08C inventory block not found')
+          text = text.replace(old, new)
+          text = text.replace(
+              '''            if isinstance(method, dict) and method.get("is_active") is True
+          ''',
+              '''            if method.get("is_active") is True
+          ''',
+          )
+          p08c.write_text(text, encoding='utf-8')
+
+          contract = Path('src/simulation/mcse_contract.py')
+          text = contract.read_text(encoding='utf-8')
+          old = '    return dict(winner)\n'
+          new = '    return cast(MetricPolicy, dict(winner))\n'
+          if old not in text:
+              raise SystemExit('MCSE policy return not found')
+          contract.write_text(text.replace(old, new), encoding='utf-8')
+
+          test_path = Path('tests/stages/test_p08_mcse_contract.py')
+          text = test_path.read_text(encoding='utf-8')
+          old = '''    metric_ids = set().union(*(required_metric_ids(method) for method in methods))
+          '''
+          new = '''    metric_ids: set[str] = set()
+              for method in methods:
+                  metric_ids.update(required_metric_ids(method))
+          '''
+          if old not in text:
+              raise SystemExit('MCSE coverage metric union not found')
+          test_path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          FILES=(
+            scripts/p08c_aggregate_batches.py
+            src/simulation/mcse_contract.py
+            tests/stages/test_p08_mcse_contract.py
+          )
+          uv run ruff format "${FILES[@]}"
+          uv run ruff check "${FILES[@]}"
+          uv run pyright "${FILES[@]}"
+      - name: Commit type fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            scripts/p08c_aggregate_batches.py \
+            src/simulation/mcse_contract.py \
+            tests/stages/test_p08_mcse_contract.py
+          git commit -m "Resolve strict Pyright findings in P08 MCSE integration"
+          git push origin HEAD:agent/p08-production-mcse
