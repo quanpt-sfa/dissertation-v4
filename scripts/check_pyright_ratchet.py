@@ -126,6 +126,8 @@ def _run_pyright() -> list[Diagnostic]:
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="strict",
     )
     if not completed.stdout.strip():
         detail = completed.stderr.strip() or f"exit code {completed.returncode}"
