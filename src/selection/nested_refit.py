@@ -607,7 +607,7 @@ def _heldout_feature_registry(
             continue
         if item.get("research_decision_status") not in {None, "LOCKED"}:
             continue
-        if item.get("model_eligibility") not in {None, "eligible"}:
+        if item.get("model_eligibility") not in {None, ELIGIBLE}:
             continue
         if str(item.get("source_channel", "")) == heldout_channel:
             continue

@@ -22,6 +22,7 @@ from sklearn.preprocessing import StandardScaler
 
 from core.metrics import average_precision
 from core.semantic_keys import (
+    ELIGIBLE,
     FIRM_ID,
     FISCAL_YEAR,
     LEARNER_ID,
@@ -378,7 +379,7 @@ def _feature_groups(registry: list[dict[str, Any]]) -> dict[str, list[str]]:
         item
         for item in registry
         if item.get("research_decision_status") in {None, "LOCKED"}
-        and item.get("model_eligibility") in {None, "eligible"}
+        and item.get("model_eligibility") in {None, ELIGIBLE}
     ]
     content = [str(item["feature_id"]) for item in eligible if role(item) == "content"]
     observable = [str(item["feature_id"]) for item in eligible if role(item) == "observability"]
