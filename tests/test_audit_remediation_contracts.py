@@ -6,8 +6,8 @@ from typing import Any, cast
 import pytest
 
 from core.registry_compiler import compile_registry
-from features.service import _validate_definition
-from modeling.service import _feature_groups
+from features.service import validate_feature_definition
+from modeling.service import feature_groups
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,7 +20,7 @@ def test_observability_features_enter_reference_and_full_groups() -> None:
     registry = _registry()
     features = cast(dict[str, Any], registry["features"])
     definitions = cast(list[dict[str, Any]], features["registry"])
-    groups = _feature_groups(definitions)
+    groups = feature_groups(definitions)
     assert groups["observability_only"]
     assert set(groups["observability_only"]).issubset(groups["full"])
     assert set(groups["full"]) != set(groups["content_only"])
@@ -32,7 +32,7 @@ def test_model_eligibility_is_a_closed_enum() -> None:
     definition = dict(cast(list[dict[str, Any]], features["registry"])[0])
     definition["model_eligibility"] = "silent_unknown_value"
     with pytest.raises(ValueError, match="invalid model_eligibility"):
-        _validate_definition(definition)
+        validate_feature_definition(definition)
 
 
 def test_l3_unlocked_parameters_are_explicitly_nonreportable() -> None:

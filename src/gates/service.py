@@ -298,6 +298,7 @@ def gate3_verdict(
                 frame=frame,
                 monitoring=monitoring,
                 outcome=outcome,
+                gate=gate,
                 replications=bootstrap_replications,
                 alpha=familywise_alpha / 3.0,
                 rng=rng,
@@ -429,6 +430,7 @@ def _threshold_claim(
                 frame=fold_frame,
                 monitoring=monitoring,
                 outcome=outcome,
+                gate=gate,
                 replications=bootstrap_replications,
                 alpha=familywise_alpha / 3.0,
                 rng=rng,
@@ -568,6 +570,7 @@ def _shape_bootstrap(
     frame: pd.DataFrame,
     monitoring: str,
     outcome: str,
+    gate: dict[str, Any],
     replications: int,
     alpha: float,
     rng: np.random.Generator,
@@ -578,8 +581,8 @@ def _shape_bootstrap(
         sample = frame.iloc[rng.integers(0, len(frame), size=len(frame))]
         if sample[outcome].nunique() < 2:
             continue
-        coefficients.append(_interaction_coefficient(sample, monitoring, outcome))
-        point, _ = _breakpoint(sample, monitoring, outcome)
+        coefficients.append(_interaction_coefficient(sample, monitoring, outcome, gate))
+        point, _ = _breakpoint(sample, monitoring, outcome, gate)
         if point is not None:
             breakpoints.append(point)
     quantiles = (alpha / 2.0, 1.0 - alpha / 2.0)

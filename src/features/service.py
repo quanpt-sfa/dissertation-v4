@@ -228,6 +228,11 @@ def _validate_unique_ids(definitions: list[dict[str, object]]) -> None:
         raise ValueError("P07 feature IDs must be non-empty and unique")
 
 
+def validate_feature_definition(item: dict[str, object]) -> None:
+    """Validate one feature registry definition against the closed contract."""
+    _validate_definition(item)
+
+
 def _validate_definition(item: dict[str, object]) -> None:
     feature_id = str(item["feature_id"])
     # Retain the original firewall diagnostic even for a malformed legacy definition.

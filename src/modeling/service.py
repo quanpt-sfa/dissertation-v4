@@ -402,6 +402,11 @@ def _feature_groups(registry: list[dict[str, Any]]) -> dict[str, list[str]]:
     }
 
 
+def feature_groups(registry: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """Return the production feature groups used by registered learners."""
+    return _feature_groups(registry)
+
+
 def _candidate_settings(
     *,
     learner_id: str,
