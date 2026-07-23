@@ -1,0 +1,40 @@
+name: Apply A01-A15 remediation
+
+on:
+  push:
+    branches:
+      - agent/remediate-a01-a15-audit
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply remediation
+        run: python scripts/apply_a01_a15_remediation.py
+      - name: Format and lint fixes
+        run: |
+          uv sync --frozen
+          uv run ruff format .
+          uv run ruff check --fix .
+      - name: Commit generated remediation
+        run: |
+          if git diff --quiet; then
+            echo 'No remediation changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Remediate A01-A15 methodological audit'
+          git push
