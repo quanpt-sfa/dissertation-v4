@@ -48,16 +48,19 @@ def _scenario() -> dict[str, object]:
     }
 
 
+def _row(anchor: bool | None, weak: bool | None) -> dict[str, bool | None]:
+    return {"anchor": anchor, "weak": weak}
+
+
 def _rows() -> list[dict[str, bool | None]]:
-    rows: list[dict[str, bool | None]] = (
-        [{"anchor": True, "weak": True}] * 24
-        + [{"anchor": True, "weak": False}] * 10
-        + [{"anchor": False, "weak": True}] * 8
-        + [{"anchor": False, "weak": False}] * 150
-        + [{"anchor": True, "weak": None}] * 5
-        + [{"anchor": None, "weak": False}] * 12
+    return (
+        [_row(True, True)] * 24
+        + [_row(True, False)] * 10
+        + [_row(False, True)] * 8
+        + [_row(False, False)] * 150
+        + [_row(True, None)] * 5
+        + [_row(None, False)] * 12
     )
-    return rows
 
 
 def _accuracy() -> dict[str, tuple[float, float]]:
