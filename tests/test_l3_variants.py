@@ -18,7 +18,7 @@ def _settings() -> dict[str, object]:
         "credible_interval_mass": 0.95,
         "wrong_fixed_pi_offset": 0.05,
         "misspecification_regret_definition": (
-            "signed_excess_squared_error_relative_to_l3_correct"
+            "paired_excess_row_brier_relative_to_l3_correct"
         ),
     }
 
@@ -77,28 +77,28 @@ def test_l3_variants_use_distinct_locked_assumptions() -> None:
         for variant in L3_VARIANT_IDS
     }
 
-    assert estimates["l3_correct"]["misspecification_regret"] == 0.0
-    assert not np.isclose(
-        estimates["l3_correct"]["estimate"],
-        estimates["l3_ignore_dependence"]["estimate"],
+    correct = np.asarray(estimates["l3_correct"]["row_probabilities"], dtype=float)
+    assert np.all((correct > 0.0) & (correct < 1.0))
+    assert np.isclose(float(estimates["l3_correct"]["fixed_pi_used"]), 0.10)
+    assert np.isclose(float(estimates["l3_wrong_fixed_pi"]["fixed_pi_used"]), 0.15)
+    assert not np.allclose(
+        correct,
+        np.asarray(estimates["l3_ignore_dependence"]["row_probabilities"], dtype=float),
     )
-    assert not np.isclose(
-        estimates["l3_correct"]["estimate"],
-        estimates["l3_clean_anchor"]["estimate"],
+    assert not np.allclose(
+        correct,
+        np.asarray(estimates["l3_clean_anchor"]["row_probabilities"], dtype=float),
     )
-    assert np.isclose(
-        estimates["l3_wrong_fixed_pi"]["estimate"],
-        0.15,
+    assert not np.allclose(
+        correct,
+        np.asarray(estimates["l3_wrong_fixed_pi"]["row_probabilities"], dtype=float),
     )
-    assert estimates["l3_wrong_fixed_pi"]["lower"] == estimates["l3_wrong_fixed_pi"]["upper"]
 
 
 def test_l3_variant_batch_is_paired_and_metric_complete() -> None:
     scenario = _scenario()
 
-    def data_rng_factory(
-        replication_id: int,
-    ) -> np.random.Generator:
+    def data_rng_factory(replication_id: int) -> np.random.Generator:
         return np.random.default_rng(1000 + replication_id)
 
     outputs = {}
@@ -124,8 +124,40 @@ def test_l3_variant_batch_is_paired_and_metric_complete() -> None:
     correct = outputs["l3_correct"].set_index(["replication_id", "metric_id"])["estimate"]
     assert (
         correct.xs(
-            "prevalence_misspecification_regret",
+            "paired_brier_regret",
             level="metric_id",
         )
         == 0.0
     ).all()
+    assert np.isfinite(
+        correct.xs(
+            "review_sample_size_ratio_vs_l1",
+            level="metric_id",
+        )
+    ).all()
+    assert np.isfinite(
+        correct.xs(
+            "review_sample_size_ratio_vs_l2",
+            level="metric_id",
+        )
+    ).all()
+
+
+def test_fixed_pi_metrics_are_distinct_from_hierarchical_pi_sensitivity() -> None:
+    scenario = _scenario()
+
+    def data_rng_factory(replication_id: int) -> np.random.Generator:
+        return np.random.default_rng(5000 + replication_id)
+
+    batch = run_l3_variant_batch(
+        scenario,
+        method_id="l3_wrong_fixed_pi",
+        replications=range(3),
+        data_rng_factory=data_rng_factory,
+    )
+    metric_ids = set(batch["metric_id"].astype(str))
+
+    assert "row_calibration_bias" in metric_ids
+    assert "paired_brier_regret" in metric_ids
+    assert "hierarchical_pi_error" in metric_ids
+    assert "prevalence_error" not in metric_ids
