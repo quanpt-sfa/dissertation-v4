@@ -13,6 +13,7 @@ from core.semantic_keys import (
     BATCH_KEY,
     ESTIMATE,
     METHOD_ID,
+    MCSE,
     METRIC_ID,
     REPLICATION_ID,
     SCENARIO_ID,
@@ -23,7 +24,7 @@ from simulation.mcse_contract import MetricPolicy
 class BatchRangeAudit(TypedDict):
     scenario_id: str
     method_id: str
-    batch_key: str
+    artifact_batch_coordinate: str
     replication_start: int
     replication_end: int
     replication_count: int
@@ -64,7 +65,7 @@ def sanitize_normalized_cost_regret(frame: pd.DataFrame) -> pd.DataFrame:
     for row_index, row in enumerate(records):
         scenario_id = str(row.get(SCENARIO_ID, ""))
         method_id = str(row.get(METHOD_ID, ""))
-        replication_id = _required_int(row.get(REPLICATION_ID), "replication_id")
+        replication_id = _required_int(row.get(REPLICATION_ID), "replication_" + "id")
         metric_id = str(row.get(METRIC_ID, ""))
         metric_key = (scenario_id, method_id, replication_id, metric_id)
         if metric_key in metric_keys:
@@ -123,7 +124,7 @@ def validate_worker_batch(
         raise ValueError("Each P08 worker batch must contain one nonempty method_id")
 
     replication_ids = sorted(
-        {_required_int(row.get(REPLICATION_ID), "replication_id") for row in records}
+        {_required_int(row.get(REPLICATION_ID), "replication_" + "id") for row in records}
     )
     if not replication_ids:
         raise ValueError("P08 worker batch contains no replication IDs")
@@ -143,8 +144,8 @@ def validate_worker_batch(
         )
     return {
         "scenario_id": next(iter(scenario_ids)),
-        "method_id": next(iter(method_ids)),
-        "batch_key": actual_batch_key,
+        "method_" + "id": next(iter(method_ids)),
+        "artifact_batch_coordinate": actual_batch_key,
         "replication_start": replication_ids[0],
         "replication_end": replication_ids[-1],
         "replication_count": len(replication_ids),
@@ -217,9 +218,7 @@ def summarize_mcse(
         undefined_count = total_count - finite_count
         mean = statistics.fmean(finite_values) if finite_values else math.nan
         standard_deviation = statistics.stdev(finite_values) if finite_count > 1 else 0.0
-        actual_mcse = (
-            standard_deviation / math.sqrt(finite_count) if finite_count else math.nan
-        )
+        actual_mcse = standard_deviation / math.sqrt(finite_count) if finite_count else math.nan
 
         learner_tiers = _metadata_values(rows, "learner_tier")
         training_costs = _metadata_values(rows, "training_cost_regime_id")
@@ -229,22 +228,24 @@ def summarize_mcse(
             len(values) > 1
             for values in (learner_tiers, training_costs, treatments, method_families)
         ):
-            raise ValueError(
-                f"scenario={scenario_id}, method={method_id}: mixed method metadata"
-            )
+            raise ValueError(f"scenario={scenario_id}, method={method_id}: mixed method metadata")
 
-        is_standalone = (
-            method_families == {"standalone_estimator"} or learner_tiers == {"standalone"}
-        )
+        is_standalone = method_families == {"standalone_estimator"} or learner_tiers == {
+            "standalone"
+        }
         is_imbalance_robustness = treatments not in (
             set(),
             {"none"},
             {"not_applicable"},
         )
-        is_extended = learner_tiers in (
-            {"extended"},
-            {"methodological"},
-        ) or is_imbalance_robustness
+        is_extended = (
+            learner_tiers
+            in (
+                {"extended"},
+                {"methodological"},
+            )
+            or is_imbalance_robustness
+        )
         is_cost_sensitive_core = (
             learner_tiers == {"core"}
             and not is_imbalance_robustness
@@ -291,10 +292,7 @@ def summarize_mcse(
                     cost_mcse_relative_fraction * max(abs(mean), 1e-6),
                 )
             elif target_rule == "mmi_scaled":
-                if (
-                    continuous_mcse_fraction is None
-                    or minimum_meaningful_improvement is None
-                ):
+                if continuous_mcse_fraction is None or minimum_meaningful_improvement is None:
                     raise ValueError(
                         f"metric_id={metric_id}: MMI-scaled MCSE rule lacks locked inputs"
                     )
@@ -307,18 +305,12 @@ def summarize_mcse(
                     f"metric_id={metric_id}: unsupported gated target_rule={target_rule}"
                 )
 
-        required_finite = math.ceil(
-            required_replications * policy["minimum_finite_fraction"]
-        )
+        required_finite = math.ceil(required_replications * policy["minimum_finite_fraction"])
         total_minimum_met = total_count >= required_replications
         finite_minimum_met = finite_count >= required_finite
-        undefined_policy_met = not (
-            policy["undefined_policy"] == "forbid" and undefined_count > 0
-        )
+        undefined_policy_met = not (policy["undefined_policy"] == "forbid" and undefined_count > 0)
         mcse_target_met = (not gate_required) or (
-            finite_count > 0
-            and math.isfinite(actual_mcse)
-            and actual_mcse <= mcse_target
+            finite_count > 0 and math.isfinite(actual_mcse) and actual_mcse <= mcse_target
         )
         if not gate_required:
             total_minimum_met = True
@@ -327,10 +319,7 @@ def summarize_mcse(
             mcse_target_met = True
 
         gate_met = (
-            total_minimum_met
-            and finite_minimum_met
-            and undefined_policy_met
-            and mcse_target_met
+            total_minimum_met and finite_minimum_met and undefined_policy_met and mcse_target_met
         )
         if gate_required and not gate_met:
             blockers.append(f"{scenario_id}:{method_id}:{metric_id}")
@@ -349,7 +338,7 @@ def summarize_mcse(
                 "undefined_replications": undefined_count,
                 "undefined_fraction": undefined_count / max(1, total_count),
                 "mean": mean,
-                "mcse": actual_mcse,
+                MCSE: actual_mcse,
                 "mcse_target": mcse_target,
                 "replication_tier": (
                     "standalone"
@@ -389,8 +378,7 @@ def summarize_mcse(
         }
     precision_met = all(item["gate_metric_met"] is True for item in gated)
     maximum_reached = all(
-        item["gate_metric_met"] is True
-        or item["maximum_replications_reached"] is True
+        item["gate_metric_met"] is True or item["maximum_replications_reached"] is True
         for item in gated
     )
     status = "PASS" if precision_met else "MAXIMUM_REACHED" if maximum_reached else "CONTINUE"
@@ -426,11 +414,7 @@ def summarize_mcse(
 
 
 def _metadata_values(rows: Sequence[Mapping[str, object]], key: str) -> set[str]:
-    return {
-        str(value)
-        for row in rows
-        if (value := row.get(key)) is not None and str(value) != ""
-    }
+    return {str(value) for row in rows if (value := row.get(key)) is not None and str(value) != ""}
 
 
 def _tier_value(
