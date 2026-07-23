@@ -1,0 +1,37 @@
+name: apply-p08-legacy-boundary
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'agent/p08-production-mcse'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/p08-production-mcse
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - run: uv run python .github/scripts/apply_p08_legacy_boundary.py
+      - run: |
+          uv run ruff format scripts/p08_profiled_orchestrator.py
+          uv run ruff check scripts/p08_profiled_orchestrator.py
+      - run: |
+          uv run pytest -q \
+            tests/stages/test_remaining_stage_invariants.py::test_batch_exists_both_present_skips \
+            tests/stages/test_remaining_stage_invariants.py::test_batch_exists_diagnostics_missing_reruns \
+            tests/stages/test_remaining_stage_invariants.py::test_batch_exists_batch_missing_reruns \
+            tests/stages/test_remaining_stage_invariants.py::test_incomplete_batch_commands_adaptive_resume \
+            tests/stages/test_p08_orchestrator_control.py
+      - name: Commit compatibility boundary
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/p08_profiled_orchestrator.py
+          git commit -m "Preserve typed P08 orchestrator helper compatibility"
+          git push origin HEAD:agent/p08-production-mcse
