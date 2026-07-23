@@ -25,11 +25,22 @@ jobs:
           uv run ruff format \
             src/simulation/mcse_service.py \
             scripts/p08c_aggregate_batches.py
-      - run: |
+      - id: targeted
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
           uv run pytest -q \
             tests/stages/test_p08_mcse_contract.py::test_production_policy_registry_covers_every_registered_p08_metric \
             tests/stages/test_remaining_stage_invariants.py::test_p08c_exit_code_policies \
-            tests/stages/test_remaining_stage_invariants.py::test_p08c_bijection_check_missing_diagnostics_fails
+            tests/stages/test_remaining_stage_invariants.py::test_p08c_bijection_check_missing_diagnostics_fails \
+            2>&1 | tee /tmp/p08-targeted.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p08-targeted-log
+          path: /tmp/p08-targeted.log
+      - if: steps.targeted.outcome == 'failure'
+        run: exit 1
       - name: Commit contract fixes
         run: |
           git config user.name "github-actions[bot]"
