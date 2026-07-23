@@ -7,12 +7,14 @@ from typing import Any, cast
 
 from core.semantic_keys import LEARNER_ID, OUTER_FOLD
 
+JsonRow = dict[str, Any]
+
 
 def prepare_gate2_inputs(
     *,
-    evaluations: list[dict[str, Any]],
-    bootstraps: list[list[dict[str, Any]]],
-    gate: dict[str, Any],
+    evaluations: list[JsonRow],
+    bootstraps: list[list[JsonRow]],
+    gate: JsonRow,
     confirmatory_folds: list[str],
 ) -> dict[str, object]:
     """Validate and filter Gate 2 inputs to the preregistered candidate family."""
@@ -25,20 +27,29 @@ def prepare_gate2_inputs(
     minimum_bootstrap = gate.get("minimum_valid_bootstrap_replications")
     fold_count = gate.get("fold_count")
 
-    if not isinstance(expected_family_count, int) or expected_family_count < 1:
+    if not isinstance(expected_family_count, int) or isinstance(expected_family_count, bool):
+        blockers.append("GATE2_CANDIDATE_FAMILY_COUNT_INVALID")
+    elif expected_family_count < 1:
         blockers.append("GATE2_CANDIDATE_FAMILY_COUNT_INVALID")
     elif len(candidate_ids) != expected_family_count:
         blockers.append("GATE2_CANDIDATE_FAMILY_COUNT_MISMATCH")
     if set(reference_by_candidate) != set(candidate_ids):
         blockers.append("GATE2_REFERENCE_BINDINGS_INCOMPLETE")
-    if not isinstance(minimum_bootstrap, int) or minimum_bootstrap < 1:
+    minimum_bootstrap_count: int | None = None
+    if not isinstance(minimum_bootstrap, int) or isinstance(minimum_bootstrap, bool):
         blockers.append("GATE2_MINIMUM_BOOTSTRAP_INVALID")
-    if not isinstance(fold_count, int) or fold_count != len(confirmatory_folds):
+    elif minimum_bootstrap < 1:
+        blockers.append("GATE2_MINIMUM_BOOTSTRAP_INVALID")
+    else:
+        minimum_bootstrap_count = minimum_bootstrap
+    if not isinstance(fold_count, int) or isinstance(fold_count, bool):
+        blockers.append("GATE2_CONFIRMATORY_FOLD_COUNT_MISMATCH")
+    elif fold_count != len(confirmatory_folds):
         blockers.append("GATE2_CONFIRMATORY_FOLD_COUNT_MISMATCH")
     if len(set(confirmatory_folds)) != len(confirmatory_folds):
         blockers.append("GATE2_CONFIRMATORY_FOLDS_NOT_UNIQUE")
 
-    evaluations_by_fold: dict[str, dict[str, Any]] = {}
+    evaluations_by_fold: dict[str, JsonRow] = {}
     for evaluation in evaluations:
         fold = str(evaluation.get(OUTER_FOLD, ""))
         if fold in evaluations_by_fold:
@@ -47,9 +58,9 @@ def prepare_gate2_inputs(
     if set(evaluations_by_fold) != set(confirmatory_folds):
         blockers.append("GATE2_EVALUATION_FOLD_COVERAGE_INCOMPLETE")
 
-    bootstrap_by_fold: dict[str, list[dict[str, Any]]] = {}
+    bootstrap_by_fold: dict[str, list[JsonRow]] = {}
     for batch in bootstraps:
-        folds = {str(item.get(OUTER_FOLD, "")) for item in batch if isinstance(item, dict)}
+        folds = {str(item.get(OUTER_FOLD, "")) for item in batch}
         if len(folds) != 1:
             blockers.append("GATE2_BOOTSTRAP_BATCH_FOLD_AMBIGUOUS")
             continue
@@ -60,8 +71,8 @@ def prepare_gate2_inputs(
     if set(bootstrap_by_fold) != set(confirmatory_folds):
         blockers.append("GATE2_BOOTSTRAP_FOLD_COVERAGE_INCOMPLETE")
 
-    filtered_evaluations: list[dict[str, Any]] = []
-    filtered_bootstraps: list[list[dict[str, Any]]] = []
+    filtered_evaluations: list[JsonRow] = []
+    filtered_bootstraps: list[list[JsonRow]] = []
     for fold in confirmatory_folds:
         evaluation = evaluations_by_fold.get(fold)
         if evaluation is None:
@@ -72,37 +83,41 @@ def prepare_gate2_inputs(
             blockers.append(f"GATE2_EVALUATION_STRUCTURE_INVALID:{fold}")
             continue
 
-        model_rows = [
-            cast(dict[str, Any], item) for item in raw_models if isinstance(item, dict)
-        ]
-        comparison_rows = [
-            cast(dict[str, Any], item) for item in raw_comparisons if isinstance(item, dict)
-        ]
+        model_rows = _dict_rows(raw_models)
+        comparison_rows = _dict_rows(raw_comparisons)
         model_index = _unique_index(model_rows, LEARNER_ID, fold, "MODEL", blockers)
         comparison_index = _unique_index(
             comparison_rows, "candidate", fold, "COMPARISON", blockers
         )
-        selected_models: list[dict[str, Any]] = []
-        selected_comparisons: list[dict[str, Any]] = []
+        selected_models: list[JsonRow] = []
+        selected_comparisons: list[JsonRow] = []
         for candidate in candidate_ids:
             reference = reference_by_candidate.get(candidate)
+            if reference is None:
+                blockers.append(f"GATE2_REFERENCE_BINDING_MISSING:{fold}:{candidate}")
+                continue
             candidate_model = model_index.get(candidate)
-            reference_model = model_index.get(str(reference))
+            reference_model = model_index.get(reference)
             comparison = comparison_index.get(candidate)
             if candidate_model is None or reference_model is None or comparison is None:
                 blockers.append(f"GATE2_REQUIRED_PAIR_MISSING:{fold}:{candidate}")
                 continue
             if str(comparison.get("reference")) != reference:
                 blockers.append(f"GATE2_REFERENCE_MISMATCH:{fold}:{candidate}")
-            if not _finite_number(comparison.get("delta_average_precision")):
+            if _finite_float(comparison.get("delta_average_precision")) is None:
                 blockers.append(f"GATE2_DELTA_AP_MISSING:{fold}:{candidate}")
-            for model_id, model in ((candidate, candidate_model), (reference, reference_model)):
-                if not _finite_number(model.get("average_precision")):
+            for model_id, model in (
+                (candidate, candidate_model),
+                (reference, reference_model),
+            ):
+                if _finite_float(model.get("average_precision")) is None:
                     blockers.append(f"GATE2_AP_MISSING:{fold}:{model_id}")
-                if not _finite_number(model.get("precision_at_primary_budget")):
+                if _finite_float(model.get("precision_at_primary_budget")) is None:
                     blockers.append(f"GATE2_YIELD_MISSING:{fold}:{model_id}")
-            reference_precision = reference_model.get("precision_at_primary_budget")
-            if _finite_number(reference_precision) and float(reference_precision) <= 0.0:
+            reference_precision = _finite_float(
+                reference_model.get("precision_at_primary_budget")
+            )
+            if reference_precision is not None and reference_precision <= 0.0:
                 blockers.append(f"GATE2_REFERENCE_YIELD_NONPOSITIVE:{fold}:{candidate}")
             positives = candidate_model.get("positives")
             if not isinstance(positives, int) or isinstance(positives, bool):
@@ -120,16 +135,14 @@ def prepare_gate2_inputs(
         batch = bootstrap_by_fold.get(fold)
         if batch is None:
             continue
-        bootstrap_rows = [
-            cast(dict[str, Any], item) for item in batch if isinstance(item, dict)
-        ]
-        bootstrap_index = _unique_index(
-            bootstrap_rows, "candidate", fold, "BOOTSTRAP", blockers
-        )
-        selected_bootstraps: list[dict[str, Any]] = []
+        bootstrap_index = _unique_index(batch, "candidate", fold, "BOOTSTRAP", blockers)
+        selected_bootstraps: list[JsonRow] = []
         for candidate in candidate_ids:
-            item = bootstrap_index.get(candidate)
             reference = reference_by_candidate.get(candidate)
+            if reference is None:
+                blockers.append(f"GATE2_BOOTSTRAP_REFERENCE_BINDING_MISSING:{fold}:{candidate}")
+                continue
+            item = bootstrap_index.get(candidate)
             if item is None:
                 blockers.append(f"GATE2_BOOTSTRAP_PAIR_MISSING:{fold}:{candidate}")
                 continue
@@ -139,9 +152,13 @@ def prepare_gate2_inputs(
             if not isinstance(samples, list):
                 blockers.append(f"GATE2_BOOTSTRAP_SAMPLES_MISSING:{fold}:{candidate}")
             else:
-                if isinstance(minimum_bootstrap, int) and len(samples) < minimum_bootstrap:
+                sample_values = cast(list[object], samples)
+                if (
+                    minimum_bootstrap_count is not None
+                    and len(sample_values) < minimum_bootstrap_count
+                ):
                     blockers.append(f"GATE2_BOOTSTRAP_TOO_SHORT:{fold}:{candidate}")
-                if not all(_finite_number(value) for value in samples):
+                if any(_finite_float(value) is None for value in sample_values):
                     blockers.append(f"GATE2_BOOTSTRAP_NONFINITE:{fold}:{candidate}")
             selected_bootstraps.append(item)
         filtered_bootstraps.append(selected_bootstraps)
@@ -155,7 +172,9 @@ def prepare_gate2_inputs(
     }
 
 
-def insufficient_gate2_verdict(blockers: list[str], candidate_ids: list[str]) -> dict[str, object]:
+def insufficient_gate2_verdict(
+    blockers: list[str], candidate_ids: list[str]
+) -> dict[str, object]:
     return {
         "status": "INSUFFICIENT_EVIDENCE",
         "gate_id": "GATE2",
@@ -170,13 +189,25 @@ def insufficient_gate2_verdict(blockers: list[str], candidate_ids: list[str]) ->
     }
 
 
+def _dict_rows(value: list[object]) -> list[JsonRow]:
+    rows: list[JsonRow] = []
+    for raw_row in value:
+        if isinstance(raw_row, dict):
+            rows.append(cast(JsonRow, raw_row))
+    return rows
+
+
 def _string_list(value: object, name: str, blockers: list[str]) -> list[str]:
-    if not isinstance(value, list) or not value or not all(
-        isinstance(item, str) and item for item in value
-    ):
+    if not isinstance(value, list) or not value:
         blockers.append(f"GATE2_{name.upper()}_INVALID")
         return []
-    return [str(item) for item in value]
+    parsed: list[str] = []
+    for item in cast(list[object], value):
+        if not isinstance(item, str) or not item:
+            blockers.append(f"GATE2_{name.upper()}_INVALID")
+            return []
+        parsed.append(item)
+    return parsed
 
 
 def _string_mapping(value: object, name: str, blockers: list[str]) -> dict[str, str]:
@@ -193,13 +224,13 @@ def _string_mapping(value: object, name: str, blockers: list[str]) -> dict[str, 
 
 
 def _unique_index(
-    rows: list[dict[str, Any]],
+    rows: list[JsonRow],
     key: str,
     fold: str,
     role: str,
     blockers: list[str],
-) -> dict[str, dict[str, Any]]:
-    index: dict[str, dict[str, Any]] = {}
+) -> dict[str, JsonRow]:
+    index: dict[str, JsonRow] = {}
     for row in rows:
         value = str(row.get(key, ""))
         if value in index:
@@ -208,16 +239,15 @@ def _unique_index(
     return index
 
 
-def _deduplicate_models(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    unique: dict[str, dict[str, Any]] = {}
+def _deduplicate_models(rows: list[JsonRow]) -> list[JsonRow]:
+    unique: dict[str, JsonRow] = {}
     for row in rows:
         unique[str(row.get(LEARNER_ID, ""))] = row
     return [unique[key] for key in sorted(unique)]
 
 
-def _finite_number(value: object) -> bool:
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(float(value))
-    )
+def _finite_float(value: object) -> float | None:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    parsed = float(value)
+    return parsed if math.isfinite(parsed) else None
