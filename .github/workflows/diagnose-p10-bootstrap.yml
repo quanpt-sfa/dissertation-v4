@@ -1,5 +1,6 @@
 name: diagnose-p10-bootstrap
 
+# Temporary diagnostic workflow; removed before merge.
 on: [push, pull_request]
 
 permissions:
