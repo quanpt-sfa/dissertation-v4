@@ -39,13 +39,11 @@ def confirmatory_control_decision(
     ]
     completed = min(replication_counts)
     precision_met = all(
-        row.get("minimum_replications_met") is True
-        and row.get("mcse_target_met") is True
+        row.get("minimum_replications_met") is True and row.get("mcse_target_met") is True
         for row in gate_rows
     )
     terminal_at_cap = all(
-        row.get("mcse_target_met") is True
-        or row.get("maximum_replications_reached") is True
+        row.get("mcse_target_met") is True or row.get("maximum_replications_reached") is True
         for row in gate_rows
     )
     return {

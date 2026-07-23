@@ -182,11 +182,7 @@ def main() -> int:
                 method_id=job.method_id,
             )
             completed = decision["completed"]
-            if (
-                decision["precision_met"]
-                or decision["terminal_at_cap"]
-                or completed >= job.maximum
-            ):
+            if decision["precision_met"] or decision["terminal_at_cap"] or completed >= job.maximum:
                 continue
             count = min(job.batch_size, job.maximum - completed)
             pending_commands.append(
@@ -436,10 +432,7 @@ def _coordinates(item: Mapping[str, object]) -> dict[str, str]:
     raw = item.get("coordinates")
     if not isinstance(raw, dict):
         raise ValueError("artifact manifest coordinates required")
-    return {
-        str(key): str(value)
-        for key, value in cast(dict[object, object], raw).items()
-    }
+    return {str(key): str(value) for key, value in cast(dict[object, object], raw).items()}
 
 
 def _coordinate_key(coordinates: Mapping[str, str]) -> CoordinateKey:
