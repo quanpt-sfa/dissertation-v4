@@ -21,6 +21,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from core.metrics import average_precision
+from features.service import FIT_MODEL_ELIGIBILITY_VALUES
 from core.semantic_keys import (
     ELIGIBLE,
     FIRM_ID,
@@ -189,6 +190,8 @@ def fit_fold_models(
     track_id: str = "track_a",
     learner_search_spaces: dict[str, Any] | None = None,
     maximum_valid_configurations: int = 50,
+    required_feature_groups: list[str] | None = None,
+    candidate_seed_offset: int = 1009,
 ) -> ModelFitResult:
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
@@ -211,6 +214,15 @@ def fit_fold_models(
     development = frame.loc[(frame[year] < outer_year) & frame[response].notna()].copy()
     outer = frame.loc[frame[year] == outer_year].copy()
     groups = _feature_groups(feature_registry)
+    required_groups = set(required_feature_groups or [])
+    unknown_required = sorted(required_groups - set(groups))
+    if unknown_required:
+        raise ValueError(f"unknown required feature groups: {unknown_required}")
+    empty_required = sorted(group for group in required_groups if not groups[group])
+    if empty_required:
+        raise RuntimeError(f"required feature groups are empty: {empty_required}")
+    if candidate_seed_offset < 1:
+        raise ValueError("candidate_seed_offset must be positive")
     models: list[dict[str, object]] = []
     oof_rows: list[dict[str, object]] = []
     oof_target_rows: list[dict[str, object]] = []
@@ -241,7 +253,7 @@ def fit_fold_models(
                     response,
                     year,
                     weight,
-                    random_state + candidate_index * 1009,
+                    random_state + candidate_index * candidate_seed_offset,
                     soft_target=soft_target,
                     target_transform=target_transform,
                 )
@@ -379,7 +391,7 @@ def _feature_groups(registry: list[dict[str, Any]]) -> dict[str, list[str]]:
         item
         for item in registry
         if item.get("research_decision_status") in {None, "LOCKED"}
-        and item.get("model_eligibility") in {None, ELIGIBLE}
+        and item.get("model_eligibility") in {None, *FIT_MODEL_ELIGIBILITY_VALUES}
     ]
     content = [str(item["feature_id"]) for item in eligible if role(item) == "content"]
     observable = [str(item["feature_id"]) for item in eligible if role(item) == "observability"]

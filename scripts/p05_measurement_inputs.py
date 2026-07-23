@@ -233,22 +233,36 @@ def _execute_l3_pilot(
         return
     model = mapping(measurement.get("l3_model"), "measurement.l3_model")
     operational = mapping(model.get("operational"), "measurement.l3_model.operational")
+    parameter_status = str(operational.get("parameter_status", "UNSPECIFIED"))
+    report_required = bool(operational.get("report_required", False))
     grid = sequence(operational.get("fixed_pi_grid"), "l3 fixed_pi_grid")
     priors_by_profile = mapping(
         operational.get("accuracy_priors_by_profile"), "L3 priors by profile"
     )
     if not grid:
+        if report_required:
+            raise RuntimeError("L3 is report-required but fixed_pi_grid is empty")
         capability.update(
             {
                 "status": "EMPIRICALLY_PENDING",
                 "pilot_executed": False,
-                "reason_code": "L3_FIXED_PI_GRID_NOT_LOCKED",
+                "reason_code": str(
+                    operational.get(
+                        "unavailable_reason_code", "L3_FIXED_PI_GRID_NOT_LOCKED"
+                    )
+                ),
+                "parameter_status": parameter_status,
+                "report_required": report_required,
                 "required_config_key": "measurement.l3_model.operational.fixed_pi_grid",
             }
         )
         return
     missing_profiles = sorted(set(source_profiles.values()) - set(priors_by_profile))
     if missing_profiles:
+        if report_required:
+            raise RuntimeError(
+                f"L3 is report-required but accuracy priors are missing for {missing_profiles}"
+            )
         capability.update(
             {
                 "status": "EMPIRICALLY_PENDING",
@@ -256,6 +270,8 @@ def _execute_l3_pilot(
                 "reason_code": "L3_ACCURACY_PRIORS_NOT_LOCKED",
                 "missing_profile_ids": missing_profiles,
                 "required_config_key": "measurement.l3_model.operational.accuracy_priors_by_profile",
+                "parameter_status": parameter_status,
+                "report_required": report_required,
             }
         )
         return

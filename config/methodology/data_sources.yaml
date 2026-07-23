@@ -22,4 +22,15 @@ data_sources:
     root_environment_variable: DISSERTATION_RAW_ROOT
     schema_evolution_policy: fail_on_unregistered_fields
     hash_policy: locked_sha256_required
+    provenance_contract:
+      manifest_relative_path: extract_provenance.json
+      required: true
+      required_fields:
+      - vendor
+      - vendor_product
+      - pull_date
+      - vendor_version
+      - extract_query
+      - revision_policy
+      - point_in_time_vintages_available
     sources: {}

@@ -1,0 +1,10 @@
+{
+  "vendor": "FiinPro",
+  "vendor_product": "REPLACE_WITH_PRODUCT_NAME",
+  "pull_date": "YYYY-MM-DD",
+  "vendor_version": "REPLACE_WITH_VENDOR_VERSION_OR_EXPLICIT_UNKNOWN",
+  "extract_query": "REPLACE_WITH_EXPORT_QUERY_OR_REPORT_IDENTIFIER",
+  "revision_policy": "REPLACE_AFTER_VENDOR_CONFIRMATION",
+  "point_in_time_vintages_available": false,
+  "notes": "Copy this file to <raw-root>/extract_provenance.json before a production run."
+}

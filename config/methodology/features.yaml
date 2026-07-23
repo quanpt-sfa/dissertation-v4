@@ -16,7 +16,22 @@ features:
     reject_duplicate_keys: true
     reject_unknown_features: true
     allow_unregistered_files: false
-    availability_policy: synthetic_annual_anchor_allowed_but_not_observed_publication_date
+    availability_policy: synthetic_annual_anchor_explicit_assumption
+    availability_contract:
+      observed_publication_dates_available: false
+      primary_synthetic_anchor_month_day: 03-31
+      sensitivity_synthetic_anchor_month_days:
+      - 06-30
+      - 09-30
+      limitation_disclosure_required: true
+    revision_contract:
+      point_in_time_vintages_available: false
+      revision_policy_source: extract_provenance.revision_policy
+      restatement_sensitivity_required: true
+    preprocessing:
+      winsorization: none
+      p1_p99_role: diagnostics_only
+      train_fold_only_if_enabled: true
     canonical_key:
     - firm_master_id
     - fiscal_year

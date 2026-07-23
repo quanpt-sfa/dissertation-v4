@@ -30,6 +30,7 @@ def build_snapshot(
     if not raw_root.is_dir():
         raise NotADirectoryError(raw_root)
     catalog = SourceCatalog.from_mapping(registry.get("source_catalog"))
+    extract_provenance = _load_extract_provenance(registry, raw_root)
     entries: list[dict[str, object]] = []
     profile_summary: dict[str, object] = {}
 
@@ -81,13 +82,61 @@ def build_snapshot(
         "snapshot_id": snapshot_id,
         "created_at_utc": datetime.now(UTC).isoformat(),
         "root_environment_variable": catalog.root_environment_variable,
-        "raw_root_recorded": False,
+        "raw_root_recorded": True,
+        "raw_root": str(raw_root),
+        "extract_provenance": extract_provenance,
         "profiles": profile_summary,
         "sources": sorted(entries, key=lambda item: str(item["source_id"])),
     }
     snapshot["snapshot_content_hash"] = _snapshot_content_hash(snapshot)
     snapshot["snapshot_hash"] = _snapshot_hash(snapshot)
     return snapshot
+
+
+def _load_extract_provenance(
+    registry: dict[str, object], raw_root: Path
+) -> dict[str, object]:
+    data_sources = registry.get("data_sources")
+    if not isinstance(data_sources, dict):
+        return {}
+    source_registry = cast(dict[str, object], data_sources).get("source_registry")
+    if not isinstance(source_registry, dict):
+        return {}
+    contract = cast(dict[str, object], source_registry).get("provenance_contract")
+    if not isinstance(contract, dict):
+        return {}
+    typed = cast(dict[str, object], contract)
+    relative = typed.get("manifest_relative_path")
+    if not isinstance(relative, str) or not relative:
+        raise ValueError("data source provenance manifest path must be registered")
+    path = (raw_root / relative).resolve()
+    try:
+        path.relative_to(raw_root)
+    except ValueError as exc:
+        raise ValueError("data source provenance manifest escapes raw root") from exc
+    required = typed.get("required") is True
+    if not path.is_file():
+        if required:
+            raise FileNotFoundError(
+                f"required extract provenance manifest is missing: {path}"
+            )
+        return {}
+    raw: object = json.loads(path.read_text(encoding="utf-8"))
+    provenance = _mapping(raw, "extract provenance")
+    raw_fields = typed.get("required_fields")
+    if not isinstance(raw_fields, list) or not all(
+        isinstance(value, str) and value for value in cast(list[object], raw_fields)
+    ):
+        raise ValueError("extract provenance required_fields must be registered")
+    required_fields = cast(list[str], raw_fields)
+    missing = [
+        field
+        for field in required_fields
+        if field not in provenance or provenance[field] in {None, ""}
+    ]
+    if missing:
+        raise ValueError(f"extract provenance is missing required fields: {missing}")
+    return {str(key): value for key, value in provenance.items()}
 
 
 def write_snapshot(path: Path, snapshot: dict[str, object]) -> None:
@@ -271,6 +320,7 @@ def _snapshot_content_hash(snapshot: dict[str, object]) -> str:
         "snapshot_schema_version": snapshot.get("snapshot_schema_version"),
         "root_environment_variable": snapshot.get("root_environment_variable"),
         "raw_root_recorded": snapshot.get("raw_root_recorded"),
+        "extract_provenance": snapshot.get("extract_provenance"),
         "profiles": snapshot.get("profiles"),
         "sources": snapshot.get("sources"),
     }

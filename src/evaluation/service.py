@@ -51,6 +51,9 @@ def evaluate_outer_fold(
     temporal_estimand_metadata: dict[str, object] | None = None,
     oof_training_targets: list[dict[str, object]] | None = None,
     latent_risk_scenarios: dict[str, list[dict[str, float]]] | None = None,
+    required_reference_by_candidate: dict[str, str] | None = None,
+    platt_inverse_regularization: float = 1_000_000.0,
+    platt_maximum_iterations: int = 2000,
 ) -> EvaluationResult:
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
@@ -76,7 +79,10 @@ def evaluate_outer_fold(
     for learner_id, frame in outer.groupby(learner, sort=True):
         development_frame = development.loc[development[learner] == learner_id]
         intercept, slope, status = _fit_platt(
-            development_frame[prediction], development_frame[outcome]
+            development_frame[prediction],
+            development_frame[outcome],
+            inverse_regularization=platt_inverse_regularization,
+            maximum_iterations=platt_maximum_iterations,
         )
         probabilities = _apply_platt(frame[prediction].to_numpy(dtype=float), intercept, slope)
         calibrated[str(learner_id)] = probabilities
@@ -125,7 +131,13 @@ def evaluate_outer_fold(
                 **fit_metrics,
             }
         )
-    comparisons = _comparisons(outer, calibrated, learner, outcome)
+    comparisons = _comparisons(
+        outer,
+        calibrated,
+        learner,
+        outcome,
+        required_reference_by_candidate=required_reference_by_candidate,
+    )
     bootstrap = _firm_bootstrap(
         outer,
         calibrated,
@@ -163,14 +175,24 @@ def evaluate_outer_fold(
     )
 
 
-def _fit_platt(scores: pd.Series, outcomes: pd.Series) -> tuple[float, float, str]:
+def _fit_platt(
+    scores: pd.Series,
+    outcomes: pd.Series,
+    *,
+    inverse_regularization: float,
+    maximum_iterations: int,
+) -> tuple[float, float, str]:
     valid = scores.notna() & outcomes.notna()
     scores = scores.loc[valid]
     outcomes = outcomes.loc[valid].astype(int)
     if scores.empty or outcomes.nunique() < 2:
         return 0.0, 1.0, "IDENTITY_INSUFFICIENT_CLASSES"
+    if inverse_regularization <= 0 or maximum_iterations < 1:
+        raise ValueError("Platt calibration controls must be positive")
     logits = _logit(scores.to_numpy(dtype=float)).reshape(-1, 1)
-    model = LogisticRegression(C=1e6, solver="lbfgs", max_iter=2000)
+    model = LogisticRegression(
+        C=inverse_regularization, solver="lbfgs", max_iter=maximum_iterations
+    )
     cast(Any, model).fit(logits, outcomes.to_numpy())
     intercept = np.asarray(cast(Any, model).intercept_, dtype=float)
     coefficient = np.asarray(cast(Any, model).coef_, dtype=float)
@@ -192,16 +214,27 @@ def _comparisons(
     calibrated: dict[str, np.ndarray],
     learner: str,
     outcome: str,
+    *,
+    required_reference_by_candidate: dict[str, str] | None,
 ) -> list[dict[str, object]]:
     results: list[dict[str, object]] = []
     by_id = {str(value): frame for value, frame in outer.groupby(learner, sort=True)}
-    for full_id, full_frame in by_id.items():
-        if not full_id.endswith(":full"):
-            continue
-        reference_id = full_id.removesuffix(":full") + ":observability_only"
+    pairs = required_reference_by_candidate or {
+        model_id: model_id.removesuffix(":full") + ":observability_only"
+        for model_id in by_id
+        if model_id.endswith(":full")
+    }
+    for full_id, reference_id in pairs.items():
+        full_frame = by_id.get(full_id)
         reference = by_id.get(reference_id)
-        if reference is None or len(reference) != len(full_frame):
-            continue
+        if full_frame is None or reference is None:
+            raise RuntimeError(
+                f"required Gate 2 model pair is missing: candidate={full_id}, reference={reference_id}"
+            )
+        if len(reference) != len(full_frame):
+            raise RuntimeError(
+                f"required Gate 2 model pair has unequal support: candidate={full_id}, reference={reference_id}"
+            )
         truth = full_frame[outcome].astype(bool).tolist()
         full_ap = average_precision(truth, calibrated[full_id].tolist())
         reference_ap = average_precision(truth, calibrated[reference_id].tolist())

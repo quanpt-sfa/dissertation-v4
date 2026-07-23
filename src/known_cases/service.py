@@ -19,6 +19,7 @@ def evaluate_known_cases(
     scenario_fraction_min: float,
     strong_percentile: float,
     columns: dict[str, str],
+    weak_percentile: float = 0.5,
 ) -> list[dict[str, Any]]:
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
@@ -74,7 +75,7 @@ def evaluate_known_cases(
                 for item in results
                 if item[LEARNER_ID] == scenario
                 and item["percentile"] is not None
-                and float(item["percentile"]) < 0.5
+                and float(item["percentile"]) < weak_percentile
             }
         )
         for scenario in scenario_ids

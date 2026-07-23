@@ -2,9 +2,14 @@ study:
   track_a: observed_endpoint
   prediction_time:
     rule: latest_time_all_core_predictors_valid
-    default_anchor: audited_financial_statement_publication_date
+    default_anchor: synthetic_annual_anchor_31_march_fiscal_year_plus_one
     calendar_standardization: true
     availability_date_audit_required: true
+    observed_publication_date_available: false
+    anchor_assumption_disclosure_required: true
+    sensitivity_anchors:
+    - synthetic_annual_anchor_30_june_fiscal_year_plus_one
+    - synthetic_annual_anchor_30_september_fiscal_year_plus_one
   horizons_months:
     primary: 12
     sensitivity:
@@ -23,4 +28,5 @@ study:
       maturity_basis: complete_next_calendar_year_source
   sample_fiscal_years:
     start: 2015
-    end: 2026
+    end: 2025
+  prospective_target_year: 2026

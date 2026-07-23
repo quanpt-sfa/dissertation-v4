@@ -16,6 +16,7 @@ known_cases:
   soft_veto:
     minimum_cases: 4
     below_median_cases: 3
+    weak_percentile: 0.5
     scenario_fraction_min: 0.75
     strong_falsification_all_below_percentile: 0.25
     fewer_than_minimum_role: casewise_reporting_only

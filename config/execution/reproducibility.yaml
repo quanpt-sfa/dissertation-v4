@@ -12,3 +12,6 @@ reproducibility:
     numpy_generator_policy: default_rng_only
     thread_policy: record_and_lock
     container_policy: record_digest_or_explicit_absence
+  seed_offsets:
+    nested_channel: 100003
+    tuning_candidate: 1009

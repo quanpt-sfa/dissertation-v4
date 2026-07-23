@@ -20,6 +20,7 @@ from core.semantic_keys import (
     PREDICTION,
     TARGET_VALUE,
 )
+from features.service import FIT_MODEL_ELIGIBILITY_VALUES
 from modeling.service import ModelFitResult, fit_fold_models
 
 _HELDOUT_CHANNEL = "heldout_channel"
@@ -50,6 +51,8 @@ def run_nested_channel_refit(
     maximum_valid_configurations: int,
     columns: Mapping[str, str],
     random_state: int,
+    channel_seed_offset: int = 100_003,
+    candidate_seed_offset: int = 1009,
 ) -> NestedRefitResult:
     """Run the complete development-only learner procedure for each held channel."""
     if minimum_observed_channels < 1:
@@ -58,6 +61,8 @@ def run_nested_channel_refit(
         raise ValueError("nested channel refit requires a positive tuning budget")
     if gate1_feature_group not in {"full", "content_only", "observability_only"}:
         raise ValueError("unsupported Gate 1 feature group")
+    if channel_seed_offset < 1 or candidate_seed_offset < 1:
+        raise ValueError("nested-refit seed offsets must be positive")
 
     year = _physical(columns, FISCAL_YEAR)
     expected_channels = _string_list(matrices.get("expected_channels"), "expected_channels")
@@ -156,7 +161,7 @@ def run_nested_channel_refit(
                     target_id=candidate,
                     measurement_id=candidate,
                     columns={str(key): str(value) for key, value in columns.items()},
-                    random_state=random_state + channel_index * 100_003,
+                    random_state=random_state + channel_index * channel_seed_offset,
                     target_values=target_frame,
                     soft_target=True,
                     target_transform="training_ecdf" if candidate == "L2" else "identity",
@@ -165,6 +170,8 @@ def run_nested_channel_refit(
                         str(key): value for key, value in learner_search_spaces.items()
                     },
                     maximum_valid_configurations=maximum_valid_configurations,
+                    required_feature_groups=[gate1_feature_group],
+                    candidate_seed_offset=candidate_seed_offset,
                 )
                 cell = _score_fit(
                     fit=fit,
@@ -607,7 +614,7 @@ def _heldout_feature_registry(
             continue
         if item.get("research_decision_status") not in {None, "LOCKED"}:
             continue
-        if item.get("model_eligibility") not in {None, ELIGIBLE}:
+        if item.get("model_eligibility") not in {None, *FIT_MODEL_ELIGIBILITY_VALUES}:
             continue
         if str(item.get("source_channel", "")) == heldout_channel:
             continue

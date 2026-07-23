@@ -7,6 +7,11 @@ evaluation:
   - content_only
   - full
   - nonlinear
+  benchmark_status:
+    fixed_accounting:
+      status: BLOCKED_UNTIL_MAPPING_REVIEW
+      reason_code: BENEISH_VN_MAPPING_REVIEW_REQUIRED
+      operational_results_may_be_claimed: false
   pu_branch: separate
   review_budget:
     primary_fraction: 0.05
@@ -48,6 +53,13 @@ evaluation:
     minimum_domains: 2
     interaction_parent_must_pass_gate2: true
     initial_fold_role: separate
+    breakpoint_grid:
+      lower_quantile: 0.1
+      upper_quantile: 0.9
+      points: 17
+    logistic_fit:
+      inverse_regularization: 1000000.0
+      maximum_iterations: 2000
   gate_common:
     noninferiority_relative_ap_margin: 0.05
     robust_scenario_fraction_min: 0.8

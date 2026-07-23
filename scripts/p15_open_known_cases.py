@@ -78,6 +78,7 @@ def main() -> int:
         below_median_cases=int(veto["below_median_cases"]),
         scenario_fraction_min=float(veto["scenario_fraction_min"]),
         strong_percentile=float(veto["strong_falsification_all_below_percentile"]),
+        weak_percentile=float(veto["weak_percentile"]),
         columns=physical_columns(loaded.registry),
     )
     loaded.context.write("known_case_results", result, {})

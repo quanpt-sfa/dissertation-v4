@@ -292,7 +292,7 @@ def gate3_verdict(
         frame = data.loc[data[year].astype(int) == fold]
         if len(frame) < 8 or frame[outcome].nunique() < 2:
             continue
-        directions.append(_interaction_coefficient(frame, monitoring, outcome))
+        directions.append(_interaction_coefficient(frame, monitoring, outcome, gate))
         if rng is not None:
             direction_interval, _ = _shape_bootstrap(
                 frame=frame,
@@ -419,7 +419,7 @@ def _threshold_claim(
         fold_frame = frame.loc[frame[year].astype(int) == fold]
         if len(fold_frame) < 8 or fold_frame[outcome].nunique() < 2:
             continue
-        point, side = _breakpoint(fold_frame, monitoring, outcome)
+        point, side = _breakpoint(fold_frame, monitoring, outcome, gate)
         if point is None:
             continue
         breakpoints.append(point)
@@ -437,7 +437,7 @@ def _threshold_claim(
     domain_points: dict[str, float] = {}
     ranges: list[tuple[float, float]] = []
     for level, domain_frame in frame.groupby(domain, sort=True):
-        point, _ = _breakpoint(domain_frame, monitoring, outcome)
+        point, _ = _breakpoint(domain_frame, monitoring, outcome, gate)
         if point is not None:
             domain_points[str(level)] = point
             ranges.append(
@@ -486,23 +486,43 @@ def breakpoint_stability_pass(breakpoints: list[float], tolerance: float) -> boo
     return float(np.std(breakpoints, ddof=0)) <= tolerance
 
 
-def _interaction_coefficient(frame: pd.DataFrame, monitoring: str, outcome: str) -> float:
+def _interaction_coefficient(
+    frame: pd.DataFrame, monitoring: str, outcome: str, gate: dict[str, Any]
+) -> float:
     pressure = frame["_pressure_z"].to_numpy(dtype=float)
     monitor = frame[monitoring].to_numpy(dtype=float)
     design = np.column_stack([np.ones(len(frame)), pressure, monitor, pressure * monitor])
-    model = LogisticRegression(C=1e6, solver="lbfgs", max_iter=2000, fit_intercept=False)
+    controls = _mapping(gate.get("logistic_fit"))
+    model = LogisticRegression(
+        C=float(controls["inverse_regularization"]),
+        solver="lbfgs",
+        max_iter=int(controls["maximum_iterations"]),
+        fit_intercept=False,
+    )
     cast(Any, model).fit(design, frame[outcome].astype(int).to_numpy())
     coefficients = np.asarray(cast(Any, model).coef_, dtype=float)
     return float(coefficients[0, -1])
 
 
-def _breakpoint(frame: pd.DataFrame, monitoring: str, outcome: str) -> tuple[float | None, float]:
+def _breakpoint(
+    frame: pd.DataFrame, monitoring: str, outcome: str, gate: dict[str, Any]
+) -> tuple[float | None, float]:
     if len(frame) < 8:
         return None, 0.0
     pressure = frame["_pressure_z"].to_numpy(dtype=float)
     monitor = frame[monitoring].to_numpy(dtype=float)
     target = frame[outcome].to_numpy(dtype=float)
-    candidates = np.unique(np.quantile(pressure, np.linspace(0.1, 0.9, 17)))
+    grid = _mapping(gate.get("breakpoint_grid"))
+    candidates = np.unique(
+        np.quantile(
+            pressure,
+            np.linspace(
+                float(grid["lower_quantile"]),
+                float(grid["upper_quantile"]),
+                int(grid["points"]),
+            ),
+        )
+    )
     best: tuple[float, float, float] | None = None
     for point in candidates:
         point_value = float(point)
@@ -514,7 +534,13 @@ def _breakpoint(frame: pd.DataFrame, monitoring: str, outcome: str) -> tuple[flo
         )
         if len(np.unique(target)) < 2:
             continue
-        model = LogisticRegression(C=1e6, solver="lbfgs", max_iter=2000, fit_intercept=False)
+        controls = _mapping(gate.get("logistic_fit"))
+        model = LogisticRegression(
+            C=float(controls["inverse_regularization"]),
+            solver="lbfgs",
+            max_iter=int(controls["maximum_iterations"]),
+            fit_intercept=False,
+        )
         cast(Any, model).fit(design, target.astype(int))
         probability = np.asarray(cast(Any, model).predict_proba(design), dtype=float)[:, 1]
         loss = float(log_loss(target.astype(int), probability, labels=[0, 1]))

@@ -877,7 +877,7 @@ def _apply_imbalance_treatment(
 
             sampler = ADASYN(n_neighbors=neighbors, random_state=random_state)
         resampled_x, resampled_y = sampler.fit_resample(x, y.astype(int))
-    except Exception as exc:
+    except (ImportError, ValueError, RuntimeError) as exc:
         record_resampling_failure(type(exc).__name__)
         return x, y, selection_weights, neutral_stats, 0.0
 

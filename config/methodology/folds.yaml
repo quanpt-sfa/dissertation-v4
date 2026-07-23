@@ -6,6 +6,10 @@ folds:
   - 2023
   - 2024
   prospective_year: 2026
+  prospective_feature_status: unavailable_by_data_cutoff
+  primary_embargo_years: 0
+  sensitivity_embargo_years:
+  - 1
   initial_in_confirmatory_pool: false
   prospective_in_retrospective_evaluation: false
   maturity_audit_required_before_lock: true

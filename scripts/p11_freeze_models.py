@@ -127,6 +127,20 @@ def main() -> int:
             f"{missing_search_spaces} under learners.tuning.search_spaces"
         )
     maximum_configurations = int(tuning["max_valid_configurations_per_learner_inner_fold"])
+    evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
+    gate2 = mapping(evaluation.get("gate2"), "evaluation.gate2")
+    reference_by_candidate = mapping(
+        gate2.get("reference_by_candidate"), "evaluation.gate2.reference_by_candidate"
+    )
+    required_feature_groups = sorted(
+        {
+            str(model_id).rsplit(":", 1)[-1]
+            for model_id in [*reference_by_candidate.keys(), *reference_by_candidate.values()]
+        }
+    )
+    reproducibility = mapping(loaded.registry.get("reproducibility"), "reproducibility")
+    seed_offsets = mapping(reproducibility.get("seed_offsets"), "reproducibility.seed_offsets")
+    candidate_seed_offset = int(seed_offsets["tuning_candidate"])
     columns = physical_columns(loaded.registry)
     plan_tracks = executable_tracks(selection)
     optional_measurements = [
@@ -159,6 +173,8 @@ def main() -> int:
         track_id=str(primary_track["track_id"]),
         learner_search_spaces=search_spaces,
         maximum_valid_configurations=maximum_configurations,
+        required_feature_groups=required_feature_groups,
+        candidate_seed_offset=candidate_seed_offset,
     )
     fits = [track_l1]
     track_statuses: dict[str, str] = {
@@ -214,6 +230,7 @@ def main() -> int:
             track_id=track_id,
             learner_search_spaces=search_spaces,
             maximum_valid_configurations=maximum_configurations,
+            candidate_seed_offset=candidate_seed_offset,
         )
         fits.append(optional_fit)
         track_statuses[track_id] = str(optional_fit.models["status"])

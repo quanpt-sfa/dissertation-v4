@@ -24,6 +24,10 @@ from core.semantic_keys import (
 _ROLES = {"content", "observability", "ambiguous", "administrative", "identifier"}
 _CONFIRMATORY = {"confirmatory", "robustness_only", "descriptive_only", "blocked"}
 _DECISION_STATUS = {"LOCKED", "RESEARCH_DECISION_REQUIRED", "UNAVAILABLE", "NOT_APPLICABLE"}
+MODEL_ELIGIBILITY_VALUES = frozenset(
+    {"eligible", "eligible_observability_view", "blocked_until_mapping_review"}
+)
+FIT_MODEL_ELIGIBILITY_VALUES = frozenset({"eligible", "eligible_observability_view"})
 _LEAKAGE_DECISIONS = {
     "ALLOW",
     "ALLOW_WITH_ABLATION",
@@ -267,6 +271,8 @@ def _validate_definition(item: dict[str, object]) -> None:
         raise ValueError(f"feature={feature_id}: invalid confirmatory_status")
     if item["research_decision_status"] not in _DECISION_STATUS:
         raise ValueError(f"feature={feature_id}: invalid research_decision_status")
+    if item["model_eligibility"] not in MODEL_ELIGIBILITY_VALUES:
+        raise ValueError(f"feature={feature_id}: invalid model_eligibility")
     if not isinstance(item["target_component_flag"], bool) or not isinstance(
         item["source_specific_flag"], bool
     ):

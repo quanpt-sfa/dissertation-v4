@@ -93,6 +93,15 @@ def main() -> int:
     pairing_audit = validate_paired_prediction_keys(cast(pd.DataFrame, predictions), columns)
     evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
     review_budget = mapping(evaluation.get("review_budget"), "evaluation.review_budget")
+    gate2 = mapping(evaluation.get("gate2"), "evaluation.gate2")
+    reference_by_candidate = {
+        str(key): str(value)
+        for key, value in mapping(
+            gate2.get("reference_by_candidate"), "evaluation.gate2.reference_by_candidate"
+        ).items()
+    }
+    calibration = mapping(loaded.registry.get("calibration"), "calibration")
+    platt = mapping(calibration.get("platt"), "calibration.platt")
     utility = mapping(loaded.registry.get("utility"), "utility")
     scenarios = [
         mapping(item, "utility scenario")
@@ -126,6 +135,9 @@ def main() -> int:
             for item in sequence(models.get("oof_training_targets"), "OOF training targets")
         ],
         latent_risk_scenarios=latent_risk_scenarios,
+        required_reference_by_candidate=reference_by_candidate,
+        platt_inverse_regularization=float(platt["inverse_regularization"]),
+        platt_maximum_iterations=int(platt["maximum_iterations"]),
         target_id=primary_target_id,
         temporal_estimand_metadata=(
             mapping(s3_taxonomy.get("temporal_estimand"), "s3 temporal estimand")

@@ -86,6 +86,9 @@ measurement:
       estimated_parameter_bias_only: true
     pairwise_dependence_role: sensitivity_only
     operational:
+      parameter_status: PENDING_EXTERNAL_ELICITATION
+      report_required: false
+      unavailable_reason_code: L3_PARAMETERS_NOT_EXTERNALLY_JUSTIFIED
       fixed_pi_grid: []
       accuracy_priors_by_profile: {}
       pilot_max_rows: 2000

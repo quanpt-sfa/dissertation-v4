@@ -210,6 +210,7 @@ def validate_methodology(
     known = _mapping(registry, "known_cases")
     simulation = _mapping(registry, "simulation")
     s3_taxonomy = _mapping(registry, "s3_taxonomy")
+    reproducibility = _mapping(registry, "reproducibility")
     _validate_p02_configuration(sources, entity_resolution)
     _validate_s3_configuration(s3_taxonomy)
 
@@ -257,6 +258,43 @@ def validate_methodology(
         simulation.get("protocol_role"),
         "simulation.protocol_role",
     )
+    prediction_time = _entry(study.get("prediction_time"), "study.prediction_time")
+    sample_years = _entry(study.get("sample_fiscal_years"), "study.sample_fiscal_years")
+    feature_store = _entry(features.get("store"), "features.store")
+    availability_contract = _entry(
+        feature_store.get("availability_contract"), "features.store.availability_contract"
+    )
+    revision_contract = _entry(
+        feature_store.get("revision_contract"), "features.store.revision_contract"
+    )
+    preprocessing = _entry(
+        feature_store.get("preprocessing"), "features.store.preprocessing"
+    )
+    l3_operational = _entry(l3_model.get("operational"), "measurement.l3_model.operational")
+    execution_tracks = _entry(
+        measurement.get("execution_tracks"), "measurement.execution_tracks"
+    )
+    source_registry = _entry(
+        sources.get("source_registry"), "data_sources.source_registry"
+    )
+    provenance_contract = _entry(
+        source_registry.get("provenance_contract"),
+        "data_sources.source_registry.provenance_contract",
+    )
+    benchmark_status = _entry(
+        evaluation.get("benchmark_status"), "evaluation.benchmark_status"
+    )
+    fixed_accounting_status = _entry(
+        benchmark_status.get("fixed_accounting"),
+        "evaluation.benchmark_status.fixed_accounting",
+    )
+    platt = _entry(calibration.get("platt"), "calibration.platt")
+    gate3 = _entry(evaluation.get("gate3"), "evaluation.gate3")
+    breakpoint_grid = _entry(gate3.get("breakpoint_grid"), "evaluation.gate3.breakpoint_grid")
+    gate3_logistic = _entry(gate3.get("logistic_fit"), "evaluation.gate3.logistic_fit")
+    seed_offsets = _entry(
+        reproducibility.get("seed_offsets"), "reproducibility.seed_offsets"
+    )
 
     required = [
         (
@@ -276,6 +314,7 @@ def validate_methodology(
             and _primary_target_valid(measurement),
             "D05 primary target must be null or explicitly reference a registered candidate",
         ),
+        # D07 is intentionally hard-guarded so protocol drift requires an explicit amendment.
         (
             review_budget.get("primary_fraction") == 0.05,
             "D07 primary review budget must be 5%",
@@ -289,10 +328,12 @@ def validate_methodology(
             ],
             "D08 learner roster differs",
         ),
+        # D09 is intentionally hard-guarded so protocol drift requires an explicit amendment.
         (
             tuning.get("max_valid_configurations_per_learner_inner_fold") == 50,
             "D09 tuning cap must be 50",
         ),
+        # D10 is intentionally hard-guarded so protocol drift requires an explicit amendment.
         (
             folds.get("initial_outer_year") == 2020
             and folds.get("fully_nested_outer_years") == [2021, 2022, 2023, 2024],
@@ -301,6 +342,95 @@ def validate_methodology(
         (
             measurement.get("selection_candidates") == ["L2", "L3_fixed_pi", "none"],
             "hierarchical-pi cannot enter Gate 1",
+        ),
+        (
+            prediction_time.get("default_anchor")
+            == "synthetic_annual_anchor_31_march_fiscal_year_plus_one"
+            and prediction_time.get("observed_publication_date_available") is False
+            and prediction_time.get("anchor_assumption_disclosure_required") is True,
+            "D01 synthetic annual anchor must be explicit and disclosed",
+        ),
+        (
+            availability_contract.get("observed_publication_dates_available") is False
+            and availability_contract.get("primary_synthetic_anchor_month_day") == "03-31"
+            and availability_contract.get("sensitivity_synthetic_anchor_month_days")
+            == ["06-30", "09-30"],
+            "feature availability anchor contract differs",
+        ),
+        (
+            revision_contract.get("point_in_time_vintages_available") is False
+            and revision_contract.get("restatement_sensitivity_required") is True,
+            "point-in-time limitation and restatement sensitivity must be explicit",
+        ),
+        (
+            preprocessing.get("winsorization") == "none"
+            and preprocessing.get("p1_p99_role") == "diagnostics_only"
+            and preprocessing.get("train_fold_only_if_enabled") is True,
+            "feature preprocessing policy must be explicit and leakage-safe",
+        ),
+        (
+            sample_years.get("end") == feature_store.get("allowed_fiscal_year_max")
+            and folds.get("prospective_year") == study.get("prospective_target_year")
+            and int(folds.get("prospective_year", 0)) == int(sample_years.get("end", 0)) + 1
+            and folds.get("prospective_feature_status") == "unavailable_by_data_cutoff"
+            and folds.get("prospective_in_retrospective_evaluation") is False,
+            "sample and prospective year ownership differs",
+        ),
+        (
+            folds.get("primary_embargo_years") == 0
+            and folds.get("sensitivity_embargo_years") == [1],
+            "one-year embargo sensitivity must be registered",
+        ),
+        (
+            (
+                bool(l3_operational.get("fixed_pi_grid"))
+                and bool(l3_operational.get("accuracy_priors_by_profile"))
+            )
+            or (
+                l3_operational.get("parameter_status") == "PENDING_EXTERNAL_ELICITATION"
+                and l3_operational.get("report_required") is False
+                and "L3_fixed_pi" in _string_list(
+                    execution_tracks.get("order"), "measurement.execution_tracks.order"
+                )
+            ),
+            "L3 parameters must be locked or explicitly pending and non-reportable",
+        ),
+        (
+            provenance_contract.get("required") is True
+            and provenance_contract.get("manifest_relative_path") == "extract_provenance.json"
+            and set(
+                _string_list(
+                    provenance_contract.get("required_fields"),
+                    "data source provenance required_fields",
+                )
+            )
+            >= {
+                "vendor",
+                "vendor_product",
+                "pull_date",
+                "vendor_version",
+                "extract_query",
+                "revision_policy",
+                "point_in_time_vintages_available",
+            },
+            "data extract provenance must be fail-closed",
+        ),
+        (
+            fixed_accounting_status.get("status") == "BLOCKED_UNTIL_MAPPING_REVIEW"
+            and fixed_accounting_status.get("operational_results_may_be_claimed") is False,
+            "fixed-accounting benchmark cannot be claimed before Beneish mapping review",
+        ),
+        (
+            float(platt.get("inverse_regularization", 0.0)) > 0
+            and int(platt.get("maximum_iterations", 0)) > 0
+            and breakpoint_grid.get("lower_quantile") == 0.1
+            and breakpoint_grid.get("upper_quantile") == 0.9
+            and breakpoint_grid.get("points") == 17
+            and float(gate3_logistic.get("inverse_regularization", 0.0)) > 0
+            and int(gate3_logistic.get("maximum_iterations", 0)) > 0
+            and int(seed_offsets.get("nested_channel", 0)) > 0
+            and int(seed_offsets.get("tuning_candidate", 0)) > 0,
+            "locked calibration, breakpoint, and seed controls differ",
         ),
         (
             hierarchical.get("role") == "sensitivity_only",

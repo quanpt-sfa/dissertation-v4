@@ -2,3 +2,6 @@ calibration:
   source: pooled_cross_fitted_development_predictions
   development_cross_fitted_only: true
   in_sample_predictions_after_refit_forbidden: true
+  platt:
+    inverse_regularization: 1000000.0
+    maximum_iterations: 2000
