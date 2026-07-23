@@ -36,9 +36,7 @@ def inject_snapshot(registry: dict[str, object], snapshot_path: Path) -> dict[st
     if raw_protocol_registry is None:
         protocol_source_registry: dict[str, Any] = {}
     else:
-        protocol_source_registry = _mapping(
-            raw_protocol_registry, "data_sources.source_registry"
-        )
+        protocol_source_registry = _mapping(raw_protocol_registry, "data_sources.source_registry")
     root_env = snapshot.get("root_environment_variable")
     if not isinstance(root_env, str):
         raise ValueError("snapshot.root_environment_variable required")
