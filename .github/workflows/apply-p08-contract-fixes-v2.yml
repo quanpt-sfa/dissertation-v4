@@ -19,6 +19,7 @@ jobs:
       - run: uv sync --all-extras
       - run: uv run python .github/scripts/apply_p08_contract_test_fixes.py
       - run: uv run python .github/scripts/fix_p08_policy_indent.py
+      - run: uv run python .github/scripts/complete_p08_policy_coverage.py
       - run: |
           uv run ruff check --fix src/simulation/mcse_service.py scripts/p08c_aggregate_batches.py || true
           uv run ruff format src/simulation/mcse_service.py scripts/p08c_aggregate_batches.py
