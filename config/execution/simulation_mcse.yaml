@@ -16,77 +16,117 @@ simulation_mcse:
   - none
   policies:
   - policy_id: confirmatory_fit_success
-    priority: 100
+    priority: 120
     metric_pattern: fit_success
     role: confirmatory
     mcse_gate_required: true
     undefined_policy: forbid
     target_rule: absolute
     minimum_finite_fraction: 1.0
+  - policy_id: confirmatory_fixed_pi_fit_success
+    priority: 120
+    metric_pattern: fixed_pi_fit_success
+    role: confirmatory
+    mcse_gate_required: true
+    undefined_policy: forbid
+    target_rule: absolute
+    minimum_finite_fraction: 1.0
   - policy_id: confirmatory_threshold_selection
-    priority: 100
+    priority: 120
     metric_pattern: threshold_selection_success
     role: confirmatory
     mcse_gate_required: true
     undefined_policy: forbid
     target_rule: absolute
     minimum_finite_fraction: 1.0
-  - policy_id: confirmatory_latent_ap
+  - policy_id: confirmatory_fixed_pi_row_brier
+    priority: 120
+    metric_pattern: row_brier
+    role: confirmatory
+    mcse_gate_required: true
+    undefined_policy: forbid
+    target_rule: absolute
+    minimum_finite_fraction: 1.0
+  - policy_id: confirmatory_fixed_pi_row_log_loss
+    priority: 120
+    metric_pattern: row_log_loss
+    role: confirmatory
+    mcse_gate_required: true
+    undefined_policy: forbid
+    target_rule: absolute
+    minimum_finite_fraction: 1.0
+  - policy_id: confirmatory_fixed_pi_calibration_bias
+    priority: 120
+    metric_pattern: row_calibration_bias
+    role: confirmatory
+    mcse_gate_required: true
+    undefined_policy: forbid
+    target_rule: absolute
+    minimum_finite_fraction: 1.0
+  - policy_id: confirmatory_paired_brier_regret
+    priority: 120
+    metric_pattern: paired_brier_regret
+    role: confirmatory
+    mcse_gate_required: true
+    undefined_policy: forbid
+    target_rule: absolute
+    minimum_finite_fraction: 1.0
+  - policy_id: confirmatory_variance_reduction
+    priority: 110
+    metric_pattern: variance_reduction_vs_*
+    role: confirmatory
+    mcse_gate_required: true
+    undefined_policy: forbid
+    target_rule: absolute
+    minimum_finite_fraction: 1.0
+  - policy_id: confirmatory_review_sample_ratio
+    priority: 110
+    metric_pattern: review_sample_size_ratio_vs_*
+    role: confirmatory
+    mcse_gate_required: true
+    undefined_policy: forbid
+    target_rule: absolute
+    minimum_finite_fraction: 1.0
+  - policy_id: diagnostic_latent_ap
     priority: 100
     metric_pattern: latent_average_precision
-    role: confirmatory
-    mcse_gate_required: true
-    undefined_policy: forbid
-    target_rule: absolute
-    minimum_finite_fraction: 1.0
-  - policy_id: confirmatory_latent_brier
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_latent_brier
     priority: 100
     metric_pattern: latent_brier
-    role: confirmatory
-    mcse_gate_required: true
-    undefined_policy: forbid
-    target_rule: absolute
-    minimum_finite_fraction: 1.0
-  - policy_id: confirmatory_prevalence_error
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_hierarchical_pi
     priority: 100
-    metric_pattern: prevalence_error
-    role: confirmatory
-    mcse_gate_required: true
-    undefined_policy: forbid
-    target_rule: absolute
-    minimum_finite_fraction: 1.0
-  - policy_id: confirmatory_prevalence_squared_error
-    priority: 100
-    metric_pattern: prevalence_squared_error
-    role: confirmatory
-    mcse_gate_required: true
-    undefined_policy: forbid
-    target_rule: absolute
-    minimum_finite_fraction: 1.0
-  - policy_id: confirmatory_prevalence_coverage
-    priority: 100
-    metric_pattern: prevalence_coverage
-    role: confirmatory
-    mcse_gate_required: true
-    undefined_policy: forbid
-    target_rule: absolute
-    minimum_finite_fraction: 1.0
-  - policy_id: confirmatory_prevalence_misspecification_regret
-    priority: 100
-    metric_pattern: prevalence_misspecification_regret
-    role: confirmatory
-    mcse_gate_required: true
-    undefined_policy: forbid
-    target_rule: absolute
-    minimum_finite_fraction: 1.0
-  - policy_id: confirmatory_primary_threshold_cost
+    metric_pattern: hierarchical_pi_*
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_legacy_prevalence
+    priority: 95
+    metric_pattern: prevalence_*
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_primary_threshold_cost
     priority: 100
     metric_pattern: threshold_cost::{primary_evaluation_cost_regime_id}::cost_per_firm
-    role: confirmatory
-    mcse_gate_required: true
-    undefined_policy: forbid
-    target_rule: relative_to_mean
-    minimum_finite_fraction: 1.0
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
   - policy_id: diagnostic_predictive_performance
     priority: 50
     metric_pattern: observed_average_precision
@@ -157,6 +197,22 @@ simulation_mcse:
     role: diagnostic
     mcse_gate_required: false
     undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_row_residual_variance
+    priority: 40
+    metric_pattern: row_residual_variance
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_row_probability
+    priority: 40
+    metric_pattern: row_probability_*
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
     target_rule: none
     minimum_finite_fraction: 0.0
   - policy_id: descriptive_imbalance_treatment_applied

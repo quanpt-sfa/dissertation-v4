@@ -1,15 +1,22 @@
-"""Chapter 3 L3 correct and misspecified standalone estimators.
+"""Chapter 3 fixed-pi L3 measurement and misspecification estimators.
 
-The four variants are evaluated on the same replication-level DGP:
+The registered variants are evaluated on the same replication-level DGP.  The
+primary estimand is row-level latent risk under a locked prevalence scenario.
+Prevalence recovery is retained only as a hierarchical-pi sensitivity
+diagnostic; it is not used as evidence that the fixed-pi target recovered a
+unique latent truth.
 
-- ``l3_correct``: uses the locked source accuracies and channel-dependence parameter.
-- ``l3_ignore_dependence``: forces conditional independence between sources.
-- ``l3_wrong_fixed_pi``: fixes prevalence to a prespecified incorrect value.
-- ``l3_clean_anchor``: incorrectly sets the anchor false-positive rate to zero.
+The four locked variants are:
 
-Missing source values are treated as unavailable evidence. The variants isolate
-measurement-model assumptions; selective-verification adjustment remains a
-separate simulation dimension.
+- ``l3_correct``: locked source accuracy, channel dependence, and verification.
+- ``l3_ignore_dependence``: conditional independence between sources.
+- ``l3_wrong_fixed_pi``: a prespecified incorrect prevalence scenario.
+- ``l3_clean_anchor``: an incorrectly perfect-specificity anchor.
+
+Every misspecification regret is paired within replication against
+``l3_correct``.  The row-level residual-variance metrics quantify how much a
+proxy can reduce validation-review sample requirements in a downstream
+prediction-powered inference design.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ from core.semantic_keys import (
     REPLICATION_ID,
     SCENARIO_ID,
 )
+from labels.service import evidence_score_l2
 from simulation.method_contract import (
     EVALUATION_TARGETS,
     IMBALANCE_TREATMENT_ID,
@@ -48,12 +56,22 @@ L3_VARIANT_IDS = (
 )
 
 L3_REQUIRED_METRICS = (
-    "prevalence_fit_success",
-    "prevalence_error",
-    "prevalence_squared_error",
-    "prevalence_coverage",
-    "interval_width",
-    "prevalence_misspecification_regret",
+    "fixed_pi_fit_success",
+    "row_brier",
+    "row_log_loss",
+    "row_calibration_bias",
+    "row_residual_variance",
+    "row_probability_mean",
+    "row_probability_sd",
+    "paired_brier_regret",
+    "variance_reduction_vs_l1",
+    "variance_reduction_vs_l2",
+    "review_sample_size_ratio_vs_l1",
+    "review_sample_size_ratio_vs_l2",
+    "hierarchical_pi_error",
+    "hierarchical_pi_squared_error",
+    "hierarchical_pi_coverage",
+    "hierarchical_pi_interval_width",
     "empirical_panel_rows",
     "empirical_observed_positive_rate",
     "empirical_known_label_rate",
@@ -63,35 +81,57 @@ L3_REQUIRED_METRICS = (
 L3_VARIANT_SPECS: dict[str, dict[str, object]] = {
     "l3_correct": {
         "description": (
-            "L3 latent-class prevalence estimator with locked source accuracy "
-            "and channel dependence."
+            "Fixed-pi L3 row-risk estimator with locked source accuracy, "
+            "channel dependence, and verification mechanism."
         ),
         "chapter_2_role": "correctly_specified_l3_reference",
         "assumption_role": "correct",
     },
     "l3_ignore_dependence": {
         "description": (
-            "L3 misspecification that forces conditional independence across "
-            "the anchor and weak source."
+            "Fixed-pi L3 misspecification that forces conditional independence "
+            "across the anchor and weak source."
         ),
         "chapter_2_role": "l3_dependence_misspecification",
         "assumption_role": "misspecified",
     },
     "l3_wrong_fixed_pi": {
         "description": (
-            "L3 misspecification that fixes prevalence to a prespecified incorrect value."
+            "Fixed-pi L3 misspecification using a prespecified incorrect prevalence scenario."
         ),
         "chapter_2_role": "l3_fixed_pi_misspecification",
         "assumption_role": "misspecified",
     },
     "l3_clean_anchor": {
         "description": (
-            "L3 misspecification that incorrectly assumes the anchor has no false positives."
+            "Fixed-pi L3 misspecification that incorrectly assumes the anchor "
+            "has no false positives."
         ),
         "chapter_2_role": "l3_clean_anchor_misspecification",
         "assumption_role": "misspecified",
     },
 }
+
+
+def _required_float(mapping: Mapping[str, object], key: str) -> float:
+    value = mapping.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{key} must be numeric")
+    return float(value)
+
+
+def _optional_float(mapping: Mapping[str, object], key: str, default: float) -> float:
+    value = mapping.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{key} must be numeric")
+    return float(value)
+
+
+def _required_int(mapping: Mapping[str, object], key: str) -> int:
+    value = mapping.get(key)
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{key} must be an integer")
+    return value
 
 
 def extend_method_registry(
@@ -102,7 +142,8 @@ def extend_method_registry(
     configured_raw = simulation.get("l3_variants")
     if not isinstance(configured_raw, list):
         raise ValueError("simulation.l3_variants must be a list")
-    configured = [str(value) for value in configured_raw]
+    configured_values = cast(list[object], configured_raw)
+    configured = [str(value) for value in configured_values]
     if len(configured) != len(set(configured)):
         raise ValueError("simulation.l3_variants must be unique")
     if set(configured) != set(L3_VARIANT_IDS):
@@ -133,7 +174,9 @@ def extend_method_registry(
                 "estimator": dict(spec),
                 REQUIRED_METRICS: list(L3_REQUIRED_METRICS),
                 EVALUATION_TARGETS: [
-                    "latent_parameter",
+                    "fixed_pi_row_risk",
+                    "validation_review_efficiency",
+                    "hierarchical_pi_sensitivity",
                     "l3_misspecification",
                 ],
             }
@@ -148,8 +191,8 @@ def estimate_l3_variant(
     accuracy: Mapping[str, tuple[float, float]],
     scenario: Mapping[str, object],
     observable_risk: np.ndarray | None = None,
-) -> dict[str, float]:
-    """Estimate prevalence under one locked L3 assumption set."""
+) -> dict[str, object]:
+    """Estimate fixed-pi row risks and hierarchical-pi sensitivity diagnostics."""
     if variant_id not in L3_VARIANT_IDS:
         raise ValueError(f"unsupported L3 variant={variant_id}")
 
@@ -159,60 +202,65 @@ def estimate_l3_variant(
     settings = cast(Mapping[str, object], settings_raw)
     _validate_settings(settings)
 
-    correct_estimate, correct_lower, correct_upper = _posterior_pi(
-        source_rows=source_rows,
-        accuracy=accuracy,
-        dependence=float(scenario.get("channel_dependence", 0.0)),
-        settings=settings,
-        scenario=scenario,
-        observable_risk=observable_risk,
+    risks = _validated_observable_risk(source_rows, observable_risk)
+    correct_accuracy = dict(accuracy)
+    correct_dependence = _optional_float(scenario, "channel_dependence", 0.0)
+    correct_fixed_pi = _optional_float(
+        scenario,
+        "fixed_pi",
+        _required_float(scenario, "prevalence"),
     )
 
-    if variant_id == "l3_correct":
-        estimate, lower, upper = correct_estimate, correct_lower, correct_upper
-    elif variant_id == "l3_ignore_dependence":
-        estimate, lower, upper = _posterior_pi(
-            source_rows=source_rows,
-            accuracy=accuracy,
-            dependence=0.0,
-            settings=settings,
-            scenario=scenario,
-            observable_risk=observable_risk,
+    variant_accuracy = dict(correct_accuracy)
+    variant_dependence = correct_dependence
+    variant_fixed_pi = correct_fixed_pi
+    if variant_id == "l3_ignore_dependence":
+        variant_dependence = 0.0
+    elif variant_id == "l3_wrong_fixed_pi":
+        variant_fixed_pi = min(
+            max(
+                correct_fixed_pi + _required_float(settings, "wrong_fixed_pi_offset"),
+                _required_float(settings, "posterior_grid_minimum"),
+            ),
+            _required_float(settings, "posterior_grid_maximum"),
         )
     elif variant_id == "l3_clean_anchor":
-        clean_accuracy = dict(accuracy)
-        anchor_sensitivity, _ = clean_accuracy["anchor"]
-        clean_accuracy["anchor"] = (anchor_sensitivity, 1.0)
-        estimate, lower, upper = _posterior_pi(
-            source_rows=source_rows,
-            accuracy=clean_accuracy,
-            dependence=float(scenario.get("channel_dependence", 0.0)),
-            settings=settings,
-            scenario=scenario,
-            observable_risk=observable_risk,
-        )
-    else:
-        offset = float(settings["wrong_fixed_pi_offset"])
-        fixed_pi = float(scenario.get("fixed_pi", scenario["prevalence"]))
-        estimate = float(
-            np.clip(
-                fixed_pi + offset,
-                float(settings["posterior_grid_minimum"]),
-                float(settings["posterior_grid_maximum"]),
-            )
-        )
-        lower = estimate
-        upper = estimate
+        anchor_sensitivity, _ = variant_accuracy["anchor"]
+        variant_accuracy["anchor"] = (anchor_sensitivity, 1.0)
 
-    true_prevalence = float(scenario["prevalence"])
-    correct_squared_error = (correct_estimate - true_prevalence) ** 2
-    squared_error = (estimate - true_prevalence) ** 2
+    correct_probabilities = _fixed_pi_row_probabilities(
+        source_rows=source_rows,
+        accuracy=correct_accuracy,
+        dependence=correct_dependence,
+        fixed_pi=correct_fixed_pi,
+        scenario=scenario,
+        observable_risk=risks,
+    )
+    probabilities = _fixed_pi_row_probabilities(
+        source_rows=source_rows,
+        accuracy=variant_accuracy,
+        dependence=variant_dependence,
+        fixed_pi=variant_fixed_pi,
+        scenario=scenario,
+        observable_risk=risks,
+    )
+
+    hierarchical_estimate, hierarchical_lower, hierarchical_upper = _posterior_pi(
+        source_rows=source_rows,
+        accuracy=variant_accuracy,
+        dependence=variant_dependence,
+        settings=settings,
+        scenario=scenario,
+        observable_risk=risks,
+    )
     return {
-        ESTIMATE: estimate,
-        "lower": lower,
-        "upper": upper,
-        "correct_reference_estimate": correct_estimate,
-        "misspecification_regret": squared_error - correct_squared_error,
+        ESTIMATE: float(np.mean(probabilities)),
+        "row_probabilities": probabilities,
+        "correct_reference_probabilities": correct_probabilities,
+        "fixed_pi_used": variant_fixed_pi,
+        "hierarchical_pi_estimate": hierarchical_estimate,
+        "hierarchical_pi_lower": hierarchical_lower,
+        "hierarchical_pi_upper": hierarchical_upper,
     }
 
 
@@ -224,11 +272,11 @@ def run_l3_variant_batch(
     data_rng_factory: Callable[[int], np.random.Generator],
     diagnostics: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
-    """Run one L3 variant over a deterministic replication range."""
+    """Run one fixed-pi L3 variant over a deterministic paired replication range."""
     if method_id not in L3_VARIANT_IDS:
         raise ValueError(f"unsupported L3 variant={method_id}")
 
-    from simulation.service import _generate_replication
+    from simulation.service import _generate_replication  # pyright: ignore[reportPrivateUsage]
 
     rows: list[dict[str, object]] = []
     for replication_id in replications:
@@ -238,6 +286,7 @@ def run_l3_variant_batch(
         )
         source_rows = cast(list[dict[str, bool | None]], data["source_rows"])
         accuracy = cast(dict[str, tuple[float, float]], data["accuracy"])
+        latent = np.asarray(data["latent"], dtype=float)
         standardized_content = np.asarray(data["features"], dtype=float)[:, 0]
         observable_risk = 1.0 / (1.0 + np.exp(-standardized_content))
         result = estimate_l3_variant(
@@ -247,33 +296,67 @@ def run_l3_variant_batch(
             scenario=scenario,
             observable_risk=observable_risk,
         )
-        true_prevalence = float(scenario["prevalence"])
-        estimate = float(result[ESTIMATE])
-        lower = float(result["lower"])
-        upper = float(result["upper"])
 
-        metrics = {
-            "prevalence_fit_success": 1.0,
-            "prevalence_error": estimate - true_prevalence,
-            "prevalence_squared_error": (estimate - true_prevalence) ** 2,
-            "prevalence_coverage": float(lower <= true_prevalence <= upper),
-            "interval_width": upper - lower,
-            "prevalence_misspecification_regret": float(result["misspecification_regret"]),
-            "empirical_panel_rows": float(scenario.get("empirical_panel_rows", 0.0)),
-            "empirical_observed_positive_rate": float(
-                scenario.get(
-                    "empirical_observed_positive_rate",
-                    np.mean([any(value is True for value in row.values()) for row in source_rows]),
-                )
+        probabilities = np.asarray(result["row_probabilities"], dtype=float)
+        correct_probabilities = np.asarray(
+            result["correct_reference_probabilities"],
+            dtype=float,
+        )
+        fixed_pi = _optional_float(
+            scenario,
+            "fixed_pi",
+            _required_float(scenario, "prevalence"),
+        )
+        l1_proxy = _l1_proxy(source_rows, fixed_pi)
+        l2_proxy = _l2_proxy(source_rows, fixed_pi)
+
+        row_brier = float(np.mean((latent - probabilities) ** 2))
+        correct_brier = float(np.mean((latent - correct_probabilities) ** 2))
+        residual_variance = _sample_variance(latent - probabilities)
+        l1_residual_variance = _sample_variance(latent - l1_proxy)
+        l2_residual_variance = _sample_variance(latent - l2_proxy)
+        ratio_l1 = _safe_variance_ratio(residual_variance, l1_residual_variance)
+        ratio_l2 = _safe_variance_ratio(residual_variance, l2_residual_variance)
+
+        true_prevalence = _required_float(scenario, "prevalence")
+        hierarchical_estimate = cast(float, result["hierarchical_pi_estimate"])
+        hierarchical_lower = cast(float, result["hierarchical_pi_lower"])
+        hierarchical_upper = cast(float, result["hierarchical_pi_upper"])
+        empirical_panel_rows = _optional_float(scenario, "empirical_panel_rows", 0.0)
+        observed_positive_rate = _optional_float(
+            scenario,
+            "empirical_observed_positive_rate",
+            float(np.mean([any(value is True for value in row.values()) for row in source_rows])),
+        )
+        known_label_rate = _optional_float(
+            scenario,
+            "empirical_known_label_rate",
+            float(
+                np.mean([any(value is not None for value in row.values()) for row in source_rows])
             ),
-            "empirical_known_label_rate": float(
-                scenario.get(
-                    "empirical_known_label_rate",
-                    np.mean(
-                        [any(value is not None for value in row.values()) for row in source_rows]
-                    ),
-                )
+        )
+        metrics: dict[str, float] = {
+            "fixed_pi_fit_success": 1.0,
+            "row_brier": row_brier,
+            "row_log_loss": _binary_log_loss(latent, probabilities),
+            "row_calibration_bias": float(np.mean(probabilities - latent)),
+            "row_residual_variance": residual_variance,
+            "row_probability_mean": float(np.mean(probabilities)),
+            "row_probability_sd": float(np.std(probabilities, ddof=1)),
+            "paired_brier_regret": row_brier - correct_brier,
+            "variance_reduction_vs_l1": 1.0 - ratio_l1,
+            "variance_reduction_vs_l2": 1.0 - ratio_l2,
+            "review_sample_size_ratio_vs_l1": ratio_l1,
+            "review_sample_size_ratio_vs_l2": ratio_l2,
+            "hierarchical_pi_error": hierarchical_estimate - true_prevalence,
+            "hierarchical_pi_squared_error": (hierarchical_estimate - true_prevalence) ** 2,
+            "hierarchical_pi_coverage": float(
+                hierarchical_lower <= true_prevalence <= hierarchical_upper
             ),
+            "hierarchical_pi_interval_width": hierarchical_upper - hierarchical_lower,
+            "empirical_panel_rows": empirical_panel_rows,
+            "empirical_observed_positive_rate": observed_positive_rate,
+            "empirical_known_label_rate": known_label_rate,
             "calibrated_latent_prevalence": true_prevalence,
         }
         for metric_id, value in metrics.items():
@@ -310,6 +393,42 @@ def run_l3_variant_batch(
     )
 
 
+def _fixed_pi_row_probabilities(
+    *,
+    source_rows: Sequence[Mapping[str, bool | None]],
+    accuracy: Mapping[str, tuple[float, float]],
+    dependence: float,
+    fixed_pi: float,
+    scenario: Mapping[str, object],
+    observable_risk: np.ndarray,
+) -> np.ndarray:
+    if not 0.0 < fixed_pi < 1.0:
+        raise ValueError("fixed_pi must be in (0, 1)")
+    output = np.empty(len(source_rows), dtype=float)
+    for index, (row, risk) in enumerate(zip(source_rows, observable_risk, strict=True)):
+        risk_value = cast(float, risk)
+        likelihood_one = _pattern_probability(
+            row=row,
+            latent=True,
+            accuracy=accuracy,
+            dependence=dependence,
+            scenario=scenario,
+            observable_risk=risk_value,
+        )
+        likelihood_zero = _pattern_probability(
+            row=row,
+            latent=False,
+            accuracy=accuracy,
+            dependence=dependence,
+            scenario=scenario,
+            observable_risk=risk_value,
+        )
+        numerator = fixed_pi * likelihood_one
+        denominator = numerator + (1.0 - fixed_pi) * likelihood_zero
+        output[index] = numerator / max(denominator, 1e-300)
+    return np.clip(output, 1e-9, 1.0 - 1e-9)
+
+
 def _posterior_pi(
     *,
     source_rows: Sequence[Mapping[str, bool | None]],
@@ -320,27 +439,22 @@ def _posterior_pi(
     observable_risk: np.ndarray | None,
 ) -> tuple[float, float, float]:
     grid = np.linspace(
-        float(settings["posterior_grid_minimum"]),
-        float(settings["posterior_grid_maximum"]),
-        int(settings["posterior_grid_points"]),
+        _required_float(settings, "posterior_grid_minimum"),
+        _required_float(settings, "posterior_grid_maximum"),
+        _required_int(settings, "posterior_grid_points"),
     )
     log_likelihood = np.zeros(len(grid), dtype=float)
-    risks = (
-        np.full(len(source_rows), 0.5, dtype=float)
-        if observable_risk is None
-        else np.asarray(observable_risk, dtype=float)
-    )
-    if len(risks) != len(source_rows):
-        raise ValueError("observable_risk length must match source_rows")
+    risks = _validated_observable_risk(source_rows, observable_risk)
 
     for row, risk in zip(source_rows, risks, strict=True):
+        risk_value = cast(float, risk)
         likelihood_one = _pattern_probability(
             row=row,
             latent=True,
             accuracy=accuracy,
             dependence=dependence,
             scenario=scenario,
-            observable_risk=float(risk),
+            observable_risk=risk_value,
         )
         likelihood_zero = _pattern_probability(
             row=row,
@@ -348,7 +462,7 @@ def _posterior_pi(
             accuracy=accuracy,
             dependence=dependence,
             scenario=scenario,
-            observable_risk=float(risk),
+            observable_risk=risk_value,
         )
         mixture = grid * likelihood_one + (1.0 - grid) * likelihood_zero
         log_likelihood += np.log(np.clip(mixture, 1e-12, None))
@@ -359,15 +473,12 @@ def _posterior_pi(
         raise FloatingPointError("invalid L3 posterior normalization")
     posterior /= total
 
-    estimate = float(np.sum(grid * posterior))
-    mass = float(settings["credible_interval_mass"])
+    estimate = math.fsum(cast(list[float], (grid * posterior).tolist()))
+    mass = _required_float(settings, "credible_interval_mass")
     tail = (1.0 - mass) / 2.0
     cumulative = np.cumsum(posterior)
     lower_index = min(int(np.searchsorted(cumulative, tail)), len(grid) - 1)
-    upper_index = min(
-        int(np.searchsorted(cumulative, 1.0 - tail)),
-        len(grid) - 1,
-    )
+    upper_index = min(int(np.searchsorted(cumulative, 1.0 - tail)), len(grid) - 1)
     return estimate, float(grid[lower_index]), float(grid[upper_index])
 
 
@@ -403,11 +514,11 @@ def _pattern_probability(
         }
         source_probability = probabilities[(bool(anchor_value), bool(weak_value))]
 
-    selective = float(scenario.get("selective_verification_strength", 0.0))
+    selective = _optional_float(scenario, "selective_verification_strength", 0.0)
     latent_float = float(latent)
     q_anchor = float(
         np.clip(
-            float(scenario.get("anchor_verification_probability", 1.0))
+            _optional_float(scenario, "anchor_verification_probability", 1.0)
             + 0.25 * selective * observable_risk
             + 0.75 * selective * latent_float,
             0.0,
@@ -416,15 +527,15 @@ def _pattern_probability(
     )
     q_weak = float(
         np.clip(
-            float(scenario.get("weak_verification_probability", 1.0))
+            _optional_float(scenario, "weak_verification_probability", 1.0)
             + 0.25 * selective * observable_risk
             + 0.75 * selective * latent_float,
             0.0,
             1.0,
         )
     )
-    horizon = float(scenario.get("horizon_days", 365.0))
-    delay_mean = float(scenario.get("detection_delay_mean_days", 30.0))
+    horizon = _optional_float(scenario, "horizon_days", 365.0)
+    delay_mean = _optional_float(scenario, "detection_delay_mean_days", 30.0)
     maturity_probability = 1.0 - math.exp(-horizon / delay_mean)
 
     anchor_present = anchor_value is not None
@@ -449,6 +560,66 @@ def _pattern_probability(
     )
 
 
+def _validated_observable_risk(
+    source_rows: Sequence[Mapping[str, bool | None]],
+    observable_risk: np.ndarray | None,
+) -> np.ndarray:
+    risks = (
+        np.full(len(source_rows), 0.5, dtype=float)
+        if observable_risk is None
+        else np.asarray(observable_risk, dtype=float)
+    )
+    if len(risks) != len(source_rows):
+        raise ValueError("observable_risk length must match source_rows")
+    if not np.all(np.isfinite(risks)):
+        raise ValueError("observable_risk must be finite")
+    return np.clip(risks, 0.0, 1.0)
+
+
+def _l1_proxy(
+    source_rows: Sequence[Mapping[str, bool | None]],
+    fixed_pi: float,
+) -> np.ndarray:
+    values: list[float] = []
+    for row in source_rows:
+        observed = [value for value in row.values() if value is not None]
+        if any(value is True for value in observed):
+            values.append(1.0)
+        elif observed:
+            values.append(0.0)
+        else:
+            values.append(fixed_pi)
+    return np.asarray(values, dtype=float)
+
+
+def _l2_proxy(
+    source_rows: Sequence[Mapping[str, bool | None]],
+    fixed_pi: float,
+) -> np.ndarray:
+    return np.asarray(
+        [
+            fixed_pi if (value := evidence_score_l2(row)) is None else float(value)
+            for row in source_rows
+        ],
+        dtype=float,
+    )
+
+
+def _binary_log_loss(truth: np.ndarray, probability: np.ndarray) -> float:
+    clipped = np.clip(probability, 1e-9, 1.0 - 1e-9)
+    return float(-np.mean(truth * np.log(clipped) + (1.0 - truth) * np.log(1.0 - clipped)))
+
+
+def _sample_variance(values: np.ndarray) -> float:
+    return float(np.var(np.asarray(values, dtype=float), ddof=1)) if len(values) > 1 else 0.0
+
+
+def _safe_variance_ratio(numerator: float, denominator: float) -> float:
+    if denominator <= 1e-15 or not math.isfinite(denominator):
+        return math.nan
+    return float(numerator / denominator)
+
+
 def _validate_settings(settings: Mapping[str, object]) -> None:
     required = {
         "posterior_grid_minimum",
@@ -462,15 +633,15 @@ def _validate_settings(settings: Mapping[str, object]) -> None:
     if missing:
         raise ValueError(f"l3_variant_settings missing={missing}")
 
-    minimum = float(settings["posterior_grid_minimum"])
-    maximum = float(settings["posterior_grid_maximum"])
-    points = settings["posterior_grid_points"]
-    mass = float(settings["credible_interval_mass"])
-    offset = float(settings["wrong_fixed_pi_offset"])
+    minimum = _required_float(settings, "posterior_grid_minimum")
+    maximum = _required_float(settings, "posterior_grid_maximum")
+    points = _required_int(settings, "posterior_grid_points")
+    mass = _required_float(settings, "credible_interval_mass")
+    offset = _required_float(settings, "wrong_fixed_pi_offset")
 
     if not 0.0 < minimum < maximum < 1.0:
         raise ValueError("L3 posterior grid must lie strictly inside (0, 1)")
-    if not isinstance(points, int) or points < 100:
+    if points < 100:
         raise ValueError("L3 posterior_grid_points must be an integer >= 100")
     if not 0.5 < mass < 1.0:
         raise ValueError("L3 credible_interval_mass must be in (0.5, 1)")

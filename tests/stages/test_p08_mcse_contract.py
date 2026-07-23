@@ -8,6 +8,7 @@ from typing import Any, cast
 import pytest
 
 from core.registry_compiler import compile_registry
+from simulation.l3_variants import extend_method_registry
 from simulation.mcse_contract import (
     MetricPolicy,
     compile_metric_policies,
@@ -42,6 +43,7 @@ def test_production_policy_registry_covers_every_registered_p08_metric() -> None
         cost_contract=cost_contract,
         imbalance_contract=imbalance_contract,
     )
+    methods = extend_method_registry(simulation, methods)
     metric_ids: set[str] = set()
     for method in methods:
         metric_ids.update(required_metric_ids(method))
@@ -55,7 +57,7 @@ def test_production_policy_registry_covers_every_registered_p08_metric() -> None
     assert coverage["role_counts"]["confirmatory"] >= 1
 
 
-def test_primary_cost_template_resolves_to_locked_cost_regime() -> None:
+def test_primary_cost_is_diagnostic_in_measurement_focused_p08() -> None:
     registry = _production_registry()
     simulation = cast(dict[str, object], registry["simulation"])
     mcse_registry = cast(dict[str, object], registry["simulation_mcse"])
@@ -63,9 +65,41 @@ def test_primary_cost_template_resolves_to_locked_cost_regime() -> None:
     policies = compile_metric_policies(mcse_registry, simulation)
     policy = resolve_metric_policy("threshold_cost::high_fn::cost_per_firm", policies)
 
-    assert policy["policy_id"] == "confirmatory_primary_threshold_cost"
-    assert policy["role"] == "confirmatory"
-    assert policy["mcse_gate_required"] is True
+    assert policy["policy_id"] == "diagnostic_primary_threshold_cost"
+    assert policy["role"] == "diagnostic"
+    assert policy["mcse_gate_required"] is False
+
+
+def test_fixed_pi_measurement_metrics_are_confirmatory() -> None:
+    registry = _production_registry()
+    simulation = cast(dict[str, object], registry["simulation"])
+    mcse_registry = cast(dict[str, object], registry["simulation_mcse"])
+
+    policies = compile_metric_policies(mcse_registry, simulation)
+    for metric_id in (
+        "fixed_pi_fit_success",
+        "row_brier",
+        "row_log_loss",
+        "row_calibration_bias",
+        "paired_brier_regret",
+        "review_sample_size_ratio_vs_l1",
+    ):
+        policy = resolve_metric_policy(metric_id, policies)
+        assert policy["role"] == "confirmatory"
+        assert policy["mcse_gate_required"] is True
+
+
+def test_hierarchical_pi_recovery_is_nonblocking_sensitivity() -> None:
+    registry = _production_registry()
+    simulation = cast(dict[str, object], registry["simulation"])
+    mcse_registry = cast(dict[str, object], registry["simulation_mcse"])
+
+    policies = compile_metric_policies(mcse_registry, simulation)
+    policy = resolve_metric_policy("hierarchical_pi_coverage", policies)
+
+    assert policy["policy_id"] == "diagnostic_hierarchical_pi"
+    assert policy["role"] == "diagnostic"
+    assert policy["mcse_gate_required"] is False
 
 
 def test_policy_resolution_rejects_unknown_metric() -> None:
