@@ -1,9 +1,6 @@
 name: agent-pyright-details
 
-on:
-  push:
-    branches:
-      - agent/l3-pii-p08-architecture
+on: [push, pull_request]
 
 permissions:
   contents: write
