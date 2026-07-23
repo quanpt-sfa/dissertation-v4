@@ -13,17 +13,17 @@ jobs:
       - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
       - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
       - run: uv run pytest --collect-only -q
-      - id: ruff_lint
+      - run: uv run ruff check .
+      - id: ruff_format
         continue-on-error: true
-        run: uv run ruff check . 2>&1 | tee ruff-check.log
+        run: uv run ruff format --check --diff . 2>&1 | tee ruff-format.log
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ruff-check
-          path: ruff-check.log
-      - if: steps.ruff_lint.outcome == 'failure'
+          name: ruff-format
+          path: ruff-format.log
+      - if: steps.ruff_format.outcome == 'failure'
         run: exit 1
-      - run: uv run ruff format --check .
       - run: uv run pyright
       - run: uv run pytest -q
       - run: uv run pre-commit run --all-files
