@@ -1,0 +1,35 @@
+name: format-pyright-cutover-once
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.head_ref == 'agent/pyright-ratchet-cutover'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pyright-ratchet-cutover
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - name: Format cutover files
+        run: |
+          uv run ruff format \
+            src/core/pyright_ratchet.py \
+            scripts/check_pyright_ratchet.py \
+            tests/test_pyright_ratchet.py
+      - name: Commit formatting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/core/pyright_ratchet.py \
+            scripts/check_pyright_ratchet.py \
+            tests/test_pyright_ratchet.py
+          git diff --cached --quiet || git commit -m "Format Pyright cutover files"
+          git push origin HEAD:agent/pyright-ratchet-cutover
