@@ -1,9 +1,6 @@
 name: agent-ruff-format-preview
 
-on:
-  push:
-    branches:
-      - agent/l3-pii-p08-architecture
+on: [push, pull_request]
 
 permissions:
   contents: read
@@ -19,6 +16,7 @@ jobs:
         run: |
           uv run ruff format src/simulation/l3_variants.py tests/test_l3_variants.py tests/stages/test_p08_mcse_contract.py
           git diff --binary > ruff-format.patch
+          cat ruff-format.patch
       - uses: actions/upload-artifact@v4
         with:
           name: ruff-format-patch
