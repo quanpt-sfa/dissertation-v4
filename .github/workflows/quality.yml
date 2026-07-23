@@ -1,95 +1,20 @@
-name: apply-remediation-once
+name: quality
 
-on:
-  pull_request:
-
-permissions:
-  contents: write
+on: [push, pull_request]
 
 jobs:
-  apply:
-    if: github.head_ref == 'agent/pipeline-audit-remediation'
+  p0:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: agent/pipeline-audit-remediation
-          fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --all-extras
-      - name: Validate and regenerate registry
-        run: |
-          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
-          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
-          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
-      - name: Apply verified mechanical and explicit fixes
-        run: |
-          uv run ruff check --fix . || true
-          uv run ruff format .
-          python - <<'PY'
-          from pathlib import Path
-
-          assurance = Path("tests/assurance/test_appendix_b_decisions.py")
-          text = assurance.read_text(encoding="utf-8")
-          old = 'assert get(registry, "measurement.primary_target_id") is None'
-          new = 'assert get(registry, "measurement.primary_target_id") == "L1_ANNUAL"'
-          if old in text:
-              assurance.write_text(text.replace(old, new), encoding="utf-8")
-          elif new not in text:
-              raise SystemExit("D05 primary-target assertion is not recognized")
-
-          p00 = Path("scripts/p00_lock_protocol.py")
-          text = p00.read_text(encoding="utf-8")
-          old = 'f"  - {art_id} ({l} chars): {p}" for art_id, p, l in violations'
-          new = (
-              'f"  - {art_id} ({length} chars): {path}" '
-              'for art_id, path, length in violations'
-          )
-          if old in text:
-              p00.write_text(text.replace(old, new), encoding="utf-8")
-          elif new not in text:
-              raise SystemExit("P00 path-budget expression is not recognized")
-
-          p08 = Path("scripts/p08b_run_batch.py")
-          text = p08.read_text(encoding="utf-8")
-          directive = "# ruff: noqa: E402"
-          if directive not in text:
-              marker = '"""P08B worker: run one active deterministic cost-sensitive method batch."""\n'
-              if marker not in text:
-                  raise SystemExit("P08B module header is not recognized")
-              p08.write_text(
-                  text.replace(marker, marker + "\n" + directive + "\n", 1),
-                  encoding="utf-8",
-              )
-          PY
-          uv run ruff check --fix . || true
-          uv run ruff format .
-      - name: Verify Ruff
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
-      - name: Verify changed production code with Pyright
-        run: |
-          uv run pyright \
-            src/core/fold_control.py \
-            src/core/mcse_contract.py \
-            src/evaluation/pairing.py \
-            src/gates/evidence_contract.py \
-            scripts/p04_risk_sets.py \
-            scripts/p05_measurement_inputs.py \
-            scripts/p09_splits_weights.py \
-            scripts/p10_select_measurement.py \
-            scripts/p12_evaluate.py \
-            scripts/p14_gate2.py \
-            tests/test_sequential_measurement_tracks.py \
-            tests/stages/test_s3_l3_production_hardening.py \
-            tests/stages/test_pipeline_audit_remediation.py
-      - name: Verify pytest
-        run: uv run pytest -q
-      - name: Commit verified code changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Apply verified pipeline remediation cleanup"
-          git push origin HEAD:agent/pipeline-audit-remediation
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
+      - run: uv run pytest --collect-only -q
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: uv run pytest -q
+      - run: uv run pre-commit run --all-files
