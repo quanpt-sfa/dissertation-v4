@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 import pandas as pd
 import pytest
@@ -51,10 +52,14 @@ def test_production_configuration_locks_target_and_tuning_grids() -> None:
 
 def test_p08_completion_contract_rejects_intermediate_statuses() -> None:
     assert p08_completion_blockers({"status": "PASS", "precision_target_met": True}) == []
-    blockers = p08_completion_blockers({"status": "CONTINUE", "precision_target_met": False})
+    blockers = p08_completion_blockers(
+        {"status": "CONTINUE", "precision_target_met": False}
+    )
     assert blockers == ["P08_STATUS_NOT_PASS", "P08_PRECISION_TARGET_NOT_MET"]
     with pytest.raises(RuntimeError, match="P09_PRODUCTION_PATH_BLOCKED"):
-        require_p08_completion({"status": "INCOMPLETE", "precision_target_met": False}, "P09")
+        require_p08_completion(
+            {"status": "INCOMPLETE", "precision_target_met": False}, "P09"
+        )
 
 
 def test_p12_pairing_requires_exact_firm_year_support() -> None:
@@ -79,29 +84,26 @@ def test_p12_pairing_requires_exact_firm_year_support() -> None:
     assert audit["pair_count"] == 1
 
     mismatch = exact.loc[
-        ~(
-            exact["model_key"].eq(reference)
-            & exact["firm_key"].eq("F2")
-        )
+        ~(exact["model_key"].eq(reference) & exact["firm_key"].eq("F2"))
     ].copy()
     with pytest.raises(RuntimeError, match="FIRM_YEAR_SUPPORT_MISMATCH"):
         validate_paired_prediction_keys(mismatch, columns)
 
 
 def test_gate2_contract_requires_complete_yield_and_bootstrap_evidence() -> None:
-    gate = {
+    gate: dict[str, Any] = {
         "candidate_ids": CANDIDATES,
         "reference_by_candidate": REFERENCES,
         "candidate_family_count": len(CANDIDATES),
         "minimum_valid_bootstrap_replications": 1800,
         "fold_count": len(FOLDS),
     }
-    evaluations: list[dict[str, object]] = []
-    bootstraps: list[list[dict[str, object]]] = []
+    evaluations: list[dict[str, Any]] = []
+    bootstraps: list[list[dict[str, Any]]] = []
     for fold in FOLDS:
-        models: list[dict[str, object]] = []
-        comparisons: list[dict[str, object]] = []
-        batch: list[dict[str, object]] = []
+        models: list[dict[str, Any]] = []
+        comparisons: list[dict[str, Any]] = []
+        batch: list[dict[str, Any]] = []
         for index, candidate in enumerate(CANDIDATES):
             reference = REFERENCES[candidate]
             models.extend(
@@ -135,7 +137,9 @@ def test_gate2_contract_requires_complete_yield_and_bootstrap_evidence() -> None
                     "delta_ap_samples": [0.05] * 1800,
                 }
             )
-        evaluations.append({OUTER_FOLD: fold, "models": models, "comparisons": comparisons})
+        evaluations.append(
+            {OUTER_FOLD: fold, "models": models, "comparisons": comparisons}
+        )
         bootstraps.append(batch)
 
     complete = prepare_gate2_inputs(
@@ -146,8 +150,7 @@ def test_gate2_contract_requires_complete_yield_and_bootstrap_evidence() -> None
     )
     assert complete["blockers"] == []
 
-    first_models = evaluations[0]["models"]
-    assert isinstance(first_models, list)
+    first_models = cast(list[dict[str, Any]], evaluations[0]["models"])
     first_models[0]["precision_at_primary_budget"] = None
     incomplete = prepare_gate2_inputs(
         evaluations=evaluations,
@@ -157,5 +160,5 @@ def test_gate2_contract_requires_complete_yield_and_bootstrap_evidence() -> None
     )
     assert any(
         str(blocker).startswith("GATE2_YIELD_MISSING:2021")
-        for blocker in incomplete["blockers"]
+        for blocker in cast(list[object], incomplete["blockers"])
     )
