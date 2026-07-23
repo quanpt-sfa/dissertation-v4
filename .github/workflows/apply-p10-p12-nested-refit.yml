@@ -1,10 +1,7 @@
 name: apply-p10-p12-nested-refit
 
 # Temporary one-shot integration workflow; removed before merge.
-on:
-  push:
-    branches:
-      - agent/p10-p12-full-nesting
+on: [push, pull_request]
 
 permissions:
   contents: write
@@ -55,6 +52,7 @@ jobs:
             scripts/p12_evaluate.py \
             tests/stages/test_p10_nested_refit.py
       - name: Commit production integration
+        if: github.event_name == 'push'
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
