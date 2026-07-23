@@ -33,6 +33,9 @@ def main() -> int:
     parser.add_argument(
         "--diff-base", help="Git base SHA/ref used to discover changed Python files"
     )
+    parser.add_argument(
+        "--staged", action="store_true", help="Require zero errors in staged Python files"
+    )
     parser.add_argument("--write-baseline", action="store_true")
     parser.add_argument("--generated-from", default="")
     parser.add_argument("--report", type=Path)
@@ -56,14 +59,18 @@ def main() -> int:
 
     changed_paths = list(cast(list[str], args.files))
     diff_base = cast(str | None, args.diff_base)
+    staged = cast(bool, args.staged)
     if diff_base:
         changed_paths.extend(_changed_files(diff_base))
+    if staged:
+        changed_paths.extend(_staged_files())
     changed_files = normalize_changed_files(changed_paths, ROOT)
     result = evaluate_ratchet(diagnostics, baseline_document, changed_files)
 
     report = {
         "schema_version": 1,
         "diff_base": diff_base,
+        "staged_mode": staged,
         "changed_python_files": sorted(changed_files),
         **result,
     }
@@ -110,13 +117,21 @@ def _run_pyright() -> list[Diagnostic]:
 
 
 def _changed_files(diff_base: str) -> list[str]:
+    return _git_diff_files(f"{diff_base}...HEAD")
+
+
+def _staged_files() -> list[str]:
+    return _git_diff_files("--cached")
+
+
+def _git_diff_files(revision: str) -> list[str]:
     completed = subprocess.run(
         [
             "git",
             "diff",
+            revision,
             "--name-only",
             "--diff-filter=ACMR",
-            f"{diff_base}...HEAD",
             "--",
             "*.py",
         ],
