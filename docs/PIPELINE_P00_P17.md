@@ -480,10 +480,12 @@ Hàng rào:
 - AP không tính trực tiếp trên L2/L3 soft targets;
 - hierarchical-π không thể được chọn.
 
-Giới hạn implementation hiện còn mở: strict channel score chưa chạy lại toàn bộ
-learner/feature/tuning/calibration procedure cho từng `M*_{f,c}` và chưa truyền
-posterior-draw robustness qua toàn pipeline. Row-level fold-local L3 posterior đã
-được tạo tại P10; P10 vẫn phải giữ `none` nếu diagnostics/evidence không đạt.
+P10 thực hiện full-refit channel-within-time cho từng candidate × held-out channel
+bằng learner Gate 1 đã khóa: target, label model, feature, tuning và calibration đều
+loại held-out channel; chỉ development-history OOF predictions được dùng để tính
+soft cross-entropy. Candidate thiếu bất kỳ channel cell nào phải `INSUFFICIENT_EVIDENCE`.
+P11 khóa receipt/hash của phép chọn này và P12 xác minh lại trước khi mở outer outcomes.
+Posterior-draw robustness của L3 vẫn chỉ khả dụng khi fixed-π grid và priors được khóa.
 
 ## 16. P11 — Fit models và freeze
 

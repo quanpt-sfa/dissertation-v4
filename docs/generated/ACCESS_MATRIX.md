@@ -313,6 +313,7 @@ Source: config/pipeline.yaml
       "l3_pilot_capability",
       "fold_eligibility",
       "mcse_report",
+      "feature_panel",
       "feature_registry"
     ],
     "required_receipts": [],

@@ -106,7 +106,7 @@ Required receipts: []
 
 Measurement selection
 
-Reads: ['fold_aware_weights', 'weight_diagnostics', 'temporal_split_registry', 'channel_time_split_registry', 'source_channel_matrices', 'l0_l1_inputs', 'l3_pilot_capability', 'fold_eligibility', 'mcse_report', 'feature_registry']
+Reads: ['fold_aware_weights', 'weight_diagnostics', 'temporal_split_registry', 'channel_time_split_registry', 'source_channel_matrices', 'l0_l1_inputs', 'l3_pilot_capability', 'fold_eligibility', 'mcse_report', 'feature_panel', 'feature_registry']
 
 Writes: ['measurement_candidate_results', 'measurement_selection_registry', 'channel_measurement_selection']
 

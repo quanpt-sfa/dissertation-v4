@@ -5,15 +5,18 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+import pandas as pd
+
 from core.evidence_registry import logical_evidence_sources
 from core.fold_control import production_path_blockers, require_primary_target
-from core.pipeline import load_run, mapping, sequence
-from core.rng import generator
+from core.pipeline import load_run, mapping, physical_columns, sequence
+from core.rng import derive_seed, generator
 from core.semantic_keys import MEASUREMENT_ID, OUTER_FOLD
+from selection.nested_refit import run_nested_channel_refit
 from selection.service import fit_l3_fold_candidate, select_measurement
 from selection.track_plan import build_sequential_track_plan
 
@@ -38,7 +41,9 @@ def main() -> int:
     capability = mapping(loaded.context.read("l3_pilot_capability", {}), "L3 capability")
     loaded.context.read("temporal_split_registry", {})
     loaded.context.read("channel_time_split_registry", {})
-    loaded.context.read("fold_aware_weights", {"fold_id": args.outer_fold})
+    weights = loaded.context.read("fold_aware_weights", {"fold_id": args.outer_fold})
+    feature_panel = loaded.context.read("feature_panel", {})
+    label_inputs = loaded.context.read("l0_l1_inputs", {})
     diagnostics = mapping(
         loaded.context.read("weight_diagnostics", {"fold_id": args.outer_fold}),
         "weight diagnostics",
@@ -48,6 +53,12 @@ def main() -> int:
     mcse = mapping(loaded.context.read("mcse_report", {}), "MCSE report")
     fold_eligibility = loaded.context.read("fold_eligibility", {})
     feature_registry = loaded.context.read("feature_registry", {})
+    if not all(isinstance(value, pd.DataFrame) for value in (weights, feature_panel, label_inputs)):
+        raise ValueError("P10 nested-refit inputs must be DataFrames")
+    feature_registry_rows = [
+        mapping(item, "feature registry item")
+        for item in sequence(feature_registry, "feature registry")
+    ]
     blockers = production_path_blockers(
         fold_eligibility=fold_eligibility,
         outer_fold=args.outer_fold,
@@ -115,6 +126,38 @@ def main() -> int:
             ),
         )
 
+    selection_config = mapping(measurement.get("selection"), "measurement.selection")
+    if selection_config.get("nested_refit_required") is not True:
+        raise RuntimeError("P10_NESTED_REFIT_NOT_LOCKED")
+    learners = mapping(loaded.registry.get("learners"), "learners")
+    tuning = mapping(learners.get("tuning"), "learners.tuning")
+    gate1_learner_id = str(selection_config["gate1_learner_id"])
+    gate1_feature_group = str(selection_config["gate1_feature_group"])
+    nested = run_nested_channel_refit(
+        matrices=matrices,
+        feature_panel=cast(pd.DataFrame, feature_panel),
+        feature_registry=feature_registry_rows,
+        label_inputs=cast(pd.DataFrame, label_inputs),
+        weights=cast(pd.DataFrame, weights),
+        outer_year=int(args.outer_fold),
+        candidates=candidates,
+        l3_fold_result=l3_fold_result,
+        minimum_observed_channels=minimum_channels if isinstance(minimum_channels, int) else 1,
+        gate1_learner_id=gate1_learner_id,
+        gate1_feature_group=gate1_feature_group,
+        learner_settings=mapping(learners.get("settings"), "learners.settings"),
+        learner_search_spaces=mapping(tuning.get("search_spaces"), "learners.tuning.search_spaces"),
+        maximum_valid_configurations=int(tuning["max_valid_configurations_per_learner_inner_fold"]),
+        columns=physical_columns(loaded.registry),
+        random_state=derive_seed(
+            loaded.protocol_hash,
+            "P10",
+            {OUTER_FOLD: args.outer_fold},
+            "nested_channel_refit",
+        )
+        % (2**32 - 1),
+    )
+
     result = select_measurement(
         matrices=matrices,
         outer_year=int(args.outer_fold),
@@ -122,6 +165,7 @@ def main() -> int:
         l3_capability=capability,
         l3_fold_result=l3_fold_result,
         minimum_observed_channels=minimum_channels,
+        nested_candidate_results=cast(list[dict[str, Any]], nested.candidate_results),
     )
     execution = mapping(measurement.get("execution_tracks"), "measurement.execution_tracks")
     order = [str(value) for value in sequence(execution.get("order"), "execution_tracks.order")]
@@ -142,7 +186,18 @@ def main() -> int:
         "optional_candidate_selected_for_diagnostics": result.selection.get("selected_measurement"),
         "optional_selection_scope": result.selection.get("selection_scope"),
     }
-    channel_selection = dict(result.channel_selection)
+    nested_cells_raw = nested.receipt.get("cell_results")
+    if not isinstance(nested_cells_raw, list):
+        raise RuntimeError("P10_NESTED_REFIT_CELL_RESULTS_MISSING")
+    nested_cells = cast(list[object], nested_cells_raw)
+    proxy_raw = result.channel_selection.get("strict_channel_results", [])
+    proxy_channel_diagnostics = cast(list[object], proxy_raw) if isinstance(proxy_raw, list) else []
+    channel_selection: dict[str, object] = {
+        str(key): cast(object, value) for key, value in result.channel_selection.items()
+    }
+    channel_selection["proxy_only_channel_diagnostics"] = proxy_channel_diagnostics
+    channel_selection["strict_channel_results"] = nested_cells
+    channel_selection["nested_refit_receipt"] = nested.receipt
     if l3_fold_result is not None and l3_fold_result.get("status") == "PASS":
         channel_selection.update(
             {

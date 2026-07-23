@@ -12,11 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import pandas as pd
 
 from core.fold_control import require_primary_target
-from core.pipeline import load_run, mapping, physical_columns, sequence
+from core.pipeline import load_run, mapping, physical_columns, sequence, stable_hash
 from core.rng import generator
 from core.semantic_keys import OUTER_FOLD
 from evaluation.pairing import validate_paired_prediction_keys
 from evaluation.service import build_latent_risk_scenarios, evaluate_outer_fold
+from selection.nested_refit import validate_nested_refit_receipt
 
 
 def main() -> int:
@@ -46,6 +47,29 @@ def main() -> int:
         raise RuntimeError(f"fold={args.outer_fold}: a PASS model-freeze receipt is required")
     if freeze.get("protocol_hash") != loaded.protocol_hash:
         raise RuntimeError("model-freeze receipt protocol hash mismatch")
+    measurement_selection = mapping(
+        loaded.context.read("measurement_selection_registry", coordinates),
+        "measurement selection",
+    )
+    if freeze.get("measurement_selection_hash") != stable_hash(measurement_selection):
+        raise RuntimeError("measurement selection hash mismatch")
+    channel_selection = mapping(
+        loaded.context.read("channel_measurement_selection", coordinates),
+        "channel measurement selection",
+    )
+    optional_tracks_raw = freeze.get("optional_measurement_tracks", [])
+    optional_tracks = [
+        str(value) for value in sequence(optional_tracks_raw, "freeze optional measurement tracks")
+    ]
+    nested_receipt = validate_nested_refit_receipt(
+        channel_selection,
+        outer_fold=args.outer_fold,
+        required_optional_measurements=optional_tracks,
+    )
+    if freeze.get("channel_measurement_selection_hash") != stable_hash(channel_selection):
+        raise RuntimeError("channel measurement selection hash mismatch")
+    if freeze.get("nested_selection_receipt_hash") != stable_hash(nested_receipt):
+        raise RuntimeError("nested selection receipt hash mismatch")
     open_receipt = {
         "status": "PASS",
         "protocol_hash": loaded.protocol_hash,
@@ -53,6 +77,9 @@ def main() -> int:
             "model_freeze_receipt", coordinates
         ),
         "mcse_report_hash": loaded.context.store.receipt_hash("mcse_report", {}),
+        "measurement_selection_hash": stable_hash(measurement_selection),
+        "channel_measurement_selection_hash": stable_hash(channel_selection),
+        "nested_selection_receipt_hash": stable_hash(nested_receipt),
         "opened_at_state": "FROZEN",
         OUTER_FOLD: args.outer_fold,
     }
@@ -73,10 +100,6 @@ def main() -> int:
     ]
     source_matrices = mapping(
         loaded.context.read("source_channel_matrices", {}), "source-channel matrices"
-    )
-    channel_selection = mapping(
-        loaded.context.read("channel_measurement_selection", coordinates),
-        "channel measurement selection",
     )
     latent_risk_scenarios = build_latent_risk_scenarios(
         matrices=source_matrices,
