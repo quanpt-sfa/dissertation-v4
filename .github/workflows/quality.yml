@@ -28,7 +28,7 @@ jobs:
               raise SystemExit("D05 legacy assertion was not found")
           path.write_text(text.replace(old, new), encoding="utf-8")
           PY
-          uv run ruff check --fix .
+          uv run ruff check --fix . || true
           uv run ruff format .
       - name: Package autofixed files
         run: |
@@ -41,7 +41,10 @@ jobs:
           path: |
             /tmp/autofix-files.tar.gz
             /tmp/autofix.patch
-      - run: uv run ruff check .
+      - id: ruff
+        continue-on-error: true
+        shell: bash
+        run: set -o pipefail; uv run ruff check . 2>&1 | tee /tmp/ruff.log
       - run: uv run ruff format --check .
       - id: pyright
         continue-on-error: true
@@ -56,8 +59,9 @@ jobs:
         with:
           name: validation-logs
           path: |
+            /tmp/ruff.log
             /tmp/pyright.log
             /tmp/pytest.log
-      - if: steps.pyright.outcome == 'failure' || steps.pytest.outcome == 'failure'
+      - if: steps.ruff.outcome == 'failure' || steps.pyright.outcome == 'failure' || steps.pytest.outcome == 'failure'
         run: exit 1
       - run: uv run pre-commit run --all-files
