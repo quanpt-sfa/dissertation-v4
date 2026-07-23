@@ -8,20 +8,27 @@ from core.semantic_keys import OUTER_FOLD, TARGET_ID
 
 
 def require_primary_target(measurement: object, stage_id: str) -> str:
+    """Resolve the one canonical production target and reject shadow aliases."""
     if not isinstance(measurement, dict):
         raise RuntimeError(f"{stage_id}_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_NOT_LOCKED")
     configuration = cast(dict[str, Any], measurement)
     primary = configuration.get("primary_target_id")
     if not isinstance(primary, str) or not primary.strip():
-        execution = configuration.get("execution_tracks")
-        if isinstance(execution, dict):
-            primary = cast(dict[str, Any], execution).get("primary_target_id")
-    if not isinstance(primary, str) or not primary.strip():
         raise RuntimeError(f"{stage_id}_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_NOT_LOCKED")
+    primary = primary.strip()
+
+    execution = configuration.get("execution_tracks")
+    if isinstance(execution, dict):
+        alias = cast(dict[str, Any], execution).get("primary_target_id")
+        if alias is not None and alias != primary:
+            raise RuntimeError(
+                f"{stage_id}_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_CONTRACT_MISMATCH"
+            )
+
     candidates = configuration.get("candidate_targets")
-    if not isinstance(candidates, dict) or primary.strip() not in candidates:
+    if not isinstance(candidates, dict) or primary not in candidates:
         raise RuntimeError(f"{stage_id}_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_NOT_REGISTERED")
-    return primary.strip()
+    return primary
 
 
 def confirmatory_fold_blockers(
