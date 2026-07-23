@@ -29,7 +29,7 @@ jobs:
             scripts/p11_freeze_models.py \
             scripts/p12_evaluate.py \
             tests/stages/test_p10_nested_refit.py
-      - name: Targeted validation
+      - name: Ruff targeted validation
         run: |
           uv run ruff check \
             src/selection/nested_refit.py \
@@ -39,10 +39,14 @@ jobs:
             scripts/p11_freeze_models.py \
             scripts/p12_evaluate.py \
             tests/stages/test_p10_nested_refit.py
+      - name: Pytest targeted validation
+        run: |
           uv run pytest -q \
             tests/stages/test_p10_nested_refit.py \
             tests/stages/test_remaining_stage_invariants.py::test_p10_selection_uses_development_history_and_removes_held_channel \
             tests/stages/test_track_b_propagation.py
+      - name: Pyright targeted validation
+        run: |
           uv run pyright \
             src/selection/nested_refit.py \
             src/selection/service.py \
