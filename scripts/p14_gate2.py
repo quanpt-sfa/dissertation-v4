@@ -5,12 +5,13 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from core.pipeline import load_run, mapping, sequence
 from core.semantic_keys import OUTER_FOLD
+from gates.evidence_contract import insufficient_gate2_verdict, prepare_gate2_inputs
 from gates.service import gate2_verdict
 
 
@@ -49,14 +50,28 @@ def main() -> int:
     loaded.context.read("censoring_sensitivity_outputs", {})
     loaded.context.read("ablation_results", {})
     evaluation_config = mapping(loaded.registry.get("evaluation"), "evaluation")
-    result = gate2_verdict(
+    gate_config = mapping(evaluation_config.get("gate2"), "evaluation.gate2")
+    prepared = prepare_gate2_inputs(
         evaluations=evaluations,
         bootstraps=bootstraps,
-        domain_transfer=domain,
-        gate=mapping(evaluation_config.get("gate2"), "evaluation.gate2"),
-        common=mapping(evaluation_config.get("gate_common"), "evaluation.gate_common"),
+        gate=gate_config,
         confirmatory_folds=confirmatory,
     )
+    blockers = [str(value) for value in cast(list[object], prepared["blockers"])]
+    candidate_ids = [str(value) for value in cast(list[object], prepared["candidate_ids"])]
+    if blockers:
+        result = insufficient_gate2_verdict(blockers, candidate_ids)
+    else:
+        result = gate2_verdict(
+            evaluations=cast(list[dict[str, Any]], prepared["evaluations"]),
+            bootstraps=cast(list[list[dict[str, Any]]], prepared["bootstraps"]),
+            domain_transfer=domain,
+            gate=gate_config,
+            common=mapping(evaluation_config.get("gate_common"), "evaluation.gate_common"),
+            confirmatory_folds=confirmatory,
+        )
+        result["locked_candidate_ids"] = candidate_ids
+        result["evidence_blockers"] = []
     result["protocol_hash"] = loaded.protocol_hash
     loaded.context.write("gate2_verdict", result, {})
     print(f"P14 status={result['status']} verdict={result['verdict']}")
