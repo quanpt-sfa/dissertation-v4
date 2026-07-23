@@ -18,11 +18,11 @@ from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from core.pipeline import LoadedRun, load_run, mapping, sequence
+from core.pipeline import load_run, mapping, sequence
 from core.semantic_keys import BATCH_KEY, METHOD_ID, METHOD_KEY, SCENARIO_ID, SCENARIO_KEY
 from simulation.mcse_control import confirmatory_control_decision
 from simulation.method_contract import active_method_ids, method_by_id
@@ -40,6 +40,24 @@ class P08Job:
     minimum: int
     batch_size: int
     maximum: int
+
+
+class _StoreLike(Protocol):
+    def inventory(self) -> list[dict[str, object]]: ...
+
+
+class _ContextLike(Protocol):
+    store: _StoreLike
+
+    def read(self, artifact_id: str, coordinates: Mapping[str, str]) -> object: ...
+
+
+class _LoadedLike(Protocol):
+    context: _ContextLike
+
+
+def _loaded_like(value: object) -> _LoadedLike:
+    return cast(_LoadedLike, value)
 
 
 def main() -> int:
@@ -337,30 +355,32 @@ def _control_report(
 
 
 def _artifact_exists(
-    loaded: LoadedRun,
+    loaded: object,
     inventory: Sequence[Mapping[str, object]],
     artifact_id: str,
     coordinates: Mapping[str, str],
 ) -> bool:
+    context = _loaded_like(loaded).context
     for item in inventory:
         if item.get("artifact_id") != artifact_id:
             continue
         if _coordinates(item) == dict(coordinates):
-            loaded.context.read(artifact_id, coordinates)
+            context.read(artifact_id, coordinates)
             return True
     return False
 
 
 def _incomplete_batch_commands(
-    loaded: LoadedRun,
+    loaded: object,
     *,
-    jobs: Sequence[P08Job],
+    jobs: Sequence[object],
     python: str,
     registry_path: Path,
     run_id: str,
 ) -> list[list[str]]:
     """Return worker commands for every incomplete batch/diagnostics pair."""
-    inventory = loaded.context.store.inventory()
+    inventory = _loaded_like(loaded).context.store.inventory()
+    normalized_jobs = [_coerce_job(value) for value in jobs]
 
     def coordinates_for(artifact_id: str) -> set[CoordinateKey]:
         return {
@@ -375,7 +395,7 @@ def _incomplete_batch_commands(
     if not incomplete:
         return []
 
-    jobs_by_keys = {(job.scenario_key, job.method_key): job for job in jobs}
+    jobs_by_keys = {(job.scenario_key, job.method_key): job for job in normalized_jobs}
     commands: list[list[str]] = []
     for coordinate_key in sorted(incomplete):
         coordinates = dict(coordinate_key)
@@ -409,9 +429,9 @@ def _incomplete_batch_commands(
 
 
 def _batch_exists(
-    loaded: LoadedRun,
+    loaded: object,
     *,
-    inventory: Sequence[Mapping[str, object]],
+    inventory: Sequence[Mapping[str, object]] | None = None,
     scenario_key: str,
     method_key: str,
     start: int,
@@ -423,9 +443,44 @@ def _batch_exists(
         METHOD_KEY: method_key,
         BATCH_KEY: batch_key,
     }
-    batch_written = _artifact_exists(loaded, inventory, "simulation_batches", coordinates)
-    diagnostics_written = _artifact_exists(loaded, inventory, "model_diagnostics", coordinates)
+    available = (
+        inventory if inventory is not None else _loaded_like(loaded).context.store.inventory()
+    )
+    batch_written = _artifact_exists(loaded, available, "simulation_batches", coordinates)
+    diagnostics_written = _artifact_exists(loaded, available, "model_diagnostics", coordinates)
     return batch_written and diagnostics_written
+
+
+def _coerce_job(value: object) -> P08Job:
+    if isinstance(value, P08Job):
+        return value
+    if not isinstance(value, dict):
+        raise ValueError("P08 job must be a P08Job or mapping")
+    raw = cast(dict[str, object], value)
+    job = P08Job(
+        scenario_id=_required_text(raw.get(SCENARIO_ID), SCENARIO_ID),
+        method_id=_required_text(raw.get(METHOD_ID), METHOD_ID),
+        scenario_key=_required_text(raw.get(SCENARIO_KEY), SCENARIO_KEY),
+        method_key=_required_text(raw.get(METHOD_KEY), METHOD_KEY),
+        minimum=_required_positive_integer(raw.get("minimum"), "minimum"),
+        batch_size=_required_positive_integer(raw.get("batch_size"), "batch_size"),
+        maximum=_required_positive_integer(raw.get("maximum"), "maximum"),
+    )
+    if job.maximum < job.minimum:
+        raise ValueError("P08 job maximum must be at least minimum")
+    return job
+
+
+def _required_text(value: object, context: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"P08 job {context}: nonempty string required")
+    return value
+
+
+def _required_positive_integer(value: object, context: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"P08 job {context}: positive integer required")
+    return value
 
 
 def _coordinates(item: Mapping[str, object]) -> dict[str, str]:
