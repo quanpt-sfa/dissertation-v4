@@ -21,9 +21,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 from core.metrics import average_precision
-from features.service import FIT_MODEL_ELIGIBILITY_VALUES
 from core.semantic_keys import (
-    ELIGIBLE,
     FIRM_ID,
     FISCAL_YEAR,
     LEARNER_ID,
@@ -35,6 +33,7 @@ from core.semantic_keys import (
     TARGET_VALUE,
     WEIGHT,
 )
+from features.service import FIT_MODEL_ELIGIBILITY_VALUES
 
 
 @dataclass(frozen=True)

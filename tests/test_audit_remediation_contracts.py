@@ -55,7 +55,10 @@ def test_temporal_and_provenance_contracts_are_explicit() -> None:
     assert store["allowed_fiscal_year_max"] == 2025
     assert folds["prospective_year"] == 2026
     assert folds["prospective_feature_status"] == "unavailable_by_data_cutoff"
-    assert cast(dict[str, Any], study["prediction_time"])["observed_publication_date_available"] is False
+    assert (
+        cast(dict[str, Any], study["prediction_time"])["observed_publication_date_available"]
+        is False
+    )
     provenance = cast(
         dict[str, Any],
         cast(dict[str, Any], cast(dict[str, Any], registry["data_sources"])["source_registry"])[

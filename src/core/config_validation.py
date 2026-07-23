@@ -267,23 +267,15 @@ def validate_methodology(
     revision_contract = _entry(
         feature_store.get("revision_contract"), "features.store.revision_contract"
     )
-    preprocessing = _entry(
-        feature_store.get("preprocessing"), "features.store.preprocessing"
-    )
+    preprocessing = _entry(feature_store.get("preprocessing"), "features.store.preprocessing")
     l3_operational = _entry(l3_model.get("operational"), "measurement.l3_model.operational")
-    execution_tracks = _entry(
-        measurement.get("execution_tracks"), "measurement.execution_tracks"
-    )
-    source_registry = _entry(
-        sources.get("source_registry"), "data_sources.source_registry"
-    )
+    execution_tracks = _entry(measurement.get("execution_tracks"), "measurement.execution_tracks")
+    source_registry = _entry(sources.get("source_registry"), "data_sources.source_registry")
     provenance_contract = _entry(
         source_registry.get("provenance_contract"),
         "data_sources.source_registry.provenance_contract",
     )
-    benchmark_status = _entry(
-        evaluation.get("benchmark_status"), "evaluation.benchmark_status"
-    )
+    benchmark_status = _entry(evaluation.get("benchmark_status"), "evaluation.benchmark_status")
     fixed_accounting_status = _entry(
         benchmark_status.get("fixed_accounting"),
         "evaluation.benchmark_status.fixed_accounting",
@@ -292,9 +284,7 @@ def validate_methodology(
     gate3 = _entry(evaluation.get("gate3"), "evaluation.gate3")
     breakpoint_grid = _entry(gate3.get("breakpoint_grid"), "evaluation.gate3.breakpoint_grid")
     gate3_logistic = _entry(gate3.get("logistic_fit"), "evaluation.gate3.logistic_fit")
-    seed_offsets = _entry(
-        reproducibility.get("seed_offsets"), "reproducibility.seed_offsets"
-    )
+    seed_offsets = _entry(reproducibility.get("seed_offsets"), "reproducibility.seed_offsets")
 
     required = [
         (
@@ -389,9 +379,8 @@ def validate_methodology(
             or (
                 l3_operational.get("parameter_status") == "PENDING_EXTERNAL_ELICITATION"
                 and l3_operational.get("report_required") is False
-                and "L3_fixed_pi" in _string_list(
-                    execution_tracks.get("order"), "measurement.execution_tracks.order"
-                )
+                and "L3_fixed_pi"
+                in _string_list(execution_tracks.get("order"), "measurement.execution_tracks.order")
             ),
             "L3 parameters must be locked or explicitly pending and non-reportable",
         ),

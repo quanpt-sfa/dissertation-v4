@@ -93,9 +93,7 @@ def build_snapshot(
     return snapshot
 
 
-def _load_extract_provenance(
-    registry: dict[str, object], raw_root: Path
-) -> dict[str, object]:
+def _load_extract_provenance(registry: dict[str, object], raw_root: Path) -> dict[str, object]:
     data_sources = registry.get("data_sources")
     if not isinstance(data_sources, dict):
         return {}
@@ -117,9 +115,7 @@ def _load_extract_provenance(
     required = typed.get("required") is True
     if not path.is_file():
         if required:
-            raise FileNotFoundError(
-                f"required extract provenance manifest is missing: {path}"
-            )
+            raise FileNotFoundError(f"required extract provenance manifest is missing: {path}")
         return {}
     raw: object = json.loads(path.read_text(encoding="utf-8"))
     provenance = _mapping(raw, "extract provenance")

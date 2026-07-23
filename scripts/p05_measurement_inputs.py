@@ -247,9 +247,7 @@ def _execute_l3_pilot(
                 "status": "EMPIRICALLY_PENDING",
                 "pilot_executed": False,
                 "reason_code": str(
-                    operational.get(
-                        "unavailable_reason_code", "L3_FIXED_PI_GRID_NOT_LOCKED"
-                    )
+                    operational.get("unavailable_reason_code", "L3_FIXED_PI_GRID_NOT_LOCKED")
                 ),
                 "parameter_status": parameter_status,
                 "report_required": report_required,

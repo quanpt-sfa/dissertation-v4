@@ -69,12 +69,12 @@ def wire_gate3_controls() -> None:
     )
     replace(
         path,
-        "    model = LogisticRegression(C=1e6, solver=\"lbfgs\", max_iter=2000, fit_intercept=False)\n",
-        "    controls = _mapping(gate.get(\"logistic_fit\"))\n"
+        '    model = LogisticRegression(C=1e6, solver="lbfgs", max_iter=2000, fit_intercept=False)\n',
+        '    controls = _mapping(gate.get("logistic_fit"))\n'
         "    model = LogisticRegression(\n"
-        "        C=float(controls[\"inverse_regularization\"]),\n"
-        "        solver=\"lbfgs\",\n"
-        "        max_iter=int(controls[\"maximum_iterations\"]),\n"
+        '        C=float(controls["inverse_regularization"]),\n'
+        '        solver="lbfgs",\n'
+        '        max_iter=int(controls["maximum_iterations"]),\n'
         "        fit_intercept=False,\n"
         "    )\n",
     )
@@ -88,28 +88,28 @@ def wire_gate3_controls() -> None:
     replace(
         path,
         "    candidates = np.unique(np.quantile(pressure, np.linspace(0.1, 0.9, 17)))\n",
-        "    grid = _mapping(gate.get(\"breakpoint_grid\"))\n"
+        '    grid = _mapping(gate.get("breakpoint_grid"))\n'
         "    candidates = np.unique(\n"
         "        np.quantile(\n"
         "            pressure,\n"
         "            np.linspace(\n"
-        "                float(grid[\"lower_quantile\"]),\n"
-        "                float(grid[\"upper_quantile\"]),\n"
-        "                int(grid[\"points\"]),\n"
+        '                float(grid["lower_quantile"]),\n'
+        '                float(grid["upper_quantile"]),\n'
+        '                int(grid["points"]),\n'
         "            ),\n"
         "        )\n"
         "    )\n",
     )
     # The second hard-coded LogisticRegression occurrence belongs to _breakpoint.
     text = read(path)
-    old = "        model = LogisticRegression(C=1e6, solver=\"lbfgs\", max_iter=2000, fit_intercept=False)\n"
+    old = '        model = LogisticRegression(C=1e6, solver="lbfgs", max_iter=2000, fit_intercept=False)\n'
     if old in text:
         new = (
-            "        controls = _mapping(gate.get(\"logistic_fit\"))\n"
+            '        controls = _mapping(gate.get("logistic_fit"))\n'
             "        model = LogisticRegression(\n"
-            "            C=float(controls[\"inverse_regularization\"]),\n"
-            "            solver=\"lbfgs\",\n"
-            "            max_iter=int(controls[\"maximum_iterations\"]),\n"
+            '            C=float(controls["inverse_regularization"]),\n'
+            '            solver="lbfgs",\n'
+            '            max_iter=int(controls["maximum_iterations"]),\n'
             "            fit_intercept=False,\n"
             "        )\n"
         )
