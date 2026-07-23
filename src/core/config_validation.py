@@ -258,9 +258,7 @@ def validate_methodology(
         simulation.get("protocol_role"),
         "simulation.protocol_role",
     )
-    prediction_anchor_config = _entry(
-        study.get(PREDICTION_TIME), "study.prediction_time"
-    )
+    prediction_anchor_config = _entry(study.get(PREDICTION_TIME), "study.prediction_time")
     sample_years = _entry(study.get("sample_fiscal_years"), "study.sample_fiscal_years")
     feature_store = _entry(features.get("store"), "features.store")
     availability_contract = _entry(
