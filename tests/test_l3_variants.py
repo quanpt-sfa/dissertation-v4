@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
+import pandas as pd
 
 from simulation.l3_variants import (
     L3_REQUIRED_METRICS,
@@ -46,7 +49,7 @@ def _scenario() -> dict[str, object]:
 
 
 def _rows() -> list[dict[str, bool | None]]:
-    return (
+    rows: list[dict[str, bool | None]] = (
         [{"anchor": True, "weak": True}] * 24
         + [{"anchor": True, "weak": False}] * 10
         + [{"anchor": False, "weak": True}] * 8
@@ -54,6 +57,7 @@ def _rows() -> list[dict[str, bool | None]]:
         + [{"anchor": True, "weak": None}] * 5
         + [{"anchor": None, "weak": False}] * 12
     )
+    return rows
 
 
 def _accuracy() -> dict[str, tuple[float, float]]:
@@ -75,21 +79,38 @@ def test_l3_variants_use_distinct_locked_assumptions() -> None:
         for variant in L3_VARIANT_IDS
     }
 
-    correct = np.asarray(estimates["l3_correct"]["row_probabilities"], dtype=float)
-    assert np.all((correct > 0.0) & (correct < 1.0))
-    assert np.isclose(float(estimates["l3_correct"]["fixed_pi_used"]), 0.10)
-    assert np.isclose(float(estimates["l3_wrong_fixed_pi"]["fixed_pi_used"]), 0.15)
-    assert not np.allclose(
-        correct,
-        np.asarray(estimates["l3_ignore_dependence"]["row_probabilities"], dtype=float),
+    correct = cast(np.ndarray, estimates["l3_correct"]["row_probabilities"])
+    assert bool(np.all((correct > 0.0) & (correct < 1.0)))
+    assert bool(np.isclose(cast(float, estimates["l3_correct"]["fixed_pi_used"]), 0.10))
+    assert bool(
+        np.isclose(
+            cast(float, estimates["l3_wrong_fixed_pi"]["fixed_pi_used"]),
+            0.15,
+        )
     )
-    assert not np.allclose(
-        correct,
-        np.asarray(estimates["l3_clean_anchor"]["row_probabilities"], dtype=float),
+    assert not bool(
+        np.allclose(
+            correct,
+            cast(
+                np.ndarray,
+                estimates["l3_ignore_dependence"]["row_probabilities"],
+            ),
+        )
     )
-    assert not np.allclose(
-        correct,
-        np.asarray(estimates["l3_wrong_fixed_pi"]["row_probabilities"], dtype=float),
+    assert not bool(
+        np.allclose(
+            correct,
+            cast(np.ndarray, estimates["l3_clean_anchor"]["row_probabilities"]),
+        )
+    )
+    assert not bool(
+        np.allclose(
+            correct,
+            cast(
+                np.ndarray,
+                estimates["l3_wrong_fixed_pi"]["row_probabilities"],
+            ),
+        )
     )
 
 
@@ -99,7 +120,7 @@ def test_l3_variant_batch_is_paired_and_metric_complete() -> None:
     def data_rng_factory(replication_id: int) -> np.random.Generator:
         return np.random.default_rng(1000 + replication_id)
 
-    outputs = {}
+    outputs: dict[str, pd.DataFrame] = {}
     for variant in L3_VARIANT_IDS:
         diagnostics: dict[str, object] = {}
         batch = run_l3_variant_batch(
@@ -119,26 +140,20 @@ def test_l3_variant_batch_is_paired_and_metric_complete() -> None:
             "affected_replication_ids": [],
         }
 
-    correct = outputs["l3_correct"].set_index(["replication_id", "metric_id"])["estimate"]
-    assert (
-        correct.xs(
-            "paired_brier_regret",
-            level="metric_id",
+    correct_rows = cast(
+        list[dict[str, object]],
+        outputs["l3_correct"].to_dict(orient="records"),
+    )
+
+    def estimates_for(metric_id: str) -> np.ndarray:
+        return np.asarray(
+            [cast(float, row["estimate"]) for row in correct_rows if row["metric_id"] == metric_id],
+            dtype=float,
         )
-        == 0.0
-    ).all()
-    assert np.isfinite(
-        correct.xs(
-            "review_sample_size_ratio_vs_l1",
-            level="metric_id",
-        )
-    ).all()
-    assert np.isfinite(
-        correct.xs(
-            "review_sample_size_ratio_vs_l2",
-            level="metric_id",
-        )
-    ).all()
+
+    assert bool(np.all(estimates_for("paired_brier_regret") == 0.0))
+    assert bool(np.all(np.isfinite(estimates_for("review_sample_size_ratio_vs_l1"))))
+    assert bool(np.all(np.isfinite(estimates_for("review_sample_size_ratio_vs_l2"))))
 
 
 def test_fixed_pi_metrics_are_distinct_from_hierarchical_pi_sensitivity() -> None:

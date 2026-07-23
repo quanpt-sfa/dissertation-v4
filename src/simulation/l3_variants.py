@@ -289,10 +289,10 @@ def run_l3_variant_batch(
         ratio_l2 = _safe_variance_ratio(residual_variance, l2_residual_variance)
 
         true_prevalence = float(scenario["prevalence"])
-        hierarchical_estimate = float(result["hierarchical_pi_estimate"])
-        hierarchical_lower = float(result["hierarchical_pi_lower"])
-        hierarchical_upper = float(result["hierarchical_pi_upper"])
-        metrics = {
+        hierarchical_estimate = cast(float, result["hierarchical_pi_estimate"])
+        hierarchical_lower = cast(float, result["hierarchical_pi_lower"])
+        hierarchical_upper = cast(float, result["hierarchical_pi_upper"])
+        metrics: dict[str, float] = {
             "fixed_pi_fit_success": 1.0,
             "row_brier": row_brier,
             "row_log_loss": _binary_log_loss(latent, probabilities),
