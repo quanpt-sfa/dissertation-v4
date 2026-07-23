@@ -1,6 +1,6 @@
 # A-01--A-15 methodological audit remediation
 
-This note records the disposition of the external audit against the current `main` branch.
+This note records the disposition of the external audit against the current `main` branch. Every code-level correction remains subject to the repository-wide quality workflow before merge.
 
 - **A-01 fixed.** `eligible_observability_view` is accepted by the production and nested-refit feature selectors; model eligibility is now a closed enum; P11 and P12 fail closed when the Gate 2 candidate/reference groups are absent.
 - **A-02 controlled, not assumed away.** Production snapshots now require an extract-provenance manifest containing the vendor revision policy and whether point-in-time vintages exist. The locked feature contract states that point-in-time vintages are currently unavailable and that a restatement sensitivity is required. No claim is made that a current FiinPro snapshot is point-in-time.
