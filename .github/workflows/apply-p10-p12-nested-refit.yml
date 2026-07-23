@@ -1,6 +1,6 @@
 name: apply-p10-p12-nested-refit
 
-# Temporary one-shot integration workflow; removed before merge.
+# Temporary one-shot semantic-hardening workflow; removed before merge.
 on: [push, pull_request]
 
 permissions:
@@ -17,75 +17,52 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --all-extras
-      - run: uv run python .github/scripts/apply_p10_p12_nested_refit.py
-      - run: uv run python .github/scripts/fix_p10_nested_seed.py
-      - run: uv run python .github/scripts/fix_p10_nested_types.py
-      - run: uv run python .github/scripts/fix_p10_nested_types_round2.py
-      - run: uv run python .github/scripts/fix_p10_nested_types_round3.py
-      - name: Format changed production files
+      - run: uv run python .github/scripts/apply_p10_p12_semantic_hardening.py
+      - name: Format hardened files
         run: |
           uv run ruff format \
             src/selection/nested_refit.py \
             src/selection/service.py \
-            src/modeling/service.py \
             scripts/p10_select_measurement.py \
-            scripts/p11_freeze_models.py \
             scripts/p12_evaluate.py \
             tests/stages/test_p10_nested_refit.py
-      - name: Ruff targeted validation
+      - name: Ruff hardened files
         run: |
           uv run ruff check \
             src/selection/nested_refit.py \
             src/selection/service.py \
-            src/modeling/service.py \
             scripts/p10_select_measurement.py \
-            scripts/p11_freeze_models.py \
             scripts/p12_evaluate.py \
             tests/stages/test_p10_nested_refit.py
-      - name: Pytest targeted validation
+      - name: Pytest nested hardening
         run: |
           uv run pytest -q \
             tests/stages/test_p10_nested_refit.py \
             tests/stages/test_remaining_stage_invariants.py::test_p10_selection_uses_development_history_and_removes_held_channel \
             tests/stages/test_track_b_propagation.py
-      - name: Pyright targeted validation
+      - name: Pyright nested hardening
         run: |
-          mkdir -p artifacts/diagnostics
-          set -o pipefail
           uv run pyright \
             src/selection/nested_refit.py \
             src/selection/service.py \
-            src/modeling/service.py \
             scripts/p10_select_measurement.py \
             scripts/p11_freeze_models.py \
             scripts/p12_evaluate.py \
-            tests/stages/test_p10_nested_refit.py \
-            2>&1 | tee artifacts/diagnostics/p10_p12_pyright.txt
-      - name: Upload Pyright diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: p10-p12-pyright-diagnostics
-          path: artifacts/diagnostics/p10_p12_pyright.txt
-      - name: Commit production integration
+            tests/stages/test_p10_nested_refit.py
+      - name: Commit semantic hardening
         if: github.event_name == 'push'
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add \
-            config/methodology/measurement.yaml \
-            config/foundation/steps.yaml \
-            docs/PIPELINE_P00_P17.md \
             src/selection/nested_refit.py \
             src/selection/service.py \
-            src/modeling/service.py \
             scripts/p10_select_measurement.py \
-            scripts/p11_freeze_models.py \
             scripts/p12_evaluate.py \
             tests/stages/test_p10_nested_refit.py
           if git diff --cached --quiet; then
-            echo 'No production changes to commit'
+            echo 'No semantic changes to commit'
           else
-            git commit -m 'Fully nest channel-within-time selection'
+            git commit -m 'Harden nested channel selection semantics'
             git push
           fi
