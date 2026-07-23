@@ -87,6 +87,22 @@ simulation_mcse:
     undefined_policy: forbid
     target_rule: absolute
     minimum_finite_fraction: 1.0
+  - policy_id: diagnostic_latent_ap
+    priority: 100
+    metric_pattern: latent_average_precision
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_latent_brier
+    priority: 100
+    metric_pattern: latent_brier
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
   - policy_id: diagnostic_hierarchical_pi
     priority: 100
     metric_pattern: hierarchical_pi_*
@@ -103,22 +119,6 @@ simulation_mcse:
     undefined_policy: allow_nonblocking
     target_rule: none
     minimum_finite_fraction: 0.0
-  - policy_id: diagnostic_predictive_latent
-    priority: 90
-    metric_pattern: latent_*
-    role: diagnostic
-    mcse_gate_required: false
-    undefined_policy: allow_nonblocking
-    target_rule: none
-    minimum_finite_fraction: 0.0
-  - policy_id: diagnostic_predictive_observed
-    priority: 90
-    metric_pattern: observed_*
-    role: diagnostic
-    mcse_gate_required: false
-    undefined_policy: allow_nonblocking
-    target_rule: none
-    minimum_finite_fraction: 0.0
   - policy_id: diagnostic_primary_threshold_cost
     priority: 100
     metric_pattern: threshold_cost::{primary_evaluation_cost_regime_id}::cost_per_firm
@@ -127,16 +127,144 @@ simulation_mcse:
     undefined_policy: allow_nonblocking
     target_rule: none
     minimum_finite_fraction: 0.0
-  - policy_id: diagnostic_cost_metrics
-    priority: 80
-    metric_pattern: '*cost*'
+  - policy_id: diagnostic_predictive_performance
+    priority: 50
+    metric_pattern: observed_average_precision
     role: diagnostic
     mcse_gate_required: false
     undefined_policy: allow_nonblocking
     target_rule: none
     minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_latent_auc
+    priority: 50
+    metric_pattern: latent_auc
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_latent_precision_at_k
+    priority: 50
+    metric_pattern: latent_precision_at_k
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_observed_minus_latent_ap
+    priority: 50
+    metric_pattern: observed_minus_latent_ap
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_interval_width
+    priority: 50
+    metric_pattern: interval_width
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_normalized_cost_regret_threshold
+    priority: 50
+    metric_pattern: threshold_cost::*::normalized_cost_regret
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_normalized_cost_regret_budget
+    priority: 50
+    metric_pattern: budget_cost::*::*::normalized_cost_regret
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_budget_precision
+    priority: 50
+    metric_pattern: budget_cost::*::*::precision
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: diagnostic_budget_recall
+    priority: 50
+    metric_pattern: budget_cost::*::*::recall
+    role: diagnostic
+    mcse_gate_required: false
+    undefined_policy: allow_nonblocking
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_row_residual_variance
+    priority: 40
+    metric_pattern: row_residual_variance
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_row_probability
+    priority: 40
+    metric_pattern: row_probability_*
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_imbalance_treatment_applied
+    priority: 20
+    metric_pattern: imbalance_treatment_applied
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_training_and_sampling
+    priority: 30
+    metric_pattern: '*training*'
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_resampling
+    priority: 30
+    metric_pattern: '*resampling*'
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_synthetic_rows
+    priority: 20
+    metric_pattern: synthetic_rows_added
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_selected_threshold
+    priority: 20
+    metric_pattern: selected_threshold
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_observability_rates
+    priority: 20
+    metric_pattern: '*_rate'
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
   - policy_id: descriptive_empirical_context
-    priority: 70
+    priority: 30
     metric_pattern: empirical_*
     role: descriptive
     mcse_gate_required: false
@@ -144,32 +272,88 @@ simulation_mcse:
     target_rule: none
     minimum_finite_fraction: 0.0
   - policy_id: descriptive_calibrated_prevalence
-    priority: 70
+    priority: 20
     metric_pattern: calibrated_latent_prevalence
     role: descriptive
     mcse_gate_required: false
     undefined_policy: report_only
     target_rule: none
     minimum_finite_fraction: 0.0
-  - policy_id: descriptive_row_probability
-    priority: 70
-    metric_pattern: row_probability_*
+  - policy_id: descriptive_realized_prevalence
+    priority: 30
+    metric_pattern: realized_prevalence
     role: descriptive
     mcse_gate_required: false
     undefined_policy: report_only
     target_rule: none
     minimum_finite_fraction: 0.0
-  - policy_id: descriptive_row_residual_variance
-    priority: 70
-    metric_pattern: row_residual_variance
+  - policy_id: descriptive_latent_probability_mean
+    priority: 20
+    metric_pattern: latent_probability_mean
     role: descriptive
     mcse_gate_required: false
     undefined_policy: report_only
     target_rule: none
     minimum_finite_fraction: 0.0
-  - policy_id: descriptive_fallback
-    priority: 1
-    metric_pattern: '*'
+  - policy_id: descriptive_cost_totals_threshold
+    priority: 20
+    metric_pattern: threshold_cost::*::total_cost
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_cost_totals_budget
+    priority: 20
+    metric_pattern: budget_cost::*::*::total_cost
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_cost_savings_threshold
+    priority: 20
+    metric_pattern: threshold_cost::*::cost_savings_vs_all_negative
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_cost_savings_budget
+    priority: 20
+    metric_pattern: budget_cost::*::*::cost_savings_vs_all_negative
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_cost_regret_threshold
+    priority: 20
+    metric_pattern: threshold_cost::*::cost_regret_vs_oracle
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_cost_regret_budget
+    priority: 20
+    metric_pattern: budget_cost::*::*::cost_regret_vs_oracle
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_cost_components
+    priority: 20
+    metric_pattern: threshold_cost::*::*_component
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_nonprimary_cost_per_firm
+    priority: 10
+    metric_pattern: threshold_cost::*::cost_per_firm
     role: descriptive
     mcse_gate_required: false
     undefined_policy: report_only
