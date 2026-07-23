@@ -23,6 +23,16 @@ evaluation:
       operator: max
     same_direction_min_folds: 3
     fold_count: 4
+    candidate_family_count: 3
+    candidate_ids:
+    - track_l1:elastic_net_logistic:full
+    - track_l1:random_forest:full
+    - track_l1:main_boosting:full
+    reference_by_candidate:
+      track_l1:elastic_net_logistic:full: track_l1:elastic_net_logistic:observability_only
+      track_l1:random_forest:full: track_l1:random_forest:observability_only
+      track_l1:main_boosting:full: track_l1:main_boosting:observability_only
+    minimum_valid_bootstrap_replications: 1800
     yield_at_primary_budget_relative_decline_max: 0.05
     confirmatory_positive_count_min: 25
     sensitivity_positive_count_range:
