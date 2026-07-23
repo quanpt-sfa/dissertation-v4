@@ -1,5 +1,6 @@
 name: apply-p10-p12-nested-refit
 
+# Temporary one-shot integration workflow; removed before merge.
 on:
   push:
     branches:
