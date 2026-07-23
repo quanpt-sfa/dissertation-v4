@@ -159,8 +159,16 @@ simulation_mcse:
     undefined_policy: allow_nonblocking
     target_rule: none
     minimum_finite_fraction: 0.0
-  - policy_id: descriptive_training_and_sampling
+  - policy_id: descriptive_imbalance_treatment_applied
     priority: 20
+    metric_pattern: imbalance_treatment_applied
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_training_and_sampling
+    priority: 30
     metric_pattern: '*training*'
     role: descriptive
     mcse_gate_required: false
@@ -168,7 +176,7 @@ simulation_mcse:
     target_rule: none
     minimum_finite_fraction: 0.0
   - policy_id: descriptive_resampling
-    priority: 20
+    priority: 30
     metric_pattern: '*resampling*'
     role: descriptive
     mcse_gate_required: false
@@ -200,7 +208,7 @@ simulation_mcse:
     target_rule: none
     minimum_finite_fraction: 0.0
   - policy_id: descriptive_empirical_context
-    priority: 20
+    priority: 30
     metric_pattern: empirical_*
     role: descriptive
     mcse_gate_required: false
@@ -210,6 +218,14 @@ simulation_mcse:
   - policy_id: descriptive_calibrated_prevalence
     priority: 20
     metric_pattern: calibrated_latent_prevalence
+    role: descriptive
+    mcse_gate_required: false
+    undefined_policy: report_only
+    target_rule: none
+    minimum_finite_fraction: 0.0
+  - policy_id: descriptive_realized_prevalence
+    priority: 30
+    metric_pattern: realized_prevalence
     role: descriptive
     mcse_gate_required: false
     undefined_policy: report_only

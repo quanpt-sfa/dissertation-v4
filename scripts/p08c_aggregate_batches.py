@@ -21,7 +21,11 @@ from core.semantic_keys import (
     SCENARIO_ID,
     SCENARIO_KEY,
 )
-from simulation.mcse_contract import compile_metric_policies, resolve_metric_policies
+from simulation.mcse_contract import (
+    MetricPolicy,
+    compile_metric_policies,
+    resolve_metric_policies,
+)
 from simulation.mcse_service import (
     sanitize_normalized_cost_regret,
     summarize_mcse,
@@ -34,6 +38,8 @@ from simulation.p08_aggregation import (
     validate_methodology,
 )
 from simulation.replication_contract import replication_plan
+
+_filter_active_batches = filter_active_batches
 
 CoordinateKey = tuple[tuple[str, str], ...]
 
@@ -106,8 +112,7 @@ def main() -> int:
             coordinates=coordinates,
             locked_worker_batch_size=int(plan["batch_size"]),
         )
-        clean = sanitize_normalized_cost_regret(value)
-        batches.append(clean)
+        batches.append(value)
         coordinates_seen.append(coordinates)
         range_audits.append(dict(audit))
 
@@ -126,11 +131,18 @@ def main() -> int:
             f"orphan_diagnostics={_display_coordinates(orphan_diagnostics)}"
         )
 
-    methodology = validate_methodology(
+    batches = [sanitize_normalized_cost_regret(batch) for batch in batches]
+
+    methodology = _validate_methodology(
         batches=batches,
         scenario_by_id=scenario_by_id,
+        simulation=simulation,
+        mcse_registry=loaded.registry.get("simulation_mcse"),
     )
-    active_batches = filter_active_batches(batches, scenario_by_id)
+    active_batches = _filter_active_batches(batches, scenario_by_id)
+    methodology_report = {
+        key: value for key, value in methodology.items() if key != "metric_policies"
+    }
     if methodology.get("status") != "PASS":
         return _finish(
             loaded=loaded,
@@ -141,7 +153,7 @@ def main() -> int:
                 "precision_target_met": False,
                 "reason_code": "P08_ACTIVE_PROFILE_OR_COST_METRIC_CONTRACT_INCOMPLETE",
                 "execution_profile": active_profile,
-                "methodology_validation": methodology,
+                "methodology_validation": methodology_report,
                 "batch_artifact_count": len(batches),
                 "active_batch_count": len(active_batches),
                 "batch_coordinates": coordinates_seen,
@@ -151,33 +163,12 @@ def main() -> int:
             failure_code=2,
         )
 
-    try:
-        mcse_registry = mapping(loaded.registry.get("simulation_mcse"), "simulation_mcse")
-        compiled_policies = compile_metric_policies(mcse_registry, simulation)
-        policy_coverage = resolve_metric_policies(
-            required_active_metric_ids(scenario_by_id),
-            compiled_policies,
-        )
-    except ValueError as exc:
-        return _finish(
-            loaded=loaded,
-            check_only=check_only,
-            report={
-                "status": "FAIL",
-                "mcse_status": "NOT_EVALUATED",
-                "precision_target_met": False,
-                "reason_code": "P08_MCSE_POLICY_CONTRACT_INCOMPLETE",
-                "policy_error": str(exc),
-                "execution_profile": active_profile,
-                "methodology_validation": methodology,
-                "batch_artifact_count": len(batches),
-                "active_batch_count": len(active_batches),
-                "batch_coordinates": coordinates_seen,
-                "batch_range_audit": range_audits,
-                "metrics": [],
-            },
-            failure_code=2,
-        )
+    metric_policies_raw = methodology.get("metric_policies")
+    metric_policies = (
+        cast(dict[str, MetricPolicy], metric_policies_raw)
+        if isinstance(metric_policies_raw, dict)
+        else {}
+    )
 
     core = mapping(simulation.get("core"), "simulation.core")
     l3 = mapping(simulation.get("l3"), "simulation.l3")
@@ -196,7 +187,7 @@ def main() -> int:
     )
     report = summarize_mcse(
         active_batches,
-        metric_policies=policy_coverage["policies"],
+        metric_policies=metric_policies,
         minimum_replications=int(core["minimum_replications"]),
         maximum_replications=int(core["maximum_replications"]),
         pass_fail_mcse_maximum=float(core["pass_fail_mcse_max"]),
@@ -220,10 +211,8 @@ def main() -> int:
         {
             "mcse_status": mcse_status,
             "execution_profile": active_profile,
-            "methodology_validation": methodology,
-            "metric_policy_coverage": {
-                key: value for key, value in policy_coverage.items() if key != "policies"
-            },
+            "methodology_validation": methodology_report,
+            "metric_policy_coverage": methodology.get("metric_policy_coverage", {}),
             "batch_artifact_count": len(batches),
             "active_batch_count": len(active_batches),
             "batch_coordinates": coordinates_seen,
@@ -258,6 +247,50 @@ def main() -> int:
         f"batches={len(active_batches)} methods_complete={methodology['status'] == 'PASS'}"
     )
     return 0
+
+
+def _validate_methodology(
+    *,
+    batches: list[pd.DataFrame],
+    scenario_by_id: dict[str, dict[str, object]],
+    simulation: dict[str, object],
+    mcse_registry: object,
+) -> dict[str, object]:
+    result = validate_methodology(batches=batches, scenario_by_id=scenario_by_id)
+    if result.get("status") != "PASS":
+        return result
+    try:
+        compiled = compile_metric_policies(
+            mapping(mcse_registry, "simulation_mcse"),
+            simulation,
+        )
+        coverage = resolve_metric_policies(
+            required_active_metric_ids(scenario_by_id),
+            compiled,
+        )
+    except ValueError as exc:
+        reason_codes_raw = result.get("reason_codes")
+        reason_codes = (
+            [str(value) for value in cast(list[object], reason_codes_raw)]
+            if isinstance(reason_codes_raw, list)
+            else []
+        )
+        return {
+            **result,
+            "status": "FAIL",
+            "reason_codes": [
+                *reason_codes,
+                "P08_MCSE_POLICY_CONTRACT_INCOMPLETE",
+            ],
+            "policy_error": str(exc),
+        }
+    return {
+        **result,
+        "metric_policy_coverage": {
+            key: value for key, value in coverage.items() if key != "policies"
+        },
+        "metric_policies": coverage["policies"],
+    }
 
 
 def _coordinates(item: dict[str, object]) -> dict[str, str]:

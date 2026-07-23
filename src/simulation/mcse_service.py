@@ -47,12 +47,13 @@ def normalized_cost_regret(
 
 def sanitize_normalized_cost_regret(frame: pd.DataFrame) -> pd.DataFrame:
     """Recompute normalized regret from companion metrics without mutating artifacts."""
-    required = {SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID, ESTIMATE}
+    required = {SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID}
     missing = sorted(required - set(str(column) for column in frame.columns))
     if missing:
         raise ValueError(f"P08 cost sanitation missing columns={missing}")
 
     records = cast(list[dict[str, object]], frame.to_dict(orient="records"))
+    estimate_present = ESTIMATE in frame.columns
     metric_keys: set[tuple[str, str, int, str]] = set()
     companions: dict[tuple[str, str, int, str], dict[str, float]] = {}
     normalized_rows: list[tuple[int, tuple[str, str, int, str]]] = []
@@ -84,6 +85,11 @@ def sanitize_normalized_cost_regret(frame: pd.DataFrame) -> pd.DataFrame:
         value = _finite_float(row.get(ESTIMATE))
         if value is not None:
             companions.setdefault(group_key, {})[suffix] = value
+
+    if not normalized_rows:
+        return frame.copy()
+    if not estimate_present:
+        raise ValueError("normalized cost regret rows require the estimate column")
 
     for row_index, group_key in normalized_rows:
         values = companions.get(group_key, {})
