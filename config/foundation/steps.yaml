@@ -348,6 +348,7 @@ steps:
     - l3_pilot_capability
     - fold_eligibility
     - mcse_report
+    - feature_panel
     - feature_registry
     optional_reads: []
     writes:

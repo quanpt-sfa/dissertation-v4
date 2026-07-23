@@ -17,6 +17,7 @@ from core.rng import derive_seed
 from core.semantic_keys import MEASUREMENT_ID, OUTER_FOLD
 from measurement.service import fold_local_l3_target_frame, measurement_target_frame
 from modeling.service import ModelFitResult, fit_anchor_pu_fold, fit_fold_models
+from selection.nested_refit import validate_nested_refit_receipt
 from selection.track_plan import executable_tracks
 
 
@@ -128,6 +129,14 @@ def main() -> int:
     maximum_configurations = int(tuning["max_valid_configurations_per_learner_inner_fold"])
     columns = physical_columns(loaded.registry)
     plan_tracks = executable_tracks(selection)
+    optional_measurements = [
+        str(item[MEASUREMENT_ID]) for item in plan_tracks if item.get("role") != "required_primary"
+    ]
+    nested_receipt = validate_nested_refit_receipt(
+        channel_selection,
+        outer_fold=args.outer_fold,
+        required_optional_measurements=optional_measurements,
+    )
     primary_track = next(
         (item for item in plan_tracks if item.get("role") == "required_primary"), None
     )
@@ -284,6 +293,9 @@ def main() -> int:
         "split_registry_hash": stable_hash(splits),
         "measurement_selection_hash": stable_hash(selection),
         "channel_measurement_selection_hash": stable_hash(channel_selection),
+        "nested_selection_receipt_hash": stable_hash(nested_receipt),
+        "nested_selection_status": nested_receipt.get("status"),
+        "optional_measurement_tracks": optional_measurements,
         "feature_registry_hash": stable_hash(feature_registry),
         "preprocessing_hash": stable_hash(feature_config.get("preprocessing")),
         "model_settings_hash": stable_hash(settings),

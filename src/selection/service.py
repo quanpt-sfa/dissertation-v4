@@ -27,6 +27,7 @@ def select_measurement(
     l3_capability: dict[str, Any],
     l3_fold_result: dict[str, Any] | None = None,
     minimum_observed_channels: int | None = None,
+    nested_candidate_results: list[dict[str, Any]] | None = None,
 ) -> SelectionResult:
     """Select using years before the outer fold and held-channel predictions only."""
     raw_rows = matrices.get("rows")
@@ -134,6 +135,18 @@ def select_measurement(
                 "fit_scope": fold_result.get("fit_scope"),
             }
         )
+    if nested_candidate_results is not None:
+        proxy_by_candidate = {str(item["candidate"]): item for item in results}
+        nested_by_candidate = {
+            str(item["candidate"]): item
+            for item in nested_candidate_results
+            if isinstance(item.get("candidate"), str)
+        }
+        results = [
+            {**proxy_by_candidate.get(candidate, {}), **nested_by_candidate[candidate]}
+            for candidate in candidates
+            if candidate != "none" and candidate in nested_by_candidate
+        ]
     eligible = [item for item in results if item[ELIGIBLE] and item["objective"] is not None]
     selected = (
         min(eligible, key=lambda item: float(item["objective"]))["candidate"]
@@ -176,6 +189,7 @@ def select_measurement(
             if selected == "L3_fixed_pi"
             else None,
             "l3_fit_scope": (l3_fold_result or {}).get("fit_scope"),
+            "nested_candidate_results": nested_candidate_results or [],
             "outer_outcomes_accessed": False,
         },
     )
@@ -246,6 +260,7 @@ def fit_l3_fold_candidate(
                         "diagnostics_eligible": False,
                         "reason_code": "NO_SOURCES_AFTER_CHANNEL_HOLDOUT",
                         "heldout_removed_from_target_and_measurement": True,
+                        "target_rows": [],
                     }
                 )
                 continue
@@ -280,10 +295,12 @@ def fit_l3_fold_candidate(
                         "diagnostics_eligible": False,
                         "reason_code": f"L3_FIT_FAILED:{error}",
                         "heldout_removed_from_target_and_measurement": True,
+                        "target_rows": [],
                     }
                 )
                 continue
             losses: list[float] = []
+            heldout_target_rows: list[dict[str, object]] = []
             for row, probability in zip(rows, fit.posterior_mean, strict=True):
                 channel_outcomes = _channel_outcomes(row)
                 heldout_value = channel_outcomes.get(heldout)
@@ -294,6 +311,14 @@ def fit_l3_fold_candidate(
                 )
                 if heldout_value is None or remaining_observed < minimum_observed_channels:
                     continue
+                heldout_target_rows.append(
+                    {
+                        "heldout_channel": heldout,
+                        FIRM_ID: str(row[FIRM_ID]),
+                        FISCAL_YEAR: int(row[FISCAL_YEAR]),
+                        TARGET_VALUE: float(probability),
+                    }
+                )
                 clipped = min(1.0 - 1e-6, max(1e-6, float(probability)))
                 outcome = float(bool(heldout_value))
                 losses.append(
@@ -314,6 +339,7 @@ def fit_l3_fold_candidate(
                     else "INSUFFICIENT_HELDOUT_CHANNEL_ROWS",
                     "heldout_removed_from_target_and_measurement": True,
                     "fit_diagnostics": fit.diagnostics,
+                    "target_rows": heldout_target_rows,
                 }
             )
         complete = bool(heldout_results) and all(
@@ -407,6 +433,12 @@ def fit_l3_fold_candidate(
         "source_accuracy": full_fit.source_accuracy,
         "channel_random_effect_sd": full_fit.channel_random_effect_sd,
         "target_rows": target_rows,
+        "heldout_target_rows": [
+            target
+            for item in all_strict_results
+            if item.get("fixed_pi") == selected_pi
+            for target in cast(list[dict[str, object]], item.get("target_rows", []))
+        ],
         "fit_scope": "development_history_only",
         "fit_max_year": max(int(row[FISCAL_YEAR]) for row in rows),
         "outer_outcomes_accessed": False,

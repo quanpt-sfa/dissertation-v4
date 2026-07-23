@@ -182,11 +182,15 @@ def run_nested_channel_refit(
         complete = bool(candidate_cells) and all(
             item.get("status") == "PASS" for item in candidate_cells
         )
-        objectives = [
-            float(item["soft_cross_entropy"])
-            for item in candidate_cells
-            if item.get("soft_cross_entropy") is not None
-        ]
+        objectives: list[float] = []
+        for item in candidate_cells:
+            objective = item.get("soft_cross_entropy")
+            if (
+                isinstance(objective, (int, float))
+                and not isinstance(objective, bool)
+                and math.isfinite(float(objective))
+            ):
+                objectives.append(float(objective))
         candidate_results.append(
             {
                 "candidate": candidate,
@@ -230,9 +234,9 @@ def validate_nested_refit_receipt(
 ) -> dict[str, object]:
     """Validate the P10 nested-selection receipt before P11/P12 may proceed."""
     raw = channel_selection.get("nested_refit_receipt")
-    if not isinstance(raw, Mapping):
+    if not isinstance(raw, dict):
         raise RuntimeError("NESTED_CHANNEL_REFIT_RECEIPT_MISSING")
-    receipt = {str(key): value for key, value in raw.items()}
+    receipt = _string_object_dict(cast(object, raw), "nested-refit receipt")
     if str(receipt.get(OUTER_FOLD)) != str(outer_fold):
         raise RuntimeError("NESTED_CHANNEL_REFIT_OUTER_FOLD_MISMATCH")
     if receipt.get("fit_scope") != "development_history_only":
@@ -242,18 +246,19 @@ def validate_nested_refit_receipt(
     if receipt.get("outer_rows_used_in_selection") != 0:
         raise RuntimeError("NESTED_CHANNEL_REFIT_OUTER_ROWS_USED")
     removed = receipt.get("heldout_channel_removed_from")
-    if not isinstance(removed, list) or set(str(value) for value in removed) != set(
-        _REMOVED_INPUTS
-    ):
+    if not isinstance(removed, list):
+        raise RuntimeError("NESTED_CHANNEL_REFIT_REMOVAL_CONTRACT_INVALID")
+    removed_values = [str(value) for value in cast(list[object], removed)]
+    if set(removed_values) != set(_REMOVED_INPUTS):
         raise RuntimeError("NESTED_CHANNEL_REFIT_REMOVAL_CONTRACT_INVALID")
 
     candidate_rows_raw = receipt.get("candidate_results")
     if not isinstance(candidate_rows_raw, list):
         raise RuntimeError("NESTED_CHANNEL_REFIT_CANDIDATES_MISSING")
     candidate_rows = [
-        cast(Mapping[str, object], item)
-        for item in candidate_rows_raw
-        if isinstance(item, Mapping)
+        _string_object_dict(cast(object, item), "nested-refit candidate")
+        for item in cast(list[object], candidate_rows_raw)
+        if isinstance(item, dict)
     ]
     by_candidate = {str(item.get("candidate")): item for item in candidate_rows}
     for measurement_id in required_optional_measurements:
@@ -297,7 +302,11 @@ def _score_fit(
             eligible_feature_count,
         )
     target_rows = pd.DataFrame(
-        [cast(dict[str, object], item) for item in target_rows_raw if isinstance(item, dict)]
+        [
+            _string_object_dict(cast(object, item), "OOF training target")
+            for item in cast(list[object], target_rows_raw)
+            if isinstance(item, dict)
+        ]
     )
     if target_rows.empty:
         return _failed_cell(
@@ -387,19 +396,22 @@ def _candidate_target_frame(
     year = _physical(columns, FISCAL_YEAR)
     target_value = _physical(columns, TARGET_VALUE)
     if candidate == "L3_fixed_pi":
-        raw_targets = None if l3_fold_result is None else l3_fold_result.get(
-            "heldout_target_rows"
-        )
+        raw_targets = None if l3_fold_result is None else l3_fold_result.get("heldout_target_rows")
         if not isinstance(raw_targets, list):
             return pd.DataFrame(columns=[firm, year, target_value])
-        parsed = [
-            cast(Mapping[str, object], item)
-            for item in raw_targets
-            if isinstance(item, Mapping)
-            and str(item.get(_HELDOUT_CHANNEL)) == heldout_channel
-            and isinstance(item.get(FISCAL_YEAR), int)
-            and int(cast(int, item[FISCAL_YEAR])) < outer_year
-        ]
+        parsed: list[dict[str, object]] = []
+        for raw_target in cast(list[object], raw_targets):
+            if not isinstance(raw_target, dict):
+                continue
+            item = _string_object_dict(cast(object, raw_target), "heldout L3 target")
+            row_year = item.get(FISCAL_YEAR)
+            if (
+                str(item.get(_HELDOUT_CHANNEL)) == heldout_channel
+                and isinstance(row_year, int)
+                and not isinstance(row_year, bool)
+                and row_year < outer_year
+            ):
+                parsed.append(item)
         return _target_frame_from_rows(parsed, columns)
 
     if candidate != "L2":
@@ -412,11 +424,12 @@ def _candidate_target_frame(
         if row.get(ELIGIBLE) is not True or row.get(MATURE) is not True:
             continue
         raw_scores = row.get("channel_evidence_scores")
-        if not isinstance(raw_scores, Mapping):
+        if not isinstance(raw_scores, dict):
             continue
+        scores = _string_object_dict(cast(object, raw_scores), "channel evidence scores")
         remaining = [
             float(value)
-            for channel, value in raw_scores.items()
+            for channel, value in scores.items()
             if str(channel) != heldout_channel
             and isinstance(value, (int, float))
             and not isinstance(value, bool)
@@ -487,9 +500,10 @@ def _heldout_outcome_frame(
         if not isinstance(row_year, int) or row_year >= outer_year:
             continue
         raw_outcomes = row.get("channel_outcomes")
-        if not isinstance(raw_outcomes, Mapping):
+        if not isinstance(raw_outcomes, dict):
             continue
-        value = raw_outcomes.get(heldout_channel)
+        outcomes = _string_object_dict(cast(object, raw_outcomes), "channel outcomes")
+        value = outcomes.get(heldout_channel)
         if value is None:
             continue
         output.append(
@@ -533,17 +547,11 @@ def _features_for_group(
     registry: Sequence[Mapping[str, object]],
     group_id: str,
 ) -> list[str]:
-    content = [
-        str(item["feature_id"]) for item in registry if item.get("role") == "content"
-    ]
+    content = [str(item["feature_id"]) for item in registry if item.get("role") == "content"]
     observability = [
-        str(item["feature_id"])
-        for item in registry
-        if item.get("role") == "observability"
+        str(item["feature_id"]) for item in registry if item.get("role") == "observability"
     ]
-    ambiguous = [
-        str(item["feature_id"]) for item in registry if item.get("role") == "ambiguous"
-    ]
+    ambiguous = [str(item["feature_id"]) for item in registry if item.get("role") == "ambiguous"]
     groups = {
         "content_only": content,
         "observability_only": observability,
@@ -600,29 +608,37 @@ def _logit(scores: np.ndarray) -> np.ndarray:
 
 def _cross_entropy(targets: np.ndarray, probabilities: np.ndarray) -> float:
     clipped = np.clip(probabilities, 1e-9, 1.0 - 1e-9)
-    return float(
-        np.mean(
-            -(targets * np.log(clipped) + (1.0 - targets) * np.log(1.0 - clipped))
-        )
-    )
+    return float(np.mean(-(targets * np.log(clipped) + (1.0 - targets) * np.log(1.0 - clipped))))
 
 
-def _matrix_rows(matrices: Mapping[str, object]) -> list[Mapping[str, object]]:
+def _matrix_rows(matrices: Mapping[str, object]) -> list[dict[str, object]]:
     raw = matrices.get("rows")
     if not isinstance(raw, list):
         raise ValueError("nested channel refit requires matrix rows")
     return [
-        cast(Mapping[str, object], item) for item in raw if isinstance(item, Mapping)
+        _string_object_dict(cast(object, item), "source-channel matrix row")
+        for item in cast(list[object], raw)
+        if isinstance(item, dict)
     ]
 
 
 def _string_list(raw: object, context: str) -> list[str]:
     if not isinstance(raw, list):
         raise ValueError(f"nested channel refit requires {context}")
-    values = [str(value) for value in raw]
+    values = [str(value) for value in cast(list[object], raw)]
     if not values or len(values) != len(set(values)):
         raise ValueError(f"nested channel refit requires unique nonempty {context}")
     return values
+
+
+def _string_object_dict(raw: object, context: str) -> dict[str, object]:
+    if not isinstance(raw, dict):
+        raise ValueError(f"{context}: object mapping required")
+    typed = cast(dict[object, object], raw)
+    result = {str(key): value for key, value in typed.items()}
+    if len(result) != len(typed):
+        raise ValueError(f"{context}: keys collide after string normalization")
+    return result
 
 
 def _physical(columns: Mapping[str, str], key: str) -> str:
@@ -687,6 +703,4 @@ def _receipt(
 
 
 def _token(value: str) -> str:
-    return "".join(
-        character if character.isalnum() else "_" for character in value
-    ).strip("_")
+    return "".join(character if character.isalnum() else "_" for character in value).strip("_")

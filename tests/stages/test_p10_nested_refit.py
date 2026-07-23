@@ -87,14 +87,12 @@ def _fixture() -> tuple[
         "rows": matrix_rows,
         "l2_scoring": {"status": "AVAILABLE"},
     }
-    registry = [
+    registry: list[dict[str, object]] = [
         {"feature_id": "feature_s1", "role": "content", "source_channel": "S1"},
         {"feature_id": "feature_s2", "role": "content", "source_channel": "S2"},
         {"feature_id": "feature_neutral", "role": "ambiguous", "source_channel": ""},
     ]
-    label_inputs = pd.DataFrame(
-        columns=["firm_key", "year_key", "target_key", "binary_result"]
-    )
+    label_inputs = pd.DataFrame(columns=["firm_key", "year_key", "target_key", "binary_result"])
     return (
         matrices,
         pd.DataFrame(panel_rows),
@@ -166,9 +164,7 @@ def test_nested_receipt_fails_closed_before_freeze_or_outer_open() -> None:
             "tuning",
             "calibration",
         ],
-        "candidate_results": [
-            {"candidate": "L2", ELIGIBLE: True, "objective": 0.5}
-        ],
+        "candidate_results": [{"candidate": "L2", ELIGIBLE: True, "objective": 0.5}],
     }
     validated = validate_nested_refit_receipt(
         {"nested_refit_receipt": receipt},
@@ -187,9 +183,7 @@ def test_nested_receipt_fails_closed_before_freeze_or_outer_open() -> None:
 
     incomplete = {
         **receipt,
-        "candidate_results": [
-            {"candidate": "L2", ELIGIBLE: False, "objective": None}
-        ],
+        "candidate_results": [{"candidate": "L2", ELIGIBLE: False, "objective": None}],
     }
     with pytest.raises(RuntimeError, match="REQUIRED_CANDIDATE_INCOMPLETE"):
         validate_nested_refit_receipt(

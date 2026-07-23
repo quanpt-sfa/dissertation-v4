@@ -115,6 +115,10 @@ measurement:
     time_only: M_f_star
     strict_channel: M_f_c_star
     development_only: true
+    nested_refit_required: true
+    complete_channel_grid_required: true
+    gate1_learner_id: elastic_net_logistic
+    gate1_feature_group: full
     no_candidate_value: none
     stability_minimum_selected_folds: 3
     stability_denominator_folds: 4

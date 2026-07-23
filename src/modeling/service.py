@@ -371,11 +371,18 @@ def fit_fold_models(
 
 
 def _feature_groups(registry: list[dict[str, Any]]) -> dict[str, list[str]]:
-    content = [str(item["feature_id"]) for item in registry if item.get("role") == "content"]
-    observable = [
-        str(item["feature_id"]) for item in registry if item.get("role") == "observability"
+    def role(item: dict[str, Any]) -> object:
+        return item.get("role", item.get("content_observability_role"))
+
+    eligible = [
+        item
+        for item in registry
+        if item.get("research_decision_status") in {None, "LOCKED"}
+        and item.get("model_eligibility") in {None, "eligible"}
     ]
-    ambiguous = [str(item["feature_id"]) for item in registry if item.get("role") == "ambiguous"]
+    content = [str(item["feature_id"]) for item in eligible if role(item) == "content"]
+    observable = [str(item["feature_id"]) for item in eligible if role(item) == "observability"]
+    ambiguous = [str(item["feature_id"]) for item in eligible if role(item) == "ambiguous"]
     return {
         "observability_only": observable,
         "content_only": content,
