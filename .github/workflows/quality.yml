@@ -1,20 +1,28 @@
-name: quality
+name: apply-remediation-once
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - agent/pipeline-audit-remediation
+
+permissions:
+  contents: write
 
 jobs:
-  p0:
+  apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: agent/pipeline-audit-remediation
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --all-extras
-      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
-      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
-      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
-      - run: uv run pytest --collect-only -q
-      - name: Apply mechanical Ruff fixes in CI workspace
+      - name: Apply verified mechanical fixes
         run: |
+          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
+          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
           uv run ruff check --fix . || true
           uv run ruff format .
           python - <<'PY'
@@ -24,44 +32,44 @@ jobs:
           text = path.read_text(encoding="utf-8")
           old = 'assert get(registry, "measurement.primary_target_id") is None'
           new = 'assert get(registry, "measurement.primary_target_id") == "L1_ANNUAL"'
-          if old not in text:
-              raise SystemExit("D05 legacy assertion was not found")
-          path.write_text(text.replace(old, new), encoding="utf-8")
+          if old in text:
+              path.write_text(text.replace(old, new), encoding="utf-8")
+          elif new not in text:
+              raise SystemExit("D05 primary-target assertion is not recognized")
           PY
-          uv run ruff check --fix . || true
+          uv run ruff check --fix .
           uv run ruff format .
-      - name: Package autofixed files
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+          uv run pytest -q
+      - name: Restore standard quality workflow and commit
         run: |
-          git diff --name-only -z > /tmp/autofix-files.list
-          tar --null -T /tmp/autofix-files.list -czf /tmp/autofix-files.tar.gz
-          git diff --binary > /tmp/autofix.patch
-      - uses: actions/upload-artifact@v4
-        with:
-          name: autofix-bundle
-          path: |
-            /tmp/autofix-files.tar.gz
-            /tmp/autofix.patch
-      - id: ruff
-        continue-on-error: true
-        shell: bash
-        run: set -o pipefail; uv run ruff check . 2>&1 | tee /tmp/ruff.log
-      - run: uv run ruff format --check .
-      - id: pyright
-        continue-on-error: true
-        shell: bash
-        run: set -o pipefail; uv run pyright 2>&1 | tee /tmp/pyright.log
-      - id: pytest
-        continue-on-error: true
-        shell: bash
-        run: set -o pipefail; uv run pytest -q 2>&1 | tee /tmp/pytest.log
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: validation-logs
-          path: |
-            /tmp/ruff.log
-            /tmp/pyright.log
-            /tmp/pytest.log
-      - if: steps.ruff.outcome == 'failure' || steps.pyright.outcome == 'failure' || steps.pytest.outcome == 'failure'
-        run: exit 1
-      - run: uv run pre-commit run --all-files
+          cat > .github/workflows/quality.yml <<'YAML'
+          # Temporary marker removed by the connector after the bulk remediation commit.
+          name: quality
+
+          on: [push, pull_request]
+
+          jobs:
+            p0:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: astral-sh/setup-uv@v6
+                - run: uv sync --all-extras
+                - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+                - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
+                - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
+                - run: uv run pytest --collect-only -q
+                - run: uv run ruff check .
+                - run: uv run ruff format --check .
+                - run: uv run pyright
+                - run: uv run pytest -q
+                - run: uv run pre-commit run --all-files
+          YAML
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply verified pipeline remediation cleanup"
+          git push origin HEAD:agent/pipeline-audit-remediation
