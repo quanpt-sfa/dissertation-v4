@@ -23,6 +23,7 @@ class BaselineEntry(TypedDict):
 class BaselineDocument(TypedDict):
     schema_version: int
     generated_from: str
+    strict_since_commit: str
     total_errors: int
     diagnostics: list[BaselineEntry]
 
@@ -74,24 +75,40 @@ def diagnostics_from_pyright(payload: object, repo_root: Path) -> list[Diagnosti
 
 
 def baseline_from_diagnostics(
-    diagnostics: list[Diagnostic], generated_from: str
+    diagnostics: list[Diagnostic],
+    generated_from: str,
+    strict_since_commit: str,
 ) -> BaselineDocument:
     counts = _diagnostic_counts(diagnostics)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_from": generated_from,
+        "strict_since_commit": strict_since_commit,
         "total_errors": sum(counts.values()),
         "diagnostics": _entries(counts),
     }
 
 
-def baseline_counts(document: object) -> Counter[Fingerprint]:
-    """Validate a baseline document and return its multiset of fingerprints."""
+def baseline_cutover(document: object) -> str:
+    """Return the commit after which changed-file strictness becomes mandatory."""
     if not isinstance(document, dict):
         raise ValueError("Pyright baseline must be a JSON object")
     baseline = cast(dict[str, object], document)
-    if baseline.get("schema_version") != 1:
+    if baseline.get("schema_version") != 2:
         raise ValueError("Unsupported Pyright baseline schema_version")
+    generated_from = baseline.get("generated_from")
+    strict_since_commit = baseline.get("strict_since_commit")
+    if not isinstance(generated_from, str) or not generated_from:
+        raise ValueError("Pyright baseline generated_from must be locked")
+    if not isinstance(strict_since_commit, str) or not strict_since_commit:
+        raise ValueError("Pyright baseline strict_since_commit must be locked")
+    return strict_since_commit
+
+
+def baseline_counts(document: object) -> Counter[Fingerprint]:
+    """Validate a baseline document and return its multiset of fingerprints."""
+    baseline_cutover(document)
+    baseline = cast(dict[str, object], document)
     raw_entries = baseline.get("diagnostics")
     if not isinstance(raw_entries, list):
         raise ValueError("Pyright baseline is missing diagnostics")
@@ -122,6 +139,19 @@ def baseline_counts(document: object) -> Counter[Fingerprint]:
     if declared_total != sum(counts.values()):
         raise ValueError("Pyright baseline total_errors does not match diagnostics")
     return counts
+
+
+def select_effective_diff_base(
+    requested_base: str,
+    strict_since_commit: str,
+    *,
+    requested_base_precedes_cutover: bool,
+    cutover_precedes_head: bool,
+) -> str:
+    """Grandfather changes already contained in the one-time cutover snapshot."""
+    if requested_base_precedes_cutover and cutover_precedes_head:
+        return strict_since_commit
+    return requested_base
 
 
 def evaluate_ratchet(
