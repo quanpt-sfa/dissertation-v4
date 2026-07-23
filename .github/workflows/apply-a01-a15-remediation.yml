@@ -18,7 +18,6 @@ jobs:
         with:
           ref: agent/remediate-a01-a15-audit
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -26,13 +25,7 @@ jobs:
         run: |
           python scripts/apply_a01_a15_remediation.py
           python scripts/apply_a01_a15_followup.py
-      - name: Format remediation
-        run: |
-          uv sync --frozen
-          uv run ruff format .
-          uv run ruff check --fix . || true
-          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write || true
-      - name: Commit generated remediation
+      - name: Commit remediation
         run: |
           if git diff --quiet; then
             echo 'No remediation changes required.'
