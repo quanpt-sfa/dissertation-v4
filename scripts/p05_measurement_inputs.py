@@ -243,6 +243,7 @@ def _execute_l3_pilot(
                 "status": "EMPIRICALLY_PENDING",
                 "pilot_executed": False,
                 "reason_code": "L3_FIXED_PI_GRID_NOT_LOCKED",
+                "required_config_key": "measurement.l3_model.operational.fixed_pi_grid",
             }
         )
         return
@@ -253,80 +254,109 @@ def _execute_l3_pilot(
                 "status": "EMPIRICALLY_PENDING",
                 "pilot_executed": False,
                 "reason_code": "L3_ACCURACY_PRIORS_NOT_LOCKED",
-                "missing_prior_profiles": missing_profiles,
+                "missing_profile_ids": missing_profiles,
+                "required_config_key": "measurement.l3_model.operational.accuracy_priors_by_profile",
             }
         )
         return
-    minimum_channels = int(
-        mapping(measurement.get("l2_missingness"), "measurement.l2_missingness")[
-            "minimum_observed_channels"
-        ]
-    )
-    rows = [
-        row
-        for row in sequence(matrices.get("rows"), "source-channel matrix rows")
-        if int(mapping(row, "source-channel matrix row")[FISCAL_YEAR]) < initial_outer_year
-        and mapping(row, "source-channel matrix row").get(MATURE) is True
-    ]
-    if not rows:
+    raw_rows = matrices.get("rows")
+    if not isinstance(raw_rows, list):
+        raise ValueError("L3 pilot requires matrix rows")
+    eligible_rows: list[dict[str, object]] = []
+    for raw_value in cast(list[object], raw_rows):
+        row = mapping(raw_value, "L3 matrix row")
+        if (
+            int(row.get(FISCAL_YEAR, initial_outer_year)) < initial_outer_year
+            and row.get(MATURE) is True
+        ):
+            eligible_rows.append(row)
+    maximum_rows = int(operational["pilot_max_rows"])
+    eligible_rows = eligible_rows[:maximum_rows]
+    if not eligible_rows:
         capability.update(
             {
-                "status": "EMPIRICALLY_PENDING",
+                "status": "UNAVAILABLE_BY_DESIGN",
                 "pilot_executed": False,
-                "reason_code": "L3_DEVELOPMENT_ROWS_UNAVAILABLE",
+                "reason_code": "NO_MATURE_DEVELOPMENT_ROWS_FOR_L3_PILOT",
+                "fit_scope": f"mature_development_years_before_{initial_outer_year}",
+                "outer_outcomes_accessed": False,
             }
         )
         return
-    max_rows = int(operational.get("pilot_max_rows", len(rows)))
-    if len(rows) > max_rows:
-        selected = rng.choice(len(rows), size=max_rows, replace=False)
-        rows = [rows[int(index)] for index in sorted(selected)]
-    source_outcomes = {
-        str(source_id): [
-            mapping(row, "source-channel matrix row").get("source_outcomes", {}).get(source_id)
-            for row in rows
-        ]
-        for source_id in source_channels
-    }
-    channel_count = len(set(source_channels.values()))
-    if not l3_channel_capability_allows_pilot(
-        {
-            "status": capability.get("status"),
-            "channel_count": channel_count,
-            "minimum_channels": minimum_channels,
-        }
-    ):
-        return
-    mcmc = mapping(operational.get("mcmc"), "measurement.l3_model.operational.mcmc")
-    fits = []
-    for fixed_pi in [float(value) for value in grid]:
+    mcmc = mapping(operational.get("mcmc"), "L3 MCMC controls")
+    priors: dict[str, dict[str, float]] = {}
+    for source_id, profile_id in source_profiles.items():
+        raw_prior = mapping(priors_by_profile[profile_id], f"L3 prior profile={profile_id}")
+        priors[source_id] = {str(key): float(value) for key, value in raw_prior.items()}
+    scenario_results: list[dict[str, object]] = []
+    for index, raw_pi in enumerate(grid):
+        fixed_pi = float(raw_pi)
         fit = fit_fixed_pi_latent_class(
-            source_outcomes=source_outcomes,
+            rows=eligible_rows,
             source_channels=source_channels,
-            accuracy_priors_by_source={
-                source_id: mapping(
-                    priors_by_profile[source_profiles[source_id]],
-                    f"L3 prior profile={source_profiles[source_id]}",
-                )
-                for source_id in source_channels
-            },
+            accuracy_priors=priors,
             fixed_pi=fixed_pi,
             chains=int(mcmc["chains"]),
-            warmup_per_chain=int(mcmc["warmup_per_chain"]),
-            draws_per_chain=int(mcmc["draws_per_chain"]),
-            alpha_proposal_sd=float(mcmc["alpha_proposal_sd"]),
-            random_effect_proposal_sd=float(mcmc["random_effect_proposal_sd"]),
-            rng=rng,
+            warmup=int(mcmc["warmup_per_chain"]),
+            draws=int(mcmc["draws_per_chain"]),
+            alpha_step=float(mcmc["alpha_proposal_sd"]),
+            random_effect_step=float(mcmc["random_effect_proposal_sd"]),
+            rhat_maximum=float(mcmc["rhat_max"]),
+            ess_minimum=float(mcmc["ess_min"]),
+            ppc_rate_error_maximum=float(mcmc["posterior_predictive_source_rate_error_max"]),
+            minimum_observations_per_source=int(mcmc["minimum_observations_per_source"]),
+            rng=np.random.default_rng(int(rng.integers(0, np.iinfo(np.uint32).max)) + index),
         )
-        fits.append(fit)
-        attach_l3_pilot_posterior(rows, fit, fixed_pi=fixed_pi)
+        attach_l3_pilot_posterior(
+            rows=eligible_rows,
+            fixed_pi=fixed_pi,
+            posterior_mean=fit.posterior_mean,
+        )
+        scenario_results.append(
+            {
+                "fixed_pi": fixed_pi,
+                "diagnostics": fit.diagnostics,
+                "source_accuracy": fit.source_accuracy,
+                "channel_random_effect_sd": fit.channel_random_effect_sd,
+                "posterior_summary": {
+                    "mean_min": min(fit.posterior_mean),
+                    "mean_max": max(fit.posterior_mean),
+                    "retained_draws": len(fit.posterior_draws),
+                },
+            }
+        )
+    eligible_fixed_pi: list[float] = []
+    for item in scenario_results:
+        if mapping(item["diagnostics"], "L3 diagnostics").get("eligible_for_gate1") is not True:
+            continue
+        raw_fixed_pi = item["fixed_pi"]
+        if not isinstance(raw_fixed_pi, (int, float)) or isinstance(raw_fixed_pi, bool):
+            raise ValueError("L3 fixed-pi scenario must be numeric")
+        eligible_fixed_pi.append(float(raw_fixed_pi))
     finalize_l3_pilot_posteriors(
-        capability=capability,
-        fits=fits,
-        robust_fraction=robust_fraction,
-        rhat_maximum=float(mcmc["rhat_max"]),
-        ess_minimum=float(mcmc["ess_min"]),
-        source_rate_error_maximum=float(mcmc["posterior_predictive_source_rate_error_max"]),
+        rows=eligible_rows,
+        eligible_fixed_pi=eligible_fixed_pi,
+    )
+    eligible_count = sum(
+        mapping(item["diagnostics"], "L3 diagnostics").get("eligible_for_gate1") is True
+        for item in scenario_results
+    )
+    eligible_fraction = eligible_count / len(scenario_results)
+    capability.update(
+        {
+            "status": "AVAILABLE"
+            if eligible_fraction >= robust_fraction
+            else "UNAVAILABLE_BY_DESIGN",
+            "pilot_executed": True,
+            "reason_code": None
+            if eligible_fraction >= robust_fraction
+            else "L3_DIAGNOSTICS_OR_ROBUSTNESS_FAILED",
+            "fit_scope": f"mature_development_years_before_{initial_outer_year}",
+            "outer_outcomes_accessed": False,
+            "fixed_pi_scenarios": scenario_results,
+            "eligible_scenario_fraction": eligible_fraction,
+            "required_robust_fraction": robust_fraction,
+        }
     )
 
 
