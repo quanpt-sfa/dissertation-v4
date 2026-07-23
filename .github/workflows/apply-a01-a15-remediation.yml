@@ -1,9 +1,10 @@
 name: Apply A01-A15 remediation
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/remediate-a01-a15-audit
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,16 +16,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: agent/remediate-a01-a15-audit
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Apply remediation
-        run: python scripts/apply_a01_a15_remediation.py
-      - name: Format and lint fixes
+        run: |
+          python scripts/apply_a01_a15_remediation.py
+          python scripts/apply_a01_a15_followup.py
+      - name: Synchronize generated contracts
         run: |
           uv sync --frozen
+          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
           uv run ruff format .
           uv run ruff check --fix .
       - name: Commit generated remediation
@@ -37,4 +42,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git commit -m 'Remediate A01-A15 methodological audit'
-          git push
+          git push origin HEAD:agent/remediate-a01-a15-audit
