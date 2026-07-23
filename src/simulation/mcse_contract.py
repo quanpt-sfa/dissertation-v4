@@ -155,7 +155,7 @@ def resolve_metric_policy(metric_id: str, policies: Sequence[MetricPolicy]) -> M
     if len(tied) != 1:
         ids = sorted(policy["policy_id"] for policy in tied)
         raise ValueError(f"P08 MCSE policy ambiguous for metric_id={metric_id}: {ids}")
-    return dict(winner)
+    return cast(MetricPolicy, dict(winner))
 
 
 def resolve_metric_policies(

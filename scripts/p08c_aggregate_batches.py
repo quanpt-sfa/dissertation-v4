@@ -73,11 +73,7 @@ def main() -> int:
     batches: list[pd.DataFrame] = []
     coordinates_seen: list[dict[str, str]] = []
     range_audits: list[dict[str, object]] = []
-    inventory = [
-        cast(dict[str, object], item)
-        for item in loaded.context.store.inventory()
-        if isinstance(item, dict)
-    ]
+    inventory = loaded.context.store.inventory()
     for item in inventory:
         if item.get("artifact_id") != "simulation_batches":
             continue

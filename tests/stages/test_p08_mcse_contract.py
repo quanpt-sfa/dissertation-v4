@@ -42,7 +42,9 @@ def test_production_policy_registry_covers_every_registered_p08_metric() -> None
         cost_contract=cost_contract,
         imbalance_contract=imbalance_contract,
     )
-    metric_ids = set().union(*(required_metric_ids(method) for method in methods))
+    metric_ids: set[str] = set()
+    for method in methods:
+        metric_ids.update(required_metric_ids(method))
 
     policies = compile_metric_policies(mcse_registry, simulation)
     coverage = resolve_metric_policies(metric_ids, policies)
