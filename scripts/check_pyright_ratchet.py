@@ -76,9 +76,7 @@ def main() -> int:
         effective_diff_base = select_effective_diff_base(
             requested_diff_base,
             strict_since_commit,
-            requested_base_precedes_cutover=_is_ancestor(
-                requested_diff_base, strict_since_commit
-            ),
+            requested_base_precedes_cutover=_is_ancestor(requested_diff_base, strict_since_commit),
             cutover_precedes_head=_is_ancestor(strict_since_commit, "HEAD"),
         )
         changed_paths.extend(_changed_files(effective_diff_base))
