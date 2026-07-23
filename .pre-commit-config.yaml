@@ -27,10 +27,10 @@ repos:
 
       - id: pyright-ratchet
         name: pyright ratchet
-        entry: uv run python scripts/check_pyright_ratchet.py --baseline config/quality/pyright_baseline.json
+        entry: uv run python scripts/check_pyright_ratchet.py --baseline config/quality/pyright_baseline.json --staged
         language: system
         types: [python]
-        pass_filenames: true
+        pass_filenames: false
 
       - id: p0-tests
         name: focused P0 tests
