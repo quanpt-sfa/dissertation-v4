@@ -160,9 +160,7 @@ def validate_methodology(
         if len(expected_ids) != int(cast(int, scenario_counts["method_total"])):
             raise ValueError(f"scenario={scenario_id}: active method count mismatch")
         actual_ids = {
-            method_id
-            for (record_scenario, method_id) in grouped
-            if record_scenario == scenario_id
+            method_id for (record_scenario, method_id) in grouped if record_scenario == scenario_id
         }
         for method_id in sorted(expected_ids - actual_ids):
             missing_methods.append({SCENARIO_ID: scenario_id, METHOD_ID: method_id})
@@ -186,9 +184,7 @@ def validate_methodology(
             expected_profile = str(scenario.get("execution_profile", ""))
             profile_values = {str(row.get(EXECUTION_PROFILE, "")) for row in method_rows}
             if profile_values != {expected_profile}:
-                profile_conflicts.append(
-                    {SCENARIO_ID: scenario_id, METHOD_ID: method_id}
-                )
+                profile_conflicts.append({SCENARIO_ID: scenario_id, METHOD_ID: method_id})
 
     reason_codes: list[str] = []
     if duplicate_rows:

@@ -5,15 +5,15 @@ from __future__ import annotations
 import math
 import statistics
 from collections.abc import Mapping, Sequence
-from typing import Any, TypedDict, cast
+from typing import TypedDict, cast
 
 import pandas as pd
 
 from core.semantic_keys import (
     BATCH_KEY,
     ESTIMATE,
-    METHOD_ID,
     MCSE,
+    METHOD_ID,
     METRIC_ID,
     REPLICATION_ID,
     SCENARIO_ID,

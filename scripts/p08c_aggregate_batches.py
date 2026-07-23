@@ -1,5 +1,7 @@
 """P08C collector: validate active artifacts and compute policy-aware MCSE."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse
@@ -14,10 +16,8 @@ import pandas as pd
 
 from core.pipeline import load_run, mapping, sequence
 from core.semantic_keys import (
-    BATCH_KEY,
     METHOD_ID,
     METHOD_KEY,
-    METRIC_ID,
     SCENARIO_ID,
     SCENARIO_KEY,
 )
@@ -274,10 +274,7 @@ def _coordinates(item: dict[str, object]) -> dict[str, str]:
     raw = item.get("coordinates")
     if not isinstance(raw, dict):
         raise ValueError("artifact manifest coordinates required")
-    return {
-        str(key): str(value)
-        for key, value in cast(dict[object, object], raw).items()
-    }
+    return {str(key): str(value) for key, value in cast(dict[object, object], raw).items()}
 
 
 def _coordinate_key(coordinates: dict[str, str]) -> CoordinateKey:

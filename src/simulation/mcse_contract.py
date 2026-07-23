@@ -82,9 +82,7 @@ def compile_metric_policies(
         if role not in _ALLOWED_ROLES:
             raise ValueError(f"policy={policy_id}: unsupported role={role}")
         if undefined_policy not in _ALLOWED_UNDEFINED_POLICIES:
-            raise ValueError(
-                f"policy={policy_id}: unsupported undefined_policy={undefined_policy}"
-            )
+            raise ValueError(f"policy={policy_id}: unsupported undefined_policy={undefined_policy}")
         if target_rule not in _ALLOWED_TARGET_RULES:
             raise ValueError(f"policy={policy_id}: unsupported target_rule={target_rule}")
         if not isinstance(gate_required, bool):
@@ -94,9 +92,7 @@ def compile_metric_policies(
             or isinstance(finite_fraction, bool)
             or not 0.0 <= float(finite_fraction) <= 1.0
         ):
-            raise ValueError(
-                f"policy={policy_id}: minimum_finite_fraction must be in [0,1]"
-            )
+            raise ValueError(f"policy={policy_id}: minimum_finite_fraction must be in [0,1]")
         if role == "confirmatory":
             if not gate_required or undefined_policy != "forbid" or target_rule == "none":
                 raise ValueError(
@@ -173,9 +169,7 @@ def resolve_metric_policies(
         policy = resolve_metric_policy(metric_id, policies)
         resolved[metric_id] = policy
         role_counts[policy["role"]] += 1
-    gated_count = sum(
-        1 for policy in resolved.values() if policy["mcse_gate_required"] is True
-    )
+    gated_count = sum(1 for policy in resolved.values() if policy["mcse_gate_required"] is True)
     if not resolved:
         raise ValueError("P08 MCSE metric set must be nonempty")
     if gated_count < 1:

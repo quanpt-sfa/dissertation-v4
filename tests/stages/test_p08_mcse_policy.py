@@ -148,10 +148,7 @@ def test_undefined_diagnostic_metric_does_not_block_confirmatory_pass() -> None:
         policies,
         minimum=10,
     )
-    rows = {
-        str(item[METRIC_ID]): item
-        for item in cast(list[dict[str, object]], report["metrics"])
-    }
+    rows = {str(item[METRIC_ID]): item for item in cast(list[dict[str, object]], report["metrics"])}
 
     assert report["status"] == "PASS"
     assert report["precision_target_met"] is True
@@ -179,9 +176,7 @@ def test_undefined_confirmatory_metric_fails_at_replication_cap() -> None:
 
     assert report["status"] == "MAXIMUM_REACHED"
     assert report["precision_target_met"] is False
-    assert report["evidence_blockers"] == [
-        "scenario:method:latent_average_precision"
-    ]
+    assert report["evidence_blockers"] == ["scenario:method:latent_average_precision"]
 
 
 def test_worker_batch_requires_contiguous_aligned_replication_ids() -> None:
