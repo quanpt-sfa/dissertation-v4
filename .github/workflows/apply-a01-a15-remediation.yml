@@ -7,11 +7,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,15 +24,13 @@ jobs:
       - name: Capture registry validation
         run: |
           uv sync --all-extras
-          mkdir -p .github/diagnostics
+          mkdir -p artifacts/a01-a15
           set +e
-          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only > .github/diagnostics/a01_a15_validation.log 2>&1
-          echo "exit_code=$?" >> .github/diagnostics/a01_a15_validation.log
+          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only > artifacts/a01-a15/validation.log 2>&1
+          echo "exit_code=$?" >> artifacts/a01-a15/validation.log
           set -e
-      - name: Commit validation diagnostics
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/diagnostics/a01_a15_validation.log
-          git commit -m 'Capture audit remediation validation diagnostics' || exit 0
-          git push origin HEAD:agent/remediate-a01-a15-audit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a01-a15-validation
+          path: artifacts/a01-a15/validation.log
+          if-no-files-found: error
