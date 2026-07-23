@@ -11,15 +11,18 @@ import sys
 from pathlib import Path
 from typing import cast
 
-from core.pyright_ratchet import (
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from core.pyright_ratchet import (  # noqa: E402
     BaselineEntry,
+    Diagnostic,
     baseline_from_diagnostics,
     diagnostics_from_pyright,
     evaluate_ratchet,
     normalize_changed_files,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE = ROOT / "config" / "quality" / "pyright_baseline.json"
 
 
@@ -34,9 +37,9 @@ def main() -> int:
     args = parser.parse_args()
 
     diagnostics = _run_pyright()
-    baseline_path = _resolve(args.baseline)
-    if args.write_baseline:
-        generated_from = args.generated_from or _git_output("rev-parse", "HEAD")
+    baseline_path = _resolve(cast(Path, args.baseline))
+    if cast(bool, args.write_baseline):
+        generated_from = cast(str, args.generated_from) or _git_output("rev-parse", "HEAD")
         document = baseline_from_diagnostics(diagnostics, generated_from)
         _write_json(baseline_path, document)
         print(
@@ -49,20 +52,22 @@ def main() -> int:
         raise SystemExit(f"Pyright baseline is missing: {baseline_path}")
     baseline_document = cast(object, json.loads(baseline_path.read_text(encoding="utf-8")))
 
-    changed_paths = list(args.files)
-    if args.diff_base:
-        changed_paths.extend(_changed_files(args.diff_base))
+    changed_paths = list(cast(list[str], args.files))
+    diff_base = cast(str | None, args.diff_base)
+    if diff_base:
+        changed_paths.extend(_changed_files(diff_base))
     changed_files = normalize_changed_files(changed_paths, ROOT)
     result = evaluate_ratchet(diagnostics, baseline_document, changed_files)
 
     report = {
         "schema_version": 1,
-        "diff_base": args.diff_base,
+        "diff_base": diff_base,
         "changed_python_files": sorted(changed_files),
         **result,
     }
-    if args.report is not None:
-        _write_json(_resolve(args.report), report)
+    report_path = cast(Path | None, args.report)
+    if report_path is not None:
+        _write_json(_resolve(report_path), report)
 
     print(
         "Pyright ratchet: "
@@ -79,7 +84,7 @@ def main() -> int:
     return 0 if result["passed"] else 1
 
 
-def _run_pyright() -> list[dict[str, str]]:
+def _run_pyright() -> list[Diagnostic]:
     executable = shutil.which("pyright")
     if executable is None:
         raise SystemExit("pyright executable is not available")
