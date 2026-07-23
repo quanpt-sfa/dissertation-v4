@@ -240,7 +240,7 @@ def main() -> int:
         str(method.get(ANALYSIS_ROLE)) == "confirmatory"
         for scenario in scenario_by_id.values()
         for method in cast(list[dict[str, object]], scenario.get("method_registry", []))
-        if isinstance(method, dict) and method.get("is_active") is True
+        if method.get("is_active") is True
     )
     if must_complete and confirmatory and report.get("precision_target_met") is not True:
         report["status"] = "FAIL"
