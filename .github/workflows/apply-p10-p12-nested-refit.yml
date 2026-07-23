@@ -20,6 +20,7 @@ jobs:
       - run: uv run python .github/scripts/apply_p10_p12_nested_refit.py
       - run: uv run python .github/scripts/fix_p10_nested_seed.py
       - run: uv run python .github/scripts/fix_p10_nested_types.py
+      - run: uv run python .github/scripts/fix_p10_nested_types_round2.py
       - name: Format changed production files
         run: |
           uv run ruff format \
