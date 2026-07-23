@@ -1,34 +1,45 @@
 measurement:
-  primary_target_id: null
+  primary_target_id: L1_ANNUAL
   candidate_targets:
     L1_ANNUAL:
       sources:
       - S1_profit_adjustment
       - S1_revenue_adjustment
       - S2_audit_opinion
+      analytical_role: primary_annual_measurement
     S3_BROAD:
       sources:
       - S3_BROAD
+      analytical_role: descriptive_enforcement_boundary
+      temporal_role: next_calendar_year_regulatory_event
     S3_REPORTING:
       sources:
       - S3_REPORTING
+      analytical_role: enforcement_boundary
+      temporal_role: next_calendar_year_regulatory_event
     S3_CONTENT:
       sources:
       - S3_CONTENT
+      analytical_role: enforcement_boundary
+      temporal_role: next_calendar_year_regulatory_event
     S3_TIMELINESS:
       sources:
       - S3_TIMELINESS
+      analytical_role: enforcement_boundary
+      temporal_role: next_calendar_year_regulatory_event
     L1_REPORTING:
       sources:
       - S1_profit_adjustment
       - S1_revenue_adjustment
       - S2_audit_opinion
       - S3_REPORTING
+      analytical_role: legacy_composite_sensitivity_only
     L1_CONTENT_STRICT:
       sources:
       - S1_profit_adjustment
       - S1_revenue_adjustment
       - S3_CONTENT
+      analytical_role: legacy_composite_sensitivity_only
   roles:
     L0: single_source_benchmark
     L1: candidate_binary_aggregation
@@ -36,7 +47,6 @@ measurement:
     L3: measurement_sensitivity
   execution_tracks:
     mode: sequential_capability_gated
-    primary_target_id: L1_ANNUAL
     order:
     - L1_ANNUAL
     - L2
@@ -126,31 +136,33 @@ measurement:
       sanction_evidence: 1.0
     delay_half_life_days: 365
     channel_weights: equal
-  primary_source_set_id: primary_misstatement
-  primary_s3_endpoint: S3_CONTENT
+  primary_source_set_id: primary_annual_measurement
+  boundary_s3_endpoint: S3_CONTENT
   source_sets:
-    primary_misstatement:
+    primary_annual_measurement:
       role: primary_measurement
+      temporal_alignment: fiscal_year_annual_reporting
       sources:
       - S1_profit_adjustment
       - S1_revenue_adjustment
       - S2_audit_opinion
+    s3_content_boundary:
+      role: prospective_enforcement_boundary
+      temporal_alignment: next_calendar_year_regulatory_event
+      sources:
       - S3_CONTENT
-    reporting_sensitivity:
-      role: measurement_sensitivity
+    s3_reporting_boundary:
+      role: prospective_enforcement_boundary
+      temporal_alignment: next_calendar_year_regulatory_event
       sources:
-      - S1_profit_adjustment
-      - S1_revenue_adjustment
-      - S2_audit_opinion
       - S3_REPORTING
-    timeliness_sensitivity:
-      role: measurement_sensitivity
+    s3_timeliness_boundary:
+      role: prospective_enforcement_boundary
+      temporal_alignment: next_calendar_year_regulatory_event
       sources:
-      - S1_profit_adjustment
-      - S1_revenue_adjustment
-      - S2_audit_opinion
       - S3_TIMELINESS
-    broad_descriptive:
+    s3_broad_descriptive:
       role: descriptive_falsification_only
+      temporal_alignment: next_calendar_year_regulatory_event
       sources:
       - S3_BROAD
