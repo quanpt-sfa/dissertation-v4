@@ -32,19 +32,30 @@ def inject_snapshot(registry: dict[str, object], snapshot_path: Path) -> dict[st
         source_registry[source_id] = source
 
     data_sources = _mapping(registry.get("data_sources"), "data_sources")
+    protocol_source_registry = _mapping(
+        data_sources.get("source_registry"), "data_sources.source_registry"
+    )
     root_env = snapshot.get("root_environment_variable")
     if not isinstance(root_env, str):
         raise ValueError("snapshot.root_environment_variable required")
-    data_sources["source_registry"] = {
-        "root_environment_variable": root_env,
-        "schema_evolution_policy": "fail_on_unregistered_fields",
-        "hash_policy": "locked_sha256_required",
-        "snapshot_id": snapshot.get("snapshot_id"),
-        "snapshot_hash": snapshot.get("snapshot_hash"),
-        "snapshot_content_hash": snapshot.get("snapshot_content_hash")
-        or _legacy_content_hash(snapshot),
-        "sources": source_registry,
+
+    injected_registry: dict[str, object] = {
+        str(key): value for key, value in protocol_source_registry.items()
     }
+    injected_registry.update(
+        {
+            "root_environment_variable": root_env,
+            "schema_evolution_policy": "fail_on_unregistered_fields",
+            "hash_policy": "locked_sha256_required",
+            "snapshot_id": snapshot.get("snapshot_id"),
+            "snapshot_hash": snapshot.get("snapshot_hash"),
+            "snapshot_content_hash": snapshot.get("snapshot_content_hash")
+            or _legacy_content_hash(snapshot),
+            "extract_provenance": snapshot.get("extract_provenance", {}),
+            "sources": source_registry,
+        }
+    )
+    data_sources["source_registry"] = injected_registry
     registry["data_snapshot"] = snapshot
     return registry
 
