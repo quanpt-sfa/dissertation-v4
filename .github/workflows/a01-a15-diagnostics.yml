@@ -1,0 +1,29 @@
+name: A01-A15 diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - name: Capture Ruff diagnostics
+        run: |
+          mkdir -p artifacts/a01-a15
+          set +e
+          uv run ruff check . > artifacts/a01-a15/ruff.log 2>&1
+          echo "exit_code=$?" >> artifacts/a01-a15/ruff.log
+          set -e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a01-a15-ruff
+          path: artifacts/a01-a15/ruff.log
+          if-no-files-found: error
