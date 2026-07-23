@@ -17,9 +17,7 @@ def _settings() -> dict[str, object]:
         "posterior_grid_points": 500,
         "credible_interval_mass": 0.95,
         "wrong_fixed_pi_offset": 0.05,
-        "misspecification_regret_definition": (
-            "paired_excess_row_brier_relative_to_l3_correct"
-        ),
+        "misspecification_regret_definition": ("paired_excess_row_brier_relative_to_l3_correct"),
     }
 
 

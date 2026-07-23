@@ -97,8 +97,7 @@ L3_VARIANT_SPECS: dict[str, dict[str, object]] = {
     },
     "l3_wrong_fixed_pi": {
         "description": (
-            "Fixed-pi L3 misspecification using a prespecified incorrect "
-            "prevalence scenario."
+            "Fixed-pi L3 misspecification using a prespecified incorrect prevalence scenario."
         ),
         "chapter_2_role": "l3_fixed_pi_misspecification",
         "assumption_role": "misspecified",
@@ -322,7 +321,9 @@ def run_l3_variant_batch(
             "empirical_known_label_rate": float(
                 scenario.get(
                     "empirical_known_label_rate",
-                    np.mean([any(value is not None for value in row.values()) for row in source_rows]),
+                    np.mean(
+                        [any(value is not None for value in row.values()) for row in source_rows]
+                    ),
                 )
             ),
             "calibrated_latent_prevalence": true_prevalence,
@@ -514,9 +515,7 @@ def _pattern_probability(
         observation_probability = maturity_probability * (1.0 - q_anchor) * q_weak
     else:
         observation_probability = (
-            1.0
-            - maturity_probability
-            + maturity_probability * (1.0 - q_anchor) * (1.0 - q_weak)
+            1.0 - maturity_probability + maturity_probability * (1.0 - q_anchor) * (1.0 - q_weak)
         )
 
     return float(
@@ -575,9 +574,7 @@ def _l2_proxy(
 
 def _binary_log_loss(truth: np.ndarray, probability: np.ndarray) -> float:
     clipped = np.clip(probability, 1e-9, 1.0 - 1e-9)
-    return float(
-        -np.mean(truth * np.log(clipped) + (1.0 - truth) * np.log(1.0 - clipped))
-    )
+    return float(-np.mean(truth * np.log(clipped) + (1.0 - truth) * np.log(1.0 - clipped)))
 
 
 def _sample_variance(values: np.ndarray) -> float:
