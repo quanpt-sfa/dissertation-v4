@@ -14,14 +14,14 @@ import pandas as pd
 
 from core.pipeline import load_run, mapping, sequence
 from core.semantic_keys import (
+    BATCH_KEY,
     LEARNER_ID,
     METHOD_ID,
+    METHOD_KEY,
     METRIC_ID,
     REPLICATION_ID,
     SCENARIO_ID,
     SCENARIO_KEY,
-    METHOD_KEY,
-    BATCH_KEY,
 )
 from simulation.method_contract import (
     ANALYSIS_ROLE,
@@ -33,8 +33,8 @@ from simulation.method_contract import (
     profile_expected_counts,
     required_metric_ids,
 )
-from simulation.service import summarize_mcse
 from simulation.replication_contract import replication_plan as _replication_plan
+from simulation.service import summarize_mcse
 
 
 def main() -> int:
@@ -82,8 +82,7 @@ def main() -> int:
         if not isinstance(raw, dict):
             raise ValueError("simulation batch manifest coordinates required")
         coordinates = {
-            str(key): str(value)
-            for key, value in cast(dict[object, object], raw).items()
+            str(key): str(value) for key, value in cast(dict[object, object], raw).items()
         }
         value = loaded.context.read("simulation_batches", coordinates)
         if not isinstance(value, pd.DataFrame):
@@ -146,7 +145,11 @@ def main() -> int:
     # batch → diagnostics: interrupted write (batch exists, diagnostics missing).
     # diagnostics → batch: orphan artifact (should not happen, but detect anyway).
     diagnostics_coords: set[tuple[str, ...]] = {
-        tuple(sorted((str(k), str(v)) for k, v in cast(dict[object, object], item["coordinates"]).items()))
+        tuple(
+            sorted(
+                (str(k), str(v)) for k, v in cast(dict[object, object], item["coordinates"]).items()
+            )
+        )
         for item in inventory
         if item.get("artifact_id") == "model_diagnostics"
         and isinstance(item.get("coordinates"), dict)
@@ -209,25 +212,13 @@ def main() -> int:
         l3_pass_fail_mcse_maximum=float(l3["pass_fail_mcse_max"]),
         extended_minimum_replications=int(extended["minimum_replications"]),
         extended_maximum_replications=int(extended["maximum_replications"]),
-        extended_pass_fail_mcse_maximum=float(
-            extended["pass_fail_mcse_max"]
-        ),
-        cost_sensitive_minimum_replications=int(
-            cost_replication["minimum_replications"]
-        ),
-        cost_sensitive_maximum_replications=int(
-            cost_replication["maximum_replications"]
-        ),
-        cost_sensitive_pass_fail_mcse_maximum=float(
-            cost_replication["pass_fail_mcse_max"]
-        ),
-        cost_mcse_relative_fraction=float(
-            cost_settings["cost_mcse_relative_fraction"]
-        ),
+        extended_pass_fail_mcse_maximum=float(extended["pass_fail_mcse_max"]),
+        cost_sensitive_minimum_replications=int(cost_replication["minimum_replications"]),
+        cost_sensitive_maximum_replications=int(cost_replication["maximum_replications"]),
+        cost_sensitive_pass_fail_mcse_maximum=float(cost_replication["pass_fail_mcse_max"]),
+        cost_mcse_relative_fraction=float(cost_settings["cost_mcse_relative_fraction"]),
         continuous_mcse_fraction=float(
-            continuous[
-                "mcse_fraction_of_minimum_meaningful_improvement_max"
-            ]
+            continuous["mcse_fraction_of_minimum_meaningful_improvement_max"]
         ),
         minimum_meaningful_improvement=float(improvement["absolute"]),
     )
@@ -241,9 +232,7 @@ def main() -> int:
     report["batch_coordinates"] = coordinates_seen
     if methodology["status"] != "PASS":
         report["status"] = "FAIL"
-        report["reason_code"] = (
-            "P08_ACTIVE_PROFILE_OR_COST_METRIC_CONTRACT_INCOMPLETE"
-        )
+        report["reason_code"] = "P08_ACTIVE_PROFILE_OR_COST_METRIC_CONTRACT_INCOMPLETE"
         if args.check_only:
             print(f"P08_CONTROL_JSON={json.dumps(report, sort_keys=True)}")
         else:
@@ -260,9 +249,7 @@ def main() -> int:
         simulation.get("protocol_role"),
         "simulation.protocol_role",
     )
-    must_complete = bool(
-        protocol_role.get("must_complete_before_outer_test")
-    )
+    must_complete = bool(protocol_role.get("must_complete_before_outer_test"))
     confirmatory = False
     for scenario in scenario_by_id.values():
         if any(
@@ -275,9 +262,7 @@ def main() -> int:
 
     if must_complete and confirmatory:
         if report.get("mcse_status") == "CONTINUE":
-            raise RuntimeError(
-                "Final P08 aggregation reached while additional replications remain"
-            )
+            raise RuntimeError("Final P08 aggregation reached while additional replications remain")
 
         if report.get("precision_target_met") is not True:
             report["status"] = "FAIL"
@@ -306,9 +291,7 @@ def _filter_active_batches(
         scenario_values = set(batch[SCENARIO_ID].astype(str))
         method_values = set(batch[METHOD_ID].astype(str))
         if len(scenario_values) != 1 or len(method_values) != 1:
-            raise ValueError(
-                "Each simulation batch must contain exactly one scenario and method"
-            )
+            raise ValueError("Each simulation batch must contain exactly one scenario and method")
         scenario_id = next(iter(scenario_values))
         method_id = next(iter(method_values))
         scenario = scenario_by_id.get(scenario_id)
@@ -332,11 +315,7 @@ def _validate_methodology(
     if not isinstance(first_registry, list):
         raise ValueError("P08 scenario method_registry required")
     counts = profile_expected_counts(
-        [
-            cast(dict[str, object], item)
-            for item in first_registry
-            if isinstance(item, dict)
-        ],
+        [cast(dict[str, object], item) for item in first_registry if isinstance(item, dict)],
         active_only=True,
     )
     active_profile = str(first_scenario.get("execution_profile", ""))
@@ -396,9 +375,7 @@ def _validate_methodology(
         if not isinstance(raw_registry, list):
             raise ValueError(f"scenario={scenario_id}: method_registry required")
         registry = [
-            cast(dict[str, object], item)
-            for item in raw_registry
-            if isinstance(item, dict)
+            cast(dict[str, object], item) for item in raw_registry if isinstance(item, dict)
         ]
         expected_ids = active_method_ids(scenario)
         scenario_counts = profile_expected_counts(
@@ -406,23 +383,15 @@ def _validate_methodology(
             active_only=True,
         )
         if len(expected_ids) != int(scenario_counts["method_total"]):
-            raise ValueError(
-                f"scenario={scenario_id}: active method count mismatch"
-            )
+            raise ValueError(f"scenario={scenario_id}: active method count mismatch")
 
-        scenario_frame = combined.loc[
-            combined[SCENARIO_ID].astype(str) == scenario_id
-        ]
+        scenario_frame = combined.loc[combined[SCENARIO_ID].astype(str) == scenario_id]
         actual_ids = set(scenario_frame[METHOD_ID].astype(str))
 
         for method_id in sorted(expected_ids - actual_ids):
-            missing_methods.append(
-                {SCENARIO_ID: scenario_id, METHOD_ID: method_id}
-            )
+            missing_methods.append({SCENARIO_ID: scenario_id, METHOD_ID: method_id})
         for method_id in sorted(actual_ids - expected_ids):
-            unexpected_methods.append(
-                {SCENARIO_ID: scenario_id, METHOD_ID: method_id}
-            )
+            unexpected_methods.append({SCENARIO_ID: scenario_id, METHOD_ID: method_id})
 
         for method_id in sorted(expected_ids & actual_ids):
             spec = method_by_id(
@@ -430,13 +399,8 @@ def _validate_methodology(
                 method_id,
                 require_active=True,
             )
-            frame = scenario_frame.loc[
-                scenario_frame[METHOD_ID].astype(str) == method_id
-            ]
-            absent = sorted(
-                required_metric_ids(spec)
-                - set(frame[METRIC_ID].astype(str))
-            )
+            frame = scenario_frame.loc[scenario_frame[METHOD_ID].astype(str) == method_id]
+            absent = sorted(required_metric_ids(spec) - set(frame[METRIC_ID].astype(str)))
             if absent:
                 missing_metrics.append(
                     {
@@ -464,9 +428,7 @@ def _validate_methodology(
                             "field": field,
                         }
                     )
-            if set(frame[EXECUTION_PROFILE].astype(str)) != {
-                str(scenario["execution_profile"])
-            }:
+            if set(frame[EXECUTION_PROFILE].astype(str)) != {str(scenario["execution_profile"])}:
                 profile_conflicts.append(
                     {
                         SCENARIO_ID: scenario_id,

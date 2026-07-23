@@ -8,13 +8,11 @@ weights use feasible information only.
 from __future__ import annotations
 
 import inspect
-import threading
-from contextlib import contextmanager, nullcontext
 import math
-from collections.abc import Mapping, Sequence
-from typing import Any, Callable, cast
-
-from simulation.scenario_contract import validate_scenario_target_identity
+import threading
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import contextmanager, nullcontext
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -58,6 +56,7 @@ from simulation.method_contract import (
     review_budgets,
     threshold_cost_metric_id,
 )
+from simulation.scenario_contract import validate_scenario_target_identity
 
 _REQUIRED = {
     SCENARIO_ID,
@@ -79,6 +78,7 @@ _REQUIRED = {
     "shift_strength",
     "signal_structure",
 }
+
 
 def validate_scenarios(raw: Sequence[object]) -> list[dict[str, Any]]:
     """Validate only explicitly registered operational scenarios."""
@@ -201,7 +201,6 @@ def attach_development_covariate_pools(
         )
         output.append(bound)
     return output
-
 
 
 class DiagnosticCollector:
@@ -338,12 +337,14 @@ def run_batch(
             )
 
     if diagnostics is not None and collector is not None:
-        diagnostics.update({
-            "fit_failures": collector.fit_failures,
-            "resampling_failures": collector.resampling_failures,
-            "warnings": collector.model_warnings,
-            "affected_replication_ids": sorted(list(collector.affected_replication_ids)),
-        })
+        diagnostics.update(
+            {
+                "fit_failures": collector.fit_failures,
+                "resampling_failures": collector.resampling_failures,
+                "warnings": collector.model_warnings,
+                "affected_replication_ids": sorted(list(collector.affected_replication_ids)),
+            }
+        )
 
     return pd.DataFrame(rows).astype(
         {
@@ -389,9 +390,7 @@ def _generate_replication(
         rng=rng,
     )
 
-    content = _content_signal(
-        scenario, latent, n, rng, base_covariates=empirical_base
-    )
+    content = _content_signal(scenario, latent, n, rng, base_covariates=empirical_base)
     standardized_content = (content - content.mean()) / max(content.std(), 1e-12)
     selective = float(scenario.get("selective_verification_strength", 0.0))
     observable_risk = 1.0 / (1.0 + np.exp(-standardized_content))
@@ -415,18 +414,14 @@ def _generate_replication(
     anchor_values = np.asarray(
         [
             bool(value) if observed and is_mature else None
-            for value, observed, is_mature in zip(
-                anchor, anchor_observed, mature, strict=True
-            )
+            for value, observed, is_mature in zip(anchor, anchor_observed, mature, strict=True)
         ],
         dtype=object,
     )
     weak_values = np.asarray(
         [
             bool(value) if observed and is_mature else None
-            for value, observed, is_mature in zip(
-                weak, weak_observed, mature, strict=True
-            )
+            for value, observed, is_mature in zip(weak, weak_observed, mature, strict=True)
         ],
         dtype=object,
     )
@@ -550,12 +545,8 @@ def _run_predictive_method(
         "source_training_rows": float(fit_result["source_training_rows"]),
         "training_rows": float(fit_result["training_rows"]),
         "training_positive_rate": float(fit_result["training_positive_rate"]),
-        "post_resampling_positive_rate": float(
-            fit_result["post_resampling_positive_rate"]
-        ),
-        "imbalance_treatment_applied": float(
-            fit_result["imbalance_treatment_applied"]
-        ),
+        "post_resampling_positive_rate": float(fit_result["post_resampling_positive_rate"]),
+        "imbalance_treatment_applied": float(fit_result["imbalance_treatment_applied"]),
         "synthetic_rows_added": float(fit_result["synthetic_rows_added"]),
         "selected_threshold": threshold,
         "threshold_selection_success": float(fit_result["threshold_selection_success"]),
@@ -598,9 +589,7 @@ def _run_predictive_method(
             "false_positive_component",
             "review_component",
         ):
-            estimates[threshold_cost_metric_id(regime_id, metric)] = float(
-                threshold_cost[metric]
-            )
+            estimates[threshold_cost_metric_id(regime_id, metric)] = float(threshold_cost[metric])
 
         for budget in review_budgets(scenario):
             budget_id = str(budget["review_budget_id"])
@@ -643,9 +632,7 @@ def _fit_strategy_with_cost(
             "threshold_validation_fraction"
         ]
     )
-    fit_positions, validation_positions = _validation_split(
-        len(x_train), validation_fraction, rng
-    )
+    fit_positions, validation_positions = _validation_split(len(x_train), validation_fraction, rng)
     ipw_all = (
         _verification_weights(x_train, verified, np.arange(len(x_train)), rng)
         if strategy_id == "ipw"
@@ -719,9 +706,7 @@ def _fit_strategy_with_cost(
         "source_training_rows": source_training_rows,
         "training_rows": training_rows,
         "training_positive_rate": positive_rate,
-        "post_resampling_positive_rate": float(
-            resampling_stats["post_resampling_positive_rate"]
-        ),
+        "post_resampling_positive_rate": float(resampling_stats["post_resampling_positive_rate"]),
         "imbalance_treatment_applied": float(resampling_stats["applied"]),
         "synthetic_rows_added": float(resampling_stats["synthetic_rows_added"]),
         "selected_threshold": threshold,
@@ -768,9 +753,7 @@ def _fit_for_subset(
             positive_indices=positive,
             unlabeled_indices=unlabeled,
             bags=int(scenario.get("pu_bags", 5)),
-            unlabeled_to_positive_ratio=float(
-                scenario.get("pu_unlabeled_to_positive_ratio", 1.0)
-            ),
+            unlabeled_to_positive_ratio=float(scenario.get("pu_unlabeled_to_positive_ratio", 1.0)),
             training_cost=training_cost,
             scenario=scenario,
             rng=rng,
@@ -818,9 +801,7 @@ def _fit_for_subset(
         selection_weights=selection_weights,
         cost_regime=training_cost,
         maximum_cost_weight=float(
-            cast(dict[str, object], scenario["cost_sensitive_settings"])[
-                "maximum_cost_weight"
-            ]
+            cast(dict[str, object], scenario["cost_sensitive_settings"])["maximum_cost_weight"]
         ),
     )
     scores, success, diag = _fit_and_predict(
@@ -833,6 +814,7 @@ def _fit_for_subset(
     )
     if success == 0.0:
         import sys
+
         print(f"Learner fit failure ({learner_id}): {diag}", file=sys.stderr, flush=True)
     success = min(float(success), float(resampling_success))
     stats = _weight_stats(cost_weights)
@@ -904,9 +886,7 @@ def _apply_imbalance_treatment(
     stats = {
         "applied": 1.0,
         "synthetic_rows_added": float(added),
-        "post_resampling_positive_rate": float(resampled_y.mean())
-        if len(resampled_y)
-        else 0.0,
+        "post_resampling_positive_rate": float(resampled_y.mean()) if len(resampled_y) else 0.0,
     }
     return (
         np.asarray(resampled_x, dtype=float),
@@ -915,6 +895,7 @@ def _apply_imbalance_treatment(
         stats,
         1.0,
     )
+
 
 def _supervised_training_view(
     *,
@@ -1012,10 +993,14 @@ def _fit_and_predict(
     fallback_scores = np.full(len(x_test), fallback, dtype=float)
     if len(y_train) < 10 or len(np.unique(y_train)) < 2:
         record_fit_failure("InsufficientData")
-        return fallback_scores, 0.0, {
-            "failure_type": "InsufficientData",
-            "failure_message": "len(y_train) < 10 or unique < 2",
-        }
+        return (
+            fallback_scores,
+            0.0,
+            {
+                "failure_type": "InsufficientData",
+                "failure_message": "len(y_train) < 10 or unique < 2",
+            },
+        )
     random_state = int(rng.integers(0, 2**31 - 1))
     try:
         estimator = _learner(learner_id, random_state)
@@ -1026,10 +1011,11 @@ def _fit_and_predict(
             fit_y = y_train[sampled]
             fit_weight = None
         import warnings as _w
+
         with _w.catch_warnings(record=True) as captured_warnings:
             _w.simplefilter("always")
             _fit_estimator(estimator, fit_x, fit_y, fit_weight)
-        for w in (captured_warnings or []):
+        for w in captured_warnings or []:
             record_model_warning(w.category.__name__)
         scores = _predict_scores(estimator, x_test)
         if not np.all(np.isfinite(scores)):
@@ -1037,10 +1023,14 @@ def _fit_and_predict(
         return np.clip(scores, 0.0, 1.0), 1.0, {}
     except (ValueError, FloatingPointError) as exc:
         record_fit_failure(type(exc).__name__)
-        return fallback_scores, 0.0, {
-            "failure_type": type(exc).__name__,
-            "failure_message": str(exc)[:500],
-        }
+        return (
+            fallback_scores,
+            0.0,
+            {
+                "failure_type": type(exc).__name__,
+                "failure_message": str(exc)[:500],
+            },
+        )
 
 
 def _fit_pu_ensemble_cost_sensitive(
@@ -1091,9 +1081,7 @@ def _fit_pu_ensemble_cost_sensitive(
             selection_weights=np.ones(len(y)),
             cost_regime=training_cost,
             maximum_cost_weight=float(
-                cast(dict[str, object], scenario["cost_sensitive_settings"])[
-                    "maximum_cost_weight"
-                ]
+                cast(dict[str, object], scenario["cost_sensitive_settings"])["maximum_cost_weight"]
             ),
         )
         scores, success, diag = _fit_and_predict(
@@ -1106,6 +1094,7 @@ def _fit_pu_ensemble_cost_sensitive(
         )
         if success == 0.0:
             import sys
+
             print(f"PU bag learner fit failure ({learner_id}): {diag}", file=sys.stderr, flush=True)
         if success == 1.0:
             bag_scores.append(scores)
@@ -1193,9 +1182,7 @@ def _select_cost_threshold(
 
 
 def _bayes_cost_threshold(cost_regime: Mapping[str, object]) -> float:
-    numerator = float(cost_regime["false_positive_cost"]) + float(
-        cost_regime["review_cost"]
-    )
+    numerator = float(cost_regime["false_positive_cost"]) + float(cost_regime["review_cost"])
     denominator = (
         float(cost_regime["false_positive_cost"])
         + float(cost_regime["false_negative_cost"])
@@ -1269,9 +1256,8 @@ def _oracle_unconstrained_cost(
     )
     positive_count = int(np.sum(truth))
     negative_count = len(truth) - positive_count
-    return (
-        positive_count * min(positive_review_cost, positive_skip_cost)
-        + negative_count * min(negative_review_cost, 0.0)
+    return positive_count * min(positive_review_cost, positive_skip_cost) + negative_count * min(
+        negative_review_cost, 0.0
     )
 
 
@@ -1297,8 +1283,7 @@ def _budget_cost(
         float(cost_regime["false_negative_cost"])
         - float(cost_regime["review_cost"])
         + float(cost_regime["true_positive_benefit"]),
-        -float(cost_regime["review_cost"])
-        - float(cost_regime["false_positive_cost"]),
+        -float(cost_regime["review_cost"]) - float(cost_regime["false_positive_cost"]),
     )
     oracle_order = np.argsort(-review_savings, kind="stable")
     oracle_predicted = np.zeros(len(truth), dtype=bool)
@@ -1339,6 +1324,7 @@ def _primary_review_budget(scenario: Mapping[str, object]) -> dict[str, object]:
     if len(matches) != 1:
         raise ValueError("primary review budget must be registered exactly once")
     return matches[0]
+
 
 def _learner(learner_id: str, random_state: int) -> object:
     if learner_id == "logistic_regression":
@@ -1457,6 +1443,7 @@ def _learner(learner_id: str, random_state: int) -> object:
         )
     if learner_id == "xgboost":
         from xgboost import XGBClassifier
+
         return XGBClassifier(
             n_estimators=60,
             max_depth=4,
@@ -1469,6 +1456,7 @@ def _learner(learner_id: str, random_state: int) -> object:
         )
     if learner_id == "lightgbm":
         from lightgbm import LGBMClassifier
+
         return LGBMClassifier(
             n_estimators=60,
             learning_rate=0.05,
@@ -1479,6 +1467,7 @@ def _learner(learner_id: str, random_state: int) -> object:
         )
     if learner_id == "catboost":
         from catboost import CatBoostClassifier
+
         return CatBoostClassifier(
             iterations=60,
             depth=5,
@@ -1629,7 +1618,6 @@ def _partial_identification_bounds(
     return (lower + upper) / 2.0, lower, upper
 
 
-
 def summarize_mcse(
     batches: Sequence[pd.DataFrame],
     *,
@@ -1667,9 +1655,21 @@ def summarize_mcse(
         standard_deviation = float(frame[ESTIMATE].std(ddof=1)) if count > 1 else 0.0
         metric_name = str(metric_id)
         is_standalone = metric_name.startswith("prevalence_") or metric_name == "interval_width"
-        learner_tiers = set(frame["learner_tier"].dropna().astype(str)) if "learner_tier" in frame.columns else set()
-        training_costs = set(frame["training_cost_regime_id"].dropna().astype(str)) if "training_cost_regime_id" in frame.columns else set()
-        treatments = set(frame["imbalance_treatment_id"].dropna().astype(str)) if "imbalance_treatment_id" in frame.columns else set()
+        learner_tiers = (
+            set(frame["learner_tier"].dropna().astype(str))
+            if "learner_tier" in frame.columns
+            else set()
+        )
+        training_costs = (
+            set(frame["training_cost_regime_id"].dropna().astype(str))
+            if "training_cost_regime_id" in frame.columns
+            else set()
+        )
+        treatments = (
+            set(frame["imbalance_treatment_id"].dropna().astype(str))
+            if "imbalance_treatment_id" in frame.columns
+            else set()
+        )
         if len(learner_tiers) > 1 or len(training_costs) > 1 or len(treatments) > 1:
             raise ValueError(f"scenario={scenario_id}, method={method_id}: mixed method metadata")
         is_imbalance_robustness = treatments not in (set(), {"none"}, {"not_applicable"})
@@ -1815,6 +1815,7 @@ def _mcse_gate_required(metric_id: str) -> bool:
     )
     return not any(fragment in metric_id for fragment in descriptive_fragments)
 
+
 def _feature_matrix(
     *,
     scenario: Mapping[str, Any],
@@ -1861,9 +1862,7 @@ def _feature_matrix(
     )
     matrix = np.column_stack([engineered, base])
     if matrix.shape[1] < requested:
-        matrix = np.column_stack(
-            [matrix, rng.normal(size=(n, requested - matrix.shape[1]))]
-        )
+        matrix = np.column_stack([matrix, rng.normal(size=(n, requested - matrix.shape[1]))])
     return matrix[:, :requested].astype(float)
 
 
@@ -1931,9 +1930,7 @@ def _replication_empirical_covariates(
         raise ValueError("semi-synthetic scenario requires a locked P02-aligned pool")
     pool = np.asarray(raw_pool, dtype=float)
     if len(pool) != sample_size:
-        raise ValueError(
-            "scenario sample_size must equal the exact P02 development population"
-        )
+        raise ValueError("scenario sample_size must equal the exact P02 development population")
     return pool[rng.permutation(sample_size)]
 
 

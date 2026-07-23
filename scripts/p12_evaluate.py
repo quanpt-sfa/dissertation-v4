@@ -15,6 +15,7 @@ from core.fold_control import require_primary_target
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.rng import generator
 from core.semantic_keys import OUTER_FOLD
+from evaluation.pairing import validate_paired_prediction_keys
 from evaluation.service import build_latent_risk_scenarios, evaluate_outer_fold
 
 
@@ -61,6 +62,8 @@ def main() -> int:
     outcomes = loaded.context.read("sealed_outcome_store", {})
     if not all(isinstance(value, pd.DataFrame) for value in (oof, predictions, outcomes)):
         raise ValueError("P12 prediction and outcome inputs must be DataFrames")
+    columns = physical_columns(loaded.registry)
+    pairing_audit = validate_paired_prediction_keys(cast(pd.DataFrame, predictions), columns)
     evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
     review_budget = mapping(evaluation.get("review_budget"), "evaluation.review_budget")
     utility = mapping(loaded.registry.get("utility"), "utility")
@@ -93,7 +96,7 @@ def main() -> int:
         utility_scenarios=scenarios,
         bootstrap_replications=int(bootstrap["replications"]),
         confidence_level=float(bootstrap["confidence_level"]),
-        columns=physical_columns(loaded.registry),
+        columns=columns,
         rng=generator(loaded.protocol_hash, "P12", coordinates, "firm_bootstrap"),
         oof_training_targets=[
             mapping(item, "OOF training target")
@@ -110,13 +113,15 @@ def main() -> int:
             }
         ),
     )
+    result.metrics["pairing_audit"] = pairing_audit
     loaded.context.write("calibration_outputs", result.calibration, coordinates)
     loaded.context.write("evaluation_metrics", result.metrics, coordinates)
     loaded.context.write("bootstrap_batches", result.bootstrap, coordinates)
     loaded.context.write("utility_scenarios", result.utility, coordinates)
     print(
         f"P12 status=PASS fold={args.outer_fold} "
-        f"models={len(sequence(result.metrics['models'], 'evaluation models'))}"
+        f"models={len(sequence(result.metrics['models'], 'evaluation models'))} "
+        f"pairs={pairing_audit['pair_count']}"
     )
     return 0
 

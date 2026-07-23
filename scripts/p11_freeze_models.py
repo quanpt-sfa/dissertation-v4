@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -52,7 +52,9 @@ def _combine_fits(
             "oof_training_targets": target_rows,
         },
         oof_predictions=pd.concat(oof_frames, ignore_index=True) if oof_frames else pd.DataFrame(),
-        outer_predictions=pd.concat(outer_frames, ignore_index=True) if outer_frames else pd.DataFrame(),
+        outer_predictions=pd.concat(outer_frames, ignore_index=True)
+        if outer_frames
+        else pd.DataFrame(),
     )
 
 
@@ -150,7 +152,9 @@ def main() -> int:
         maximum_valid_configurations=maximum_configurations,
     )
     fits = [track_l1]
-    track_statuses: dict[str, str] = {str(primary_track["track_id"]): str(track_l1.models["status"])}
+    track_statuses: dict[str, str] = {
+        str(primary_track["track_id"]): str(track_l1.models["status"])
+    }
 
     optional_learners = [
         value for value in learner_ids if value in {"elastic_net_logistic", "main_boosting"}
@@ -213,7 +217,9 @@ def main() -> int:
             pu_results.append(
                 fit_anchor_pu_fold(
                     feature_panel=cast(pd.DataFrame, panel),
-                    feature_registry=[mapping(item, "feature registry item") for item in feature_registry],
+                    feature_registry=[
+                        mapping(item, "feature registry item") for item in feature_registry
+                    ],
                     label_inputs=cast(pd.DataFrame, inputs),
                     weights=cast(pd.DataFrame, weights),
                     anchor_source_id=str(anchor_source_id),

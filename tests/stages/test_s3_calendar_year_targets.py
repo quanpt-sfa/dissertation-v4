@@ -12,7 +12,6 @@ from core.fold_control import require_primary_target
 from core.pipeline import physical_columns
 from core.registry_compiler import compile_registry
 from core.semantic_keys import (
-    AFFECTED_FISCAL_YEAR,
     ANNUAL_MEASUREMENT_MATURE,
     AVAILABILITY_DATE,
     CHANNEL_ID,
@@ -482,7 +481,7 @@ def test_missing_primary_target_blocks_confirmatory_production() -> None:
 
 
 def test_resolve_sanction_year_precedence() -> None:
-    from core.semantic_keys import SANCTION_YEAR, DECISION_DATE, PUBLISH_DATE, TARGET_FISCAL_YEAR
+    from core.semantic_keys import DECISION_DATE, PUBLISH_DATE, TARGET_FISCAL_YEAR
 
     # Case 1: All fields populated -> sanction_year
     row1 = SanctionDecisionInput(
@@ -539,15 +538,16 @@ def test_resolve_sanction_year_precedence() -> None:
 
 def test_sanction_rows_parser_with_target_fiscal_year(tmp_path: Path) -> None:
     import importlib.util
-    from p01.models import SourceSpec
-    from p02.models import EntityResolutionSpec
+
     from core.semantic_keys import (
-        FIRM_ID,
         DOCUMENT_ID,
-        ROW_INCLUSION,
+        FIRM_ID,
         HARD_POSITIVE,
+        ROW_INCLUSION,
         TARGET_FISCAL_YEAR,
     )
+    from p01.models import SourceSpec
+    from p02.models import EntityResolutionSpec
 
     path = ROOT / "scripts" / "p03_evidence_ledger.py"
     spec_location = importlib.util.spec_from_file_location("test_p03_script", path)
@@ -559,8 +559,7 @@ def test_sanction_rows_parser_with_target_fiscal_year(tmp_path: Path) -> None:
     # Write temporary CSV file
     csv_file = tmp_path / "test_sanctions.csv"
     csv_file.write_text(
-        "ticker,doc_id,include_flag,positive_flag,target_year\n"
-        "AAA,DOC-100,1,1,2019\n",
+        "ticker,doc_id,include_flag,positive_flag,target_year\nAAA,DOC-100,1,1,2019\n",
         encoding="utf-8",
     )
 
@@ -621,7 +620,7 @@ def test_sanction_rows_parser_with_target_fiscal_year(tmp_path: Path) -> None:
                 "key_unique": False,
                 "row_count_min": 1,
             },
-        }
+        },
     )
 
     semantics = {
@@ -655,6 +654,7 @@ def test_decision_date_precedes_target_fiscal_year_fallback() -> None:
     )
 
     from core.semantic_keys import DECISION_DATE
+
     assert resolve_sanction_year(row) == (2024, DECISION_DATE)
     assert target_fiscal_year(row) == 2023
 
@@ -667,6 +667,7 @@ def test_target_fiscal_year_is_final_fallback() -> None:
     )
 
     from core.semantic_keys import TARGET_FISCAL_YEAR
+
     assert resolve_sanction_year(row) == (2020, TARGET_FISCAL_YEAR)
     assert target_fiscal_year(row) == 2019
 
@@ -692,4 +693,3 @@ def test_excluded_unresolved_decision_does_not_contaminate_firm_years() -> None:
     assert all(record.outcome is False for record in records.values())
     assert result.audit["unresolved_sanction_year_mapping_count"] == 0
     assert result.audit["excluded_source_rule_mapping_count"] == 1
-

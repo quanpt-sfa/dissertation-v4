@@ -146,8 +146,7 @@ def validate_source_patterns(
             tree = ast.parse(text, filename=relative)
         except SyntaxError as exc:
             violations.append(
-                f"source={relative}: Python syntax error at line={exc.lineno} "
-                f"offset={exc.offset}"
+                f"source={relative}: Python syntax error at line={exc.lineno} offset={exc.offset}"
             )
             continue
 
@@ -168,8 +167,7 @@ def validate_source_patterns(
         copied_paths = sorted(artifact_paths & literals)
         if copied_paths:
             violations.append(
-                f"source={relative}: registered artifact paths copied into source: "
-                f"{copied_paths}"
+                f"source={relative}: registered artifact paths copied into source: {copied_paths}"
             )
 
         if relative not in REPOSITORY_MAINTENANCE_SCRIPTS:

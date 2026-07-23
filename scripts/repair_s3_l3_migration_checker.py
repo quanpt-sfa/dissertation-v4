@@ -64,9 +64,7 @@ def _repair(path: Path, *, apply: bool) -> dict[str, bool]:
     )
 
     old_allowed = '        "    allowed = set(allowed_source_ids)\\n"\n'
-    new_allowed = (
-        '        "    allowed = set(sources) if allowed_source_ids is None else set(allowed_source_ids)\\n"\n'
-    )
+    new_allowed = '        "    allowed = set(sources) if allowed_source_ids is None else set(allowed_source_ids)\\n"\n'
     text, allowed_changed = _replace_once(
         text,
         old_allowed,

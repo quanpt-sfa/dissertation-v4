@@ -56,17 +56,17 @@ def _repair_measurement_profiles(path: Path, *, apply: bool) -> bool:
 
     # The migration creates two similar comprehensions at different indentation
     # levels. Both must tolerate source_profiles=None or partial profile maps.
-    config_old = '''        source_profiles={
+    config_old = """        source_profiles={
             source_id: (source_profiles or {})[source_id]
             for source_id in primary_source_ids
         },
-'''
-    config_new = '''        source_profiles={
+"""
+    config_new = """        source_profiles={
             source_id: (source_profiles or {})[source_id]
             for source_id in primary_source_ids
             if source_id in (source_profiles or {})
         },
-'''
+"""
     text, changed_config = _replace_remaining_once(
         text,
         config_old,
@@ -74,17 +74,17 @@ def _repair_measurement_profiles(path: Path, *, apply: bool) -> bool:
         "optional source-profile filtering in L2 configuration",
     )
 
-    score_old = '''            source_profiles={
+    score_old = """            source_profiles={
                 source_id: (source_profiles or {})[source_id]
                 for source_id in primary_source_ids
             },
-'''
-    score_new = '''            source_profiles={
+"""
+    score_new = """            source_profiles={
                 source_id: (source_profiles or {})[source_id]
                 for source_id in primary_source_ids
                 if source_id in (source_profiles or {})
             },
-'''
+"""
     text, changed_score = _replace_remaining_once(
         text,
         score_old,
@@ -97,20 +97,20 @@ def _repair_measurement_profiles(path: Path, *, apply: bool) -> bool:
 
 def _repair_l3_binding_signature(path: Path, *, apply: bool) -> bool:
     text = _read(path)
-    old_signature = '''def _l3_bindings(
+    old_signature = """def _l3_bindings(
     *,
     registry: dict[str, object],
     priors_by_profile: dict[str, Any],
     allowed_source_ids: list[str],
 ) -> tuple[dict[str, str], dict[str, dict[str, float]]]:
-'''
-    new_signature = '''def _l3_bindings(
+"""
+    new_signature = """def _l3_bindings(
     *,
     registry: dict[str, object],
     priors_by_profile: dict[str, Any],
     allowed_source_ids: list[str] | None = None,
 ) -> tuple[dict[str, str], dict[str, dict[str, float]]]:
-'''
+"""
     text, changed_signature = _replace_once(
         text,
         old_signature,

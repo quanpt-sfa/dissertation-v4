@@ -1,0 +1,1700 @@
+{
+  "diagnostics": [
+    {
+      "count": 1,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "scripts/apply_s3_l3_production_hardening.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"setdefault\" is partially unknown Type of \"setdefault\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown]\"",
+      "path": "scripts/apply_s3_l3_production_hardening.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"update\" is unknown",
+      "path": "scripts/apply_s3_l3_production_hardening.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"measurement\" is unknown",
+      "path": "scripts/apply_s3_l3_production_hardening.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"semantics\" is unknown",
+      "path": "scripts/apply_s3_l3_production_hardening.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "\"_snapshot_content_hash\" is private and used outside of the module in which it is declared",
+      "path": "scripts/create_data_snapshot.py",
+      "rule": "reportPrivateUsage"
+    },
+    {
+      "count": 1,
+      "message": "\"_snapshot_hash\" is private and used outside of the module in which it is declared",
+      "path": "scripts/create_data_snapshot.py",
+      "rule": "reportPrivateUsage"
+    },
+    {
+      "count": 7,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "scripts/create_data_snapshot.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"adjustment\" is partially unknown Type of \"adjustment\" is \"Unknown | None\"",
+      "path": "scripts/create_data_snapshot.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"evidence\" is partially unknown Type of \"evidence\" is \"Unknown | None\"",
+      "path": "scripts/create_data_snapshot.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"iterable\" in function \"__init__\" Argument type is \"dict[Unknown, Unknown]\"",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"x\" in function \"__new__\" Argument type is \"Unknown | Literal[0]\"",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is unknown Argument corresponds to parameter \"object\" in function \"__new__\"",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is unknown Argument corresponds to parameter \"x\" in function \"__new__\"",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 11,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 2,
+      "message": "Return type, \"dict[Unknown, Unknown]\", is partially unknown",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Return type, \"tuple[list[float], dict[str, dict[str, float]], dict[Unknown, Unknown]]\", is partially unknown",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"l3_model\" is partially unknown Type of \"l3_model\" is \"Unknown | None\"",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"operational\" is unknown",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"primary\" is partially unknown Type of \"primary\" is \"Unknown | None\"",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"raw\" is unknown",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"source_set_id\" is partially unknown Type of \"source_set_id\" is \"Unknown | None\"",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"source_sets\" is partially unknown Type of \"source_sets\" is \"Unknown | None\"",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"value\" is unknown",
+      "path": "scripts/lock_l3_parameters.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"iterable\" in function \"__init__\" Argument type is \"Sequence[Unknown]\"",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"kwargs\" in function \"format\"",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 3,
+      "message": "Argument type is unknown Argument corresponds to parameter \"object\" in function \"__new__\"",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 3,
+      "message": "Type of \"append\" is partially unknown Type of \"append\" is \"(object: Unknown, /) -> None\"",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"art_id\" is unknown",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"c\" is unknown",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"coords\" is unknown",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"item\" is unknown",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"key\" is unknown",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"length\" is unknown",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"path\" is unknown",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"path_template\" is partially unknown Type of \"path_template\" is \"Unknown | None\"",
+      "path": "scripts/p00_lock_protocol.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 3,
+      "message": "Argument of type \"LiteralString\" cannot be assigned to parameter \"key\" of type \"bytes\" in function \"get\" \"str\" is not assignable to \"bytes\"",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 6,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 6,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present ...",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"tuple[str, ...]\" cannot be assigned to parameter \"iterable\" of type \"Iterable[list[bytes]]\" in function \"__init__\" \"tuple[str, ...]\" is not assignable to \"Iterable[list[bytes]]\" Type parameter \"_T_co@Iterable\" is covariant, but \"str\" is not a subtype of \"list[bytes]\" \"str\" is not assignable to \"list[bytes]\"",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"tuple[tuple[str, str], ...]\" cannot be assigned to parameter \"element\" of type \"tuple[str, ...]\" in function \"add\" \"tuple[tuple[str, str], ...]\" is not assignable to \"tuple[str, ...]\" Tuple entry 1 is incorrect type \"tuple[str, str]\" is not assignable to \"str\"",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Cannot access attribute \"context\" for class \"object\" Attribute \"context\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 1,
+      "message": "No overloads for \"__init__\" match the provided arguments",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportCallIssue"
+    },
+    {
+      "count": 3,
+      "message": "No overloads for \"get\" match the provided arguments",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportCallIssue"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"key\" in function \"get\" Argument type is \"tuple[Unknown, Unknown]\"",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"iterable\" in function \"__init__\"",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "Argument type is unknown Argument corresponds to parameter \"object\" in function \"__new__\"",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"x\" in function \"__new__\"",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"context\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"get\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"inventory\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"removeprefix\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"store\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"batch_key\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"inventory\" is partially unknown Type of \"inventory\" is \"list[Unknown]\"",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"item\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"k\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"key\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"mk\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"raw\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"sk\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"v\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"value\" is unknown",
+      "path": "scripts/p08_profiled_orchestrator.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"iterable\" of type \"Iterable[_T@list]\" in function \"__init__\" \"object\" is incompatible with protocol \"Iterable[_T@list]\" \"__iter__\" is not present",
+      "path": "scripts/p08a_build_scenario_registry.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "\"object\" is not iterable \"__iter__\" method not defined",
+      "path": "scripts/p08a_build_scenario_registry.py",
+      "rule": "reportGeneralTypeIssues"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"source_channel_matrices\" in function \"attach_empirical_panel_calibration\" Argument type is \"dict[Unknown, Unknown]\"",
+      "path": "scripts/p08a_build_scenario_registry.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "Argument type is unknown Argument corresponds to parameter \"map\" in function \"__init__\"",
+      "path": "scripts/p08a_build_scenario_registry.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"append\" is partially unknown Type of \"append\" is \"(object: Unknown, /) -> None\"",
+      "path": "scripts/p08a_build_scenario_registry.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 4,
+      "message": "Type of \"value\" is unknown",
+      "path": "scripts/p08a_build_scenario_registry.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Unnecessary isinstance call; \"DataFrame\" is always an instance of \"DataFrame\"",
+      "path": "scripts/p08b_run_batch.py",
+      "rule": "reportUnnecessaryIsInstance"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present",
+      "path": "scripts/p08c_aggregate_batches.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present ...",
+      "path": "scripts/p08c_aggregate_batches.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument of type \"tuple[str, ...]\" cannot be assigned to parameter \"iterable\" of type \"Iterable[list[bytes]]\" in function \"__init__\" \"tuple[str, ...]\" is not assignable to \"Iterable[list[bytes]]\" Type parameter \"_T_co@Iterable\" is covariant, but \"str\" is not a subtype of \"list[bytes]\" \"str\" is not assignable to \"list[bytes]\"",
+      "path": "scripts/p08c_aggregate_batches.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Type \"set[tuple[tuple[str, str], ...]]\" is not assignable to declared type \"set[tuple[str, ...]]\"",
+      "path": "scripts/p08c_aggregate_batches.py",
+      "rule": "reportAssignmentType"
+    },
+    {
+      "count": 2,
+      "message": "No overloads for \"__init__\" match the provided arguments",
+      "path": "scripts/p08c_aggregate_batches.py",
+      "rule": "reportCallIssue"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"item\" is unknown",
+      "path": "scripts/p08c_aggregate_batches.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"obj\" of type \"Scalar | NaTType | NAType | None\" in function \"isna\" Type \"object\" is not assignable to type \"Scalar | NaTType | NAType | None\" \"object\" is not assignable to \"str\" \"object\" is not assignable to \"bytes\" \"object\" is not assignable to \"date\" \"object\" is not assignable to \"datetime\" \"object\" is not assignable to \"timedelta\" \"object\" is not assignable to \"datetime64[Any]\" \"object\" is not assignable to \"timedelta64[Any]\" ...",
+      "path": "scripts/report_s3_year_audit.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "No overloads for \"isna\" match the provided arguments",
+      "path": "scripts/report_s3_year_audit.py",
+      "rule": "reportCallIssue"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"x\" in function \"__new__\" Argument type is \"Unknown | Literal[0]\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "Argument type is unknown Argument corresponds to parameter \"object\" in function \"__new__\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 15,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 3,
+      "message": "Return type, \"dict[Unknown, Unknown]\", is partially unknown",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"grid\" is partially unknown Type of \"grid\" is \"Unknown | None\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"l3\" is partially unknown Type of \"l3\" is \"Unknown | None\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"lock\" is partially unknown Type of \"lock\" is \"Unknown | None\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"measurement_module\" is partially unknown Type of \"measurement_module\" is \"Unknown | None\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"operational\" is partially unknown Type of \"operational\" is \"Unknown | None\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"preflight\" is partially unknown Type of \"preflight\" is \"dict[str, Any | str | list[str] | dict[str, Any] | list[Unknown] | bool | None]\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"primary\" is partially unknown Type of \"primary\" is \"Unknown | None\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"priors\" is partially unknown Type of \"priors\" is \"Unknown | None\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"source_set_id\" is partially unknown Type of \"source_set_id\" is \"Unknown | None\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"source_sets\" is partially unknown Type of \"source_sets\" is \"Unknown | None\"",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"value\" is unknown",
+      "path": "scripts/run_final_l3_production.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"x\" in function \"__new__\" Argument type is \"Unknown | Literal[0]\"",
+      "path": "scripts/run_l3_preparation.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "scripts/run_l3_preparation.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 2,
+      "message": "Return type, \"dict[Unknown, Unknown]\", is partially unknown",
+      "path": "scripts/run_l3_preparation.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Function \"_run_capture\" is not accessed",
+      "path": "scripts/run_pipeline.py",
+      "rule": "reportUnusedFunction"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"iterable\" in function \"__new__\" Argument type is \"list[Unknown]\"",
+      "path": "src/core/schema_registry.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"obj\" in function \"len\" Argument type is \"list[Unknown]\"",
+      "path": "src/core/schema_registry.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"item\" is unknown",
+      "path": "src/core/schema_registry.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Unnecessary \"cast\" call; type is already \"DataFrame\"",
+      "path": "src/core/schema_registry.py",
+      "rule": "reportUnnecessaryCast"
+    },
+    {
+      "count": 1,
+      "message": "\"_decision_signature\" is private and used outside of the module in which it is declared",
+      "path": "src/evidence/sanctions.py",
+      "rule": "reportPrivateUsage"
+    },
+    {
+      "count": 1,
+      "message": "\"_decision_sort_key\" is private and used outside of the module in which it is declared",
+      "path": "src/evidence/sanctions.py",
+      "rule": "reportPrivateUsage"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"s\" in function \"update\" Argument type is \"list[Unknown]\"",
+      "path": "src/evidence/sanctions.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"item\" is unknown",
+      "path": "src/evidence/sanctions.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "src/selection/track_plan.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"item\" is unknown",
+      "path": "src/selection/track_plan.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"order\" is partially unknown Type of \"order\" is \"Unknown | None\"",
+      "path": "src/selection/track_plan.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"primary\" is partially unknown Type of \"primary\" is \"Unknown | None\"",
+      "path": "src/selection/track_plan.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Unnecessary \"cast\" call; type is already \"Mapping[str, Any]\"",
+      "path": "src/selection/track_plan.py",
+      "rule": "reportUnnecessaryCast"
+    },
+    {
+      "count": 1,
+      "message": "Unnecessary isinstance call; \"Mapping[str, Any]\" is always an instance of \"Mapping[Unknown, Unknown]\"",
+      "path": "src/selection/track_plan.py",
+      "rule": "reportUnnecessaryIsInstance"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"o\" in function \"__new__\"",
+      "path": "src/simulation/empirical_calibration.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"obj\" in function \"isna\"",
+      "path": "src/simulation/empirical_calibration.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "src/simulation/empirical_calibration.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"value\" is unknown",
+      "path": "src/simulation/empirical_calibration.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 19,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToFloat\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToFloat\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsFloat\" \"__float__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present",
+      "path": "src/simulation/l3_variants.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present",
+      "path": "src/simulation/l3_variants.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present ...",
+      "path": "src/simulation/l3_variants.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "\"_generate_replication\" is private and used outside of the module in which it is declared",
+      "path": "src/simulation/l3_variants.py",
+      "rule": "reportPrivateUsage"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"object\" in function \"__new__\"",
+      "path": "src/simulation/l3_variants.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"x\" in function \"__new__\"",
+      "path": "src/simulation/l3_variants.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"value\" is unknown",
+      "path": "src/simulation/l3_variants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"dict[str, str]\" cannot be assigned to parameter \"object\" of type \"dict[str, object]\" in function \"append\" \"dict[str, str]\" is not assignable to \"dict[str, object]\" Type parameter \"_VT@dict\" is invariant, but \"str\" is not the same as \"object\" Consider switching from \"dict\" to \"Mapping\" which is covariant in the value type",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"float\" cannot be assigned to parameter \"value\" of type \"str\" in function \"__setitem__\" \"float\" is not assignable to \"str\"",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present ...",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument of type \"str\" cannot be assigned to parameter \"object\" of type \"Literal['fit_success', 'source_training_rows', 'training_rows', 'training_positive_rate', 'post_resampling_positive_rate', 'imbalance_treatment_applied', 'synthetic_rows_added', 'selected_threshold', 'threshold_selection_success', 'training_cost_weight_mean', 'training_cost_weight_max', 'observed_average_precision', 'latent_average_precision', 'latent_auc', 'latent_brier', 'latent_precision_at_k', 'observed_minus_latent_ap', 'verification_rate', 'maturity_rate', 'realized_prevalence', 'latent_probability_mean', 'empirical_panel_rows', 'empirical_observed_positive_rate', 'empirical_known_label_rate', 'calibrated_latent_prevalence']\" in function \"append\" Type \"str\" is not assignable to type \"Literal['fit_success', 'source_training_rows', 'training_rows', 'training_positive_rate', 'post_resampling_positive_rate', 'imbalance_treatment_applied', 'synthetic_rows_added', 'selected_threshold', 'threshold_selection_success', 'training_cost_weight_mean', 'training_cost_weight_max', 'observed_average_precision', 'latent_average_precision', 'latent_auc', 'latent_brier', 'latent_precision_at_k', 'observed_minus_latent_ap', 'verification_rate', 'maturity_rate', 'realized_prevalence', 'latent_probability_mean', 'empirical_panel_rows', 'empirical_observed_positive_rate', 'empirical_known_label_rate', 'calibrated_latent_prevalence']\" \"str\" is not assignable to type \"Literal['fit_success']\" \"str\" is not assignable to type \"Literal['source_training_rows']\" \"str\" is not assignable to type \"Literal['training_rows']\" \"str\" is not assignable to type \"Literal['training_positive_rate']\" \"str\" is not assignable to type \"Literal['post_resampling_positive_rate']\" \"str\" is not assignable to type \"Literal['imbalance_treatment_applied']\" \"str\" is not assignable to type \"Literal['synthetic_rows_added']\" ...",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Operator \"<=\" not supported for types \"str\" and \"Literal[0]\"",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportOperatorIssue"
+    },
+    {
+      "count": 1,
+      "message": "Type \"list[Literal['fit_success', 'source_training_rows', 'training_rows', 'training_positive_rate', 'post_resampling_positive_rate', 'imbalance_treatment_applied', 'synthetic_rows_added', 'selected_threshold', 'threshold_selection_success', 'training_cost_weight_mean', 'training_cost_weight_max', 'observed_average_precision', 'latent_average_precision', 'latent_auc', 'latent_brier', 'latent_precision_at_k', 'observed_minus_latent_ap', 'verification_rate', 'maturity_rate', 'realized_prevalence', 'latent_probability_mean', 'empirical_panel_rows', 'empirical_observed_positive_rate', 'empirical_known_label_rate', 'calibrated_latent_prevalence']]\" is not assignable to return type \"list[str]\" \"list[Literal['fit_success', 'source_training_rows', 'training_rows', 'training_positive_rate', 'post_resampling_positive_rate', 'imbalance_treatment_applied', 'synthetic_rows_added', 'selected_threshold', 'threshold_selection_success', 'training_cost_weight_mean', 'training_cost_weight_max', 'observed_average_precision', 'latent_average_precision', 'latent_auc', 'latent_brier', 'latent_precision_at_k', 'observed_minus_latent_ap', 'verification_rate', 'maturity_rate', 'realized_prevalence', 'latent_probability_mean', 'empirical_panel_rows', 'empirical_observed_positive_rate', 'empirical_known_label_rate', 'calibrated_latent_prevalence']]\" is not assignable to \"list[str]\" Type parameter \"_T@list\" is invariant, but \"Literal['fit_success', 'source_training_rows', 'training_rows', 'training_positive_rate', 'post_resampling_positive_rate', 'imbalance_treatment_applied', 'synthetic_rows_added', 'selected_threshold', 'threshold_selection_success', 'training_cost_weight_mean', 'training_cost_weight_max', 'observed_average_precision', 'latent_average_precision', 'latent_auc', 'latent_brier', 'latent_precision_at_k', 'observed_minus_latent_ap', 'verification_rate', 'maturity_rate', 'realized_prevalence', 'latent_probability_mean', 'empirical_panel_rows', 'empirical_observed_positive_rate', 'empirical_known_label_rate', 'calibrated_latent_prevalence']\" is not the same as \"str\" Consider switching from \"list\" to \"Sequence\" which is covariant",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportReturnType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"iterable\" in function \"__new__\" Argument type is \"list[Unknown]\"",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "Argument type is unknown Argument corresponds to parameter \"object\" in function \"__new__\"",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 5,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"dependency\" is partially unknown Type of \"dependency\" is \"Unknown | None\"",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"ids\" is partially unknown Type of \"ids\" is \"Unknown | None\"",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 10,
+      "message": "Type of \"item\" is unknown",
+      "path": "src/simulation/method_contract.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"scores\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"_budget_cost\" \"object\" is not assignable to \"ndarray[_AnyShape, dtype[Any]]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"scores\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"_precision_at_k\" \"object\" is not assignable to \"ndarray[_AnyShape, dtype[Any]]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"scores\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"_safe_auc\" \"object\" is not assignable to \"ndarray[_AnyShape, dtype[Any]]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"scores\" of type \"ndarray[_AnyShape, dtype[Any]]\" in function \"_safe_average_precision\" \"object\" is not assignable to \"ndarray[_AnyShape, dtype[Any]]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 47,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToFloat\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToFloat\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsFloat\" \"__float__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present",
+      "path": "src/simulation/service.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present",
+      "path": "src/simulation/service.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"x\" of type \"ConvertibleToInt\" in function \"__new__\" Type \"object\" is not assignable to type \"ConvertibleToInt\" \"object\" is not assignable to \"str\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"SupportsInt\" \"__int__\" is not present \"object\" is incompatible with protocol \"SupportsIndex\" \"__index__\" is not present ...",
+      "path": "src/simulation/service.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"y_prob\" of type \"ArrayLike\" in function \"brier_score_loss\" Type \"object\" is not assignable to type \"ArrayLike\" \"object\" is incompatible with protocol \"Buffer\" \"__buffer__\" is not present \"object\" is incompatible with protocol \"_SupportsArray[dtype[Any]]\" \"__array__\" is not present \"object\" is incompatible with protocol \"_NestedSequence[_SupportsArray[dtype[Any]]]\" \"__len__\" is not present \"__getitem__\" is not present ...",
+      "path": "src/simulation/service.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Expression with type \"tuple[Unknown | DataFrame | ... | Series[Any], Unknown | DataFrame | ... | Series[Any]] | tuple[Unknown | DataFrame | ... | Series[Any], Unknown | DataFrame | ... | Series[Any], Unknown]\" cannot be assigned to target tuple Type \"tuple[Unknown | DataFrame | ... | Series[Any], Unknown | DataFrame | ... | Series[Any], Unknown]\" is incompatible with target tuple Tuple size mismatch; expected 2 but received 3",
+      "path": "src/simulation/service.py",
+      "rule": "reportAssignmentType"
+    },
+    {
+      "count": 1,
+      "message": "Cannot access attribute \"decision_function\" for class \"object\" Attribute \"decision_function\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 3,
+      "message": "Cannot access attribute \"fit\" for class \"object\" Attribute \"fit\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 1,
+      "message": "Cannot access attribute \"predict\" for class \"object\" Attribute \"predict\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 1,
+      "message": "Cannot access attribute \"predict_proba\" for class \"object\" Attribute \"predict_proba\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 1,
+      "message": "Import \"catboost\" could not be resolved",
+      "path": "src/simulation/service.py",
+      "rule": "reportMissingImports"
+    },
+    {
+      "count": 1,
+      "message": "Import \"lightgbm\" could not be resolved",
+      "path": "src/simulation/service.py",
+      "rule": "reportMissingImports"
+    },
+    {
+      "count": 1,
+      "message": "Import \"xgboost\" could not be resolved",
+      "path": "src/simulation/service.py",
+      "rule": "reportMissingImports"
+    },
+    {
+      "count": 2,
+      "message": "Stub file not found for \"imblearn.over_sampling\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportMissingTypeStubs"
+    },
+    {
+      "count": 1,
+      "message": "Operator \">=\" not supported for types \"object\" and \"float\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportOperatorIssue"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"a\" in function \"asarray\" Argument type is \"Unknown | DataFrame | ... | Series[Any]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"a\" in function \"asarray\" Argument type is \"list[Unknown]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"obj\" in function \"len\" Argument type is \"list[Unknown]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 3,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"obj\" in function \"len\" Argument type is \"set[str] | set[Unknown]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"x1\" in function \"__call__\" Argument type is \"ndarray[Unknown, dtype[Any]]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 3,
+      "message": "Argument type is unknown Argument corresponds to parameter \"a\" in function \"asarray\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"obj\" in function \"signature\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"predicted_positive\" in function \"_classification_cost\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"x\" in function \"__new__\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"decision_function\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"fit\" is partially unknown Type of \"fit\" is \"(X: list[str] | ndarray[tuple[Any, ...], dtype[Any]] | Iterable[Unknown] | DataFrame, y: list[int | signedinteger[_8Bit] | signedinteger[_16Bit] | signedinteger[_32Bit] | signedinteger[_64Bit]] | list[int] | Iterable[Unknown] | Series[Any] | ndarray[tuple[Any, ...], dtype[Any]] | None = None, **fit_params: Unknown) -> Pipeline\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 3,
+      "message": "Type of \"fit\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"fit_resample\" is partially unknown Type of \"fit_resample\" is \"(X: Unknown, y: Unknown, **params: Unknown) -> (tuple[Unknown | DataFrame | ... | Series[Any], Unknown | DataFrame | ... | Series[Any]] | tuple[Unknown | DataFrame | ... | Series[Any], Unknown | DataFrame | ... | Series[Any], Unknown])\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"predict\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"predict_proba\" is partially unknown Type of \"predict_proba\" is \"(X: Iterable[Unknown] | ndarray[tuple[Any, ...], dtype[Any]] | DataFrame, **predict_proba_params: Unknown) -> ndarray[tuple[Any, ...], dtype[Any]]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"predict_proba\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"shape\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 3,
+      "message": "Return type is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"CatBoostClassifier\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"LGBMClassifier\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"XGBClassifier\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"decision\" is partially unknown Type of \"decision\" is \"ndarray[Unknown, dtype[Any]]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"item\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"learner_tiers\" is partially unknown Type of \"learner_tiers\" is \"set[str] | set[Unknown]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"predictions\" is unknown",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"probabilities\" is partially unknown Type of \"probabilities\" is \"ndarray[Unknown, dtype[Any]]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"resampled_x\" is partially unknown Type of \"resampled_x\" is \"Unknown | DataFrame | ... | Series[Any]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"resampled_y\" is partially unknown Type of \"resampled_y\" is \"Unknown | DataFrame | ... | Series[Any]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"training_costs\" is partially unknown Type of \"training_costs\" is \"set[str] | set[Unknown]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"treatments\" is partially unknown Type of \"treatments\" is \"set[str] | set[Unknown]\"",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Variable \"final_name\" is not accessed",
+      "path": "src/simulation/service.py",
+      "rule": "reportUnusedVariable"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"dict[str, dict[str, dict[str, str]]]\" cannot be assigned to parameter \"registry\" of type \"dict[str, object]\" in function \"validate_source_patterns\" \"dict[str, dict[str, dict[str, str]]]\" is not assignable to \"dict[str, object]\" Type parameter \"_VT@dict\" is invariant, but \"dict[str, dict[str, str]]\" is not the same as \"object\" Consider switching from \"dict\" to \"Mapping\" which is covariant in the value type",
+      "path": "tests/core/test_forbidden_pattern_metadata_exceptions.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"list[dict[str, str | int]]\" cannot be assigned to parameter \"jobs\" of type \"list[dict[str, object]]\" in function \"_incomplete_batch_commands\" \"list[dict[str, str | int]]\" is not assignable to \"list[dict[str, object]]\" Type parameter \"_T@list\" is invariant, but \"dict[str, str | int]\" is not the same as \"dict[str, object]\" Consider switching from \"list\" to \"Sequence\" which is covariant",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument of type \"list[int]\" cannot be assigned to parameter \"replications\" of type \"range\" in function \"run_batch\" \"list[int]\" is not assignable to \"range\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"iterable\" of type \"Iterable[_T@list]\" in function \"__init__\" \"object\" is incompatible with protocol \"Iterable[_T@list]\" \"__iter__\" is not present",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 7,
+      "message": "\"object\" is not iterable \"__iter__\" method not defined",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportGeneralTypeIssues"
+    },
+    {
+      "count": 1,
+      "message": "Type annotation is missing for parameter \"check_only\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type annotation is missing for parameter \"estimator\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type annotation is missing for parameter \"mock_filter\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 2,
+      "message": "Type annotation is missing for parameter \"mock_load\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 2,
+      "message": "Type annotation is missing for parameter \"mock_parse\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type annotation is missing for parameter \"mock_val\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type annotation is missing for parameter \"summarize_return\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type annotation is missing for parameter \"w\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type annotation is missing for parameter \"x\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type annotation is missing for parameter \"y\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingParameterType"
+    },
+    {
+      "count": 9,
+      "message": "Expected type arguments for generic class \"dict\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportMissingTypeArgument"
+    },
+    {
+      "count": 3,
+      "message": "\"_batch_exists\" is private and used outside of the module in which it is declared",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportPrivateUsage"
+    },
+    {
+      "count": 1,
+      "message": "\"_incomplete_batch_commands\" is private and used outside of the module in which it is declared",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportPrivateUsage"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"diagnostics\" in function \"run_batch\" Argument type is \"dict[Unknown, Unknown]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"iterable\" in function \"__init__\" Argument type is \"list[dict[Unknown, Unknown]]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"scenario\" in function \"run_batch\" Argument type is \"dict[str, str | float | int | list[dict[str, str | bool]] | list[dict[Unknown, Unknown]] | dict[str, object]]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"scenario\" in function \"run_batch\" Argument type is \"dict[str, str | int | float | list[dict[str, object]] | list[Unknown] | list[dict[Unknown, Unknown]] | dict[str, object]]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 7,
+      "message": "Argument type is unknown Argument corresponds to parameter \"map\" in function \"__init__\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Type of parameter \"a\" is partially unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownLambdaType"
+    },
+    {
+      "count": 2,
+      "message": "Type of parameter \"artifact_id\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownLambdaType"
+    },
+    {
+      "count": 2,
+      "message": "Type of parameter \"k\" is partially unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownLambdaType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"_items\" is partially unknown Type of \"_items\" is \"list[dict[Unknown, Unknown]]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 3,
+      "message": "Type of \"get\" is partially unknown Type of \"get\" is \"Overload[(key: Unknown, default: None = None, /) -> (Unknown | None), (key: Unknown, default: Unknown, /) -> Unknown, (key: Unknown, default: _T@get, /) -> (Unknown | _T@get)]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Return type, \"dict[Unknown, Unknown]\", is partially unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Return type, \"list[dict[Unknown, Unknown]]\", is partially unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"check_only\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"coordinates\" is partially unknown Parameter type is \"dict[Unknown, Unknown]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"estimator\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"inventory_items\" is partially unknown Parameter type is \"list[dict[Unknown, Unknown]]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 3,
+      "message": "Type of parameter \"items\" is partially unknown Parameter type is \"list[dict[Unknown, Unknown]]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"mock_filter\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 2,
+      "message": "Type of parameter \"mock_load\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 2,
+      "message": "Type of parameter \"mock_parse\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"mock_val\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"summarize_return\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"w\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"x\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Type of parameter \"y\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Return type, \"dict[Unknown, Unknown]\", is partially unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Return type, \"list[dict[Unknown, Unknown]]\", is partially unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 3,
+      "message": "Type of \"coords\" is partially unknown Type of \"coords\" is \"dict[Unknown, Unknown]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"diagnostics\" is partially unknown Type of \"diagnostics\" is \"dict[Unknown, Unknown]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 3,
+      "message": "Type of \"inventory\" is partially unknown Type of \"inventory\" is \"list[dict[str, str | dict[Unknown, Unknown]]]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"mock_scenario\" is partially unknown Type of \"mock_scenario\" is \"dict[str, str | float | int | list[dict[str, str | bool]] | list[dict[Unknown, Unknown]] | dict[str, object]]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"model_warnings\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"scenario\" is partially unknown Type of \"scenario\" is \"dict[str, str | int | float | list[dict[str, object]] | list[Unknown] | list[dict[Unknown, Unknown]] | dict[str, object]]\"",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 4,
+      "message": "Type of \"v\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 3,
+      "message": "Type of \"value\" is unknown",
+      "path": "tests/stages/test_remaining_stage_invariants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 2,
+      "message": "Cannot access attribute \"audit\" for class \"object\" Attribute \"audit\" is unknown",
+      "path": "tests/stages/test_s3_calendar_year_targets.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 1,
+      "message": "Cannot access attribute \"outcome\" for class \"object\" Attribute \"outcome\" is unknown",
+      "path": "tests/stages/test_s3_calendar_year_targets.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 2,
+      "message": "Type of \"audit\" is unknown",
+      "path": "tests/stages/test_s3_calendar_year_targets.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"outcome\" is unknown",
+      "path": "tests/stages/test_s3_calendar_year_targets.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"iterable\" of type \"Iterable[_T_co@tuple]\" in function \"__new__\" \"object\" is incompatible with protocol \"Iterable[_T_co@tuple]\" \"__iter__\" is not present",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument of type \"object\" cannot be assigned to parameter \"obj\" of type \"Sized\" in function \"len\" \"object\" is incompatible with protocol \"Sized\" \"__len__\" is not present",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 6,
+      "message": "\"object\" is not iterable \"__iter__\" method not defined",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportGeneralTypeIssues"
+    },
+    {
+      "count": 4,
+      "message": "\"__getitem__\" method not defined on type \"object\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportIndexIssue"
+    },
+    {
+      "count": 3,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"iterable\" in function \"__init__\" Argument type is \"list[Unknown]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"iterable\" in function \"sum\" Argument type is \"Generator[Unknown, None, None]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"obj\" in function \"len\" Argument type is \"list[Unknown]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"obj\" in function \"len\" Argument type is \"set[Unknown]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is partially unknown Argument corresponds to parameter \"raw\" in function \"validate_scenarios\" Argument type is \"list[dict[Unknown, Unknown]]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 2,
+      "message": "Argument type is unknown Argument corresponds to parameter \"iterable\" in function \"__init__\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"map\" in function \"__init__\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Argument type is unknown Argument corresponds to parameter \"x\" in function \"__new__\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"deferred\" is partially unknown Type of \"deferred\" is \"set[Unknown]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"fully_synthetic\" is partially unknown Type of \"fully_synthetic\" is \"list[dict[Unknown, Unknown]]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"implemented\" is partially unknown Type of \"implemented\" is \"set[Unknown]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 7,
+      "message": "Type of \"item\" is unknown",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"scenario_blocks\" is partially unknown Type of \"scenario_blocks\" is \"list[Unknown]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"scenario_ids\" is partially unknown Type of \"scenario_ids\" is \"list[Unknown]\"",
+      "path": "tests/test_chapter3_scenario_matrix.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 5,
+      "message": "Unnecessary \"cast\" call; type is already \"Any\"",
+      "path": "tests/test_l2_l3_calibration.py",
+      "rule": "reportUnnecessaryCast"
+    },
+    {
+      "count": 1,
+      "message": "Type \"list[dict[str, bool | None] | dict[str, bool]]\" is not assignable to return type \"list[dict[str, bool | None]]\" \"list[dict[str, bool | None] | dict[str, bool]]\" is not assignable to \"list[dict[str, bool | None]]\" Type parameter \"_T@list\" is invariant, but \"dict[str, bool | None] | dict[str, bool]\" is not the same as \"dict[str, bool | None]\" Consider switching from \"list\" to \"Sequence\" which is covariant",
+      "path": "tests/test_l3_variants.py",
+      "rule": "reportReturnType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"all\" is unknown",
+      "path": "tests/test_l3_variants.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"set_index\" is unknown",
+      "path": "tests/test_l3_variants.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"xs\" is unknown",
+      "path": "tests/test_l3_variants.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"correct\" is unknown",
+      "path": "tests/test_l3_variants.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 1,
+      "message": "Cannot assign to attribute \"ELIGIBLE\" for class \"ModuleType\" Attribute \"ELIGIBLE\" is unknown",
+      "path": "tests/test_p02_empirical_calibration.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 1,
+      "message": "Cannot assign to attribute \"FIRM_ID\" for class \"ModuleType\" Attribute \"FIRM_ID\" is unknown",
+      "path": "tests/test_p02_empirical_calibration.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 1,
+      "message": "Cannot assign to attribute \"FISCAL_YEAR\" for class \"ModuleType\" Attribute \"FISCAL_YEAR\" is unknown",
+      "path": "tests/test_p02_empirical_calibration.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 1,
+      "message": "Cannot assign to attribute \"SCENARIO_ID\" for class \"ModuleType\" Attribute \"SCENARIO_ID\" is unknown",
+      "path": "tests/test_p02_empirical_calibration.py",
+      "rule": "reportAttributeAccessIssue"
+    },
+    {
+      "count": 1,
+      "message": "Type of \"append\" is partially unknown Type of \"append\" is \"(object: Unknown, /) -> None\"",
+      "path": "tests/test_p02_empirical_calibration.py",
+      "rule": "reportUnknownMemberType"
+    },
+    {
+      "count": 1,
+      "message": "Return type, \"tuple[DataFrame, DataFrame, dict[str, list[Unknown]], dict[str, str | list[str] | float | int]]\", is partially unknown",
+      "path": "tests/test_p02_empirical_calibration.py",
+      "rule": "reportUnknownParameterType"
+    },
+    {
+      "count": 1,
+      "message": "Return type, \"tuple[DataFrame, DataFrame, dict[str, list[Unknown]], dict[str, str | list[str] | float | int]]\", is partially unknown",
+      "path": "tests/test_p02_empirical_calibration.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 3,
+      "message": "Type of \"matrices\" is partially unknown Type of \"matrices\" is \"dict[str, list[Unknown]]\"",
+      "path": "tests/test_p02_empirical_calibration.py",
+      "rule": "reportUnknownVariableType"
+    },
+    {
+      "count": 4,
+      "message": "Argument of type \"str | int | Any\" cannot be assigned to parameter \"canonical_item\" of type \"str\" in function \"__init__\" Type \"str | int | Any\" is not assignable to type \"str\" \"int\" is not assignable to \"str\"",
+      "path": "tests/test_production_primary_configuration.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "Argument of type \"str | int | Any\" cannot be assigned to parameter \"firm_id\" of type \"str\" in function \"__init__\" Type \"str | int | Any\" is not assignable to type \"str\" \"int\" is not assignable to \"str\"",
+      "path": "tests/test_production_primary_configuration.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "Argument of type \"str | int | Any\" cannot be assigned to parameter \"fiscal_year\" of type \"int\" in function \"__init__\" Type \"str | int | Any\" is not assignable to type \"int\" \"str\" is not assignable to \"int\"",
+      "path": "tests/test_production_primary_configuration.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "Argument of type \"str | int | Any\" cannot be assigned to parameter \"statement_family\" of type \"str | None\" in function \"__init__\" Type \"str | int | Any\" is not assignable to type \"str | None\" Type \"int\" is not assignable to type \"str | None\" \"int\" is not assignable to \"str\" \"int\" is not assignable to \"None\"",
+      "path": "tests/test_production_primary_configuration.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "Argument of type \"str | int | Any\" cannot be assigned to parameter \"statement_scope\" of type \"str | None\" in function \"__init__\" Type \"str | int | Any\" is not assignable to type \"str | None\" Type \"int\" is not assignable to type \"str | None\" \"int\" is not assignable to \"str\" \"int\" is not assignable to \"None\"",
+      "path": "tests/test_production_primary_configuration.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 4,
+      "message": "Argument of type \"str | int | Any\" cannot be assigned to parameter \"unit\" of type \"str | None\" in function \"__init__\" Type \"str | int | Any\" is not assignable to type \"str | None\" Type \"int\" is not assignable to type \"str | None\" \"int\" is not assignable to \"str\" \"int\" is not assignable to \"None\"",
+      "path": "tests/test_production_primary_configuration.py",
+      "rule": "reportArgumentType"
+    },
+    {
+      "count": 1,
+      "message": "Unnecessary \"cast\" call; type is already \"dict[str, Any]\"",
+      "path": "tests/test_production_primary_configuration.py",
+      "rule": "reportUnnecessaryCast"
+    },
+    {
+      "count": 4,
+      "message": "Unnecessary \"cast\" call; type is already \"Any\"",
+      "path": "tests/test_s3_year_audit.py",
+      "rule": "reportUnnecessaryCast"
+    }
+  ],
+  "generated_from": "8a22e5725af9a96005d2668a22a1f9e8700c69f6",
+  "schema_version": 2,
+  "strict_since_commit": "8a22e5725af9a96005d2668a22a1f9e8700c69f6",
+  "total_errors": 560
+}

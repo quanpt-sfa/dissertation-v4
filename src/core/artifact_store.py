@@ -323,6 +323,7 @@ def _fsync_directory(path: Path) -> None:
 
 def _safe_replace(src: Path, dst: Path) -> None:
     import time
+
     for i in range(15):
         try:
             os.replace(src, dst)

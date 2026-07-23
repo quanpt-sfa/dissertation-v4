@@ -85,7 +85,9 @@ def build_sequential_track_plan(
                 "role": OPTIONAL_TRACK_ROLE,
                 "status": "AVAILABLE" if eligible else "SKIPPED",
                 ELIGIBLE: eligible,
-                "reason_code": None if eligible else result.get("reason_code", "CAPABILITY_UNAVAILABLE"),
+                "reason_code": None
+                if eligible
+                else result.get("reason_code", "CAPABILITY_UNAVAILABLE"),
                 "execution_position": position,
             }
         )

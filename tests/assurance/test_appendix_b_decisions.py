@@ -55,7 +55,7 @@ def test_T004_anchor_source(registry: dict[str, Any]) -> None:
 
 def test_T005_primary_outcome(registry: dict[str, Any]) -> None:
     canonical(registry, "D05", "Outcome chính")
-    assert get(registry, "measurement.primary_target_id") is None
+    assert get(registry, "measurement.primary_target_id") == "L1_ANNUAL"
     assert set(get(registry, "measurement.candidate_targets")) == {
         "L1_ANNUAL",
         "S3_BROAD",

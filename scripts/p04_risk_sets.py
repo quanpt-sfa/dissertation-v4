@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
+from core.fold_control import require_primary_target
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from risksets.service import build_risk_set
 
@@ -28,6 +29,8 @@ def main() -> int:
         step_id="P04",
         state="LEDGERED",
     )
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    primary_target_id = require_primary_target(measurement, "P04")
     risksets = mapping(loaded.registry.get("risksets"), "risksets")
     cutoff_raw = risksets.get("data_cutoff")
     if not isinstance(cutoff_raw, str):
@@ -42,7 +45,10 @@ def main() -> int:
     if not isinstance(horizon, int):
         raise ValueError("study.horizons_months.primary must be an integer")
     if args.dry_run:
-        print(f"P04 dry-run: cutoff={cutoff.isoformat()} horizon_months={horizon}")
+        print(
+            f"P04 dry-run: target={primary_target_id} "
+            f"cutoff={cutoff.isoformat()} horizon_months={horizon}"
+        )
         return 0
     panel = loaded.context.read("firm_year_panel", {})
     evidence = loaded.context.read("evidence_ledger", {})
@@ -78,17 +84,10 @@ def main() -> int:
                 "s3_taxonomy.sanction_source_completeness.incomplete_years",
             )
         },
-        primary_target_id=(
-            str(value)
-            if (
-                value := mapping(loaded.registry.get("measurement"), "measurement").get(
-                    "primary_target_id"
-                )
-            )
-            is not None
-            else None
-        ),
+        primary_target_id=primary_target_id,
     )
+    if result.maturity_audit.get("primary_target_status") != "LOCKED":
+        raise RuntimeError("P04_PRODUCTION_PATH_BLOCKED: PRIMARY_TARGET_NOT_LOCKED")
     if args.validate_only:
         return 0
     loaded.context.write("risk_sets", result.risk_sets, {})
@@ -96,7 +95,8 @@ def main() -> int:
     loaded.context.write("prospective_set", result.prospective_set, {})
     loaded.context.write("censoring_registry", result.censoring_registry, {})
     print(
-        f"P04 status=PASS mature={result.maturity_audit['mature_count']} "
+        f"P04 status=PASS target={primary_target_id} "
+        f"mature={result.maturity_audit['mature_count']} "
         f"prospective={result.maturity_audit['prospective_count']}"
     )
     return 0

@@ -62,9 +62,7 @@ def _scenario():
         },
         "imbalance_treatment_registry": imbalance["treatment_registry"],
         "imbalance_treatment_settings": {
-            key: value
-            for key, value in imbalance.items()
-            if key != "treatment_registry"
+            key: value for key, value in imbalance.items() if key != "treatment_registry"
         },
     }
 
@@ -87,9 +85,7 @@ def test_synthetic_imbalance_treatment_is_applied(
     optional_dependency: str | None,
 ) -> None:
     if optional_dependency and importlib.util.find_spec(optional_dependency) is None:
-        pytest.skip(
-            f"optional learner dependency {optional_dependency!r} is not installed"
-        )
+        pytest.skip(f"optional learner dependency {optional_dependency!r} is not installed")
 
     batch = run_batch(
         _scenario(),

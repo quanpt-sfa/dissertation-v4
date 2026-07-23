@@ -127,8 +127,7 @@ def test_mixed_group_keeps_included_mapping_and_excludes_other_rows_from_endpoin
     assert json.loads(row[columns[SOURCE_RECORD_REFS]]) == ["included-row"]
 
     records = {
-        (item.source_id, item.firm_id, item.fiscal_year): item
-        for item in result.endpoint_records
+        (item.source_id, item.firm_id, item.fiscal_year): item for item in result.endpoint_records
     }
     assert records[("S3_CONTENT", "F1", 2023)].outcome is True
     assert result.audit["excluded_source_rule_row_count"] == 1

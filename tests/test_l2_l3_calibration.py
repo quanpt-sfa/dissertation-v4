@@ -74,9 +74,9 @@ def test_zero_denominator_floor_survives_snapshot_compatibility_bridge() -> None
     original_floor = registry["source_catalog"]["profiles"]["financial_statement_core_long"][
         "evidence_mapping"
     ]["audit_adjustment"]["minimum_absolute_denominator"]
-    compatible_floor = compatible["source_catalog"]["profiles"][
-        "financial_statement_core_long"
-    ]["evidence_mapping"]["audit_adjustment"]["minimum_absolute_denominator"]
+    compatible_floor = compatible["source_catalog"]["profiles"]["financial_statement_core_long"][
+        "evidence_mapping"
+    ]["audit_adjustment"]["minimum_absolute_denominator"]
 
     assert original_floor == 0.0
     assert compatible_floor > 0.0

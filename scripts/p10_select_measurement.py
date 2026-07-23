@@ -83,8 +83,7 @@ def main() -> int:
         l3_model = mapping(measurement.get("l3_model"), "measurement.l3_model")
         operational = mapping(l3_model.get("operational"), "measurement.l3_model.operational")
         fixed_pi_grid = [
-            float(value)
-            for value in sequence(operational.get("fixed_pi_grid"), "L3 fixed-pi grid")
+            float(value) for value in sequence(operational.get("fixed_pi_grid"), "L3 fixed-pi grid")
         ]
         source_channels, accuracy_priors = _l3_bindings(
             registry=loaded.registry,
@@ -164,22 +163,27 @@ def main() -> int:
     return 0
 
 
-
 def _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:
     source_set_id = measurement.get("primary_source_set_id")
     if not isinstance(source_set_id, str) or not source_set_id:
         raise ValueError("measurement.primary_source_set_id must be locked")
     source_sets = mapping(measurement.get("source_sets"), "measurement.source_sets")
     source_set = mapping(source_sets.get(source_set_id), f"measurement.source_sets.{source_set_id}")
+    if source_set.get("role") != "primary_measurement":
+        raise ValueError("primary source set must have role=primary_measurement")
     sources = [
         str(value)
         for value in sequence(
             source_set.get("sources"), f"measurement.source_sets.{source_set_id}.sources"
         )
     ]
+    if not sources:
+        raise ValueError("primary L3 source set must not be empty")
     s3_sources = sorted(source for source in sources if source.startswith("S3_"))
-    if s3_sources != ["S3_CONTENT"]:
-        raise ValueError("primary L3 source set must contain S3_CONTENT and no other S3 endpoint")
+    if s3_sources:
+        raise ValueError(
+            "primary annual L3 source set cannot contain next-calendar-year S3 enforcement endpoints"
+        )
     return sources
 
 
@@ -205,9 +209,7 @@ def _l3_bindings(
         parsed_prior: dict[str, float] = {}
         for key, value in prior.items():
             if not isinstance(value, (int, float)) or isinstance(value, bool):
-                raise ValueError(
-                    f"profile={source.profile_id}: L3 prior values must be numeric"
-                )
+                raise ValueError(f"profile={source.profile_id}: L3 prior values must be numeric")
             parsed_prior[str(key)] = float(value)
         source_channels[logical_source_id] = source.channel_id
         accuracy_priors[logical_source_id] = parsed_prior

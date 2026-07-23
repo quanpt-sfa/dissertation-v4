@@ -64,7 +64,9 @@ def _require_hardening_applied(project_root: Path) -> None:
                 "review and commit the generated changes, then use a new preparation run ID."
             )
         if result.returncode != 0:
-            raise subprocess.CalledProcessError(result.returncode, [sys.executable, script, "--check"])
+            raise subprocess.CalledProcessError(
+                result.returncode, [sys.executable, script, "--check"]
+            )
 
 
 def _json(path: Path) -> dict[str, Any]:
@@ -203,9 +205,7 @@ def main() -> int:
     )
 
     s3 = _json(s3_dir / "s3_year_audit_summary.json")
-    calibration = _parse_prefixed_json(
-        calibration_output, "MEASUREMENT_CALIBRATION_JSON="
-    )
+    calibration = _parse_prefixed_json(calibration_output, "MEASUREMENT_CALIBRATION_JSON=")
     calibration_dir.mkdir(parents=True, exist_ok=True)
     (calibration_dir / "measurement_calibration_summary.json").write_text(
         json.dumps(calibration, ensure_ascii=False, indent=2, sort_keys=True),

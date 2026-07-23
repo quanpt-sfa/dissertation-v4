@@ -35,8 +35,8 @@ def main() -> int:
     root = args.repo_root.resolve()
     path = root / "scripts" / "p05_measurement_inputs.py"
     text = path.read_text(encoding="utf-8")
-    old = '''    _execute_l3_pilot(\n        matrices=result.matrices,\n        capability=result.l3_capability,\n        source_channels=expected_sources,\n        source_profiles=source_profiles,\n'''
-    new = '''    primary_expected_sources = {\n        source_id: expected_sources[source_id] for source_id in primary_measurement_sources\n    }\n    primary_source_profiles = {\n        source_id: source_profiles[source_id] for source_id in primary_measurement_sources\n    }\n    _execute_l3_pilot(\n        matrices=result.matrices,\n        capability=result.l3_capability,\n        source_channels=primary_expected_sources,\n        source_profiles=primary_source_profiles,\n'''
+    old = """    _execute_l3_pilot(\n        matrices=result.matrices,\n        capability=result.l3_capability,\n        source_channels=expected_sources,\n        source_profiles=source_profiles,\n"""
+    new = """    primary_expected_sources = {\n        source_id: expected_sources[source_id] for source_id in primary_measurement_sources\n    }\n    primary_source_profiles = {\n        source_id: source_profiles[source_id] for source_id in primary_measurement_sources\n    }\n    _execute_l3_pilot(\n        matrices=result.matrices,\n        capability=result.l3_capability,\n        source_channels=primary_expected_sources,\n        source_profiles=primary_source_profiles,\n"""
     text, changed = _replace_once(text, old, new, "P05 L3 feasibility primary source binding")
     if args.apply and changed:
         path.write_text(text, encoding="utf-8")

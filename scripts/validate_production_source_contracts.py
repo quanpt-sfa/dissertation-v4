@@ -6,10 +6,9 @@ import argparse
 import csv
 import json
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 EXPECTED_KNOWN_CASES = {
     ("K1", "TAR", 2020),
@@ -20,8 +19,7 @@ EXPECTED_KNOWN_CASES = {
     ("K4", "FHH", 2019),
 }
 EXPECTED_CASE_ID_BY_FIRM_YEAR = {
-    (firm_id, fiscal_year): case_id
-    for case_id, firm_id, fiscal_year in EXPECTED_KNOWN_CASES
+    (firm_id, fiscal_year): case_id for case_id, firm_id, fiscal_year in EXPECTED_KNOWN_CASES
 }
 CANONICAL_KNOWN_CASE_COLUMNS = [
     "case_id",
@@ -143,13 +141,13 @@ def _validate_sanctions(rows: list[dict[str, str]]) -> dict[str, Any]:
     }
 
 
-def _canonicalize_known_cases(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], dict[str, Any]]:
+def _canonicalize_known_cases(
+    rows: list[dict[str, str]],
+) -> tuple[list[dict[str, str]], dict[str, Any]]:
     if not rows:
         raise ValueError("known-case registry: at least one row is required")
     canonical: list[dict[str, str]] = []
-    used_input_columns = {
-        alias for aliases in KNOWN_CASE_ALIASES.values() for alias in aliases
-    }
+    used_input_columns = {alias for aliases in KNOWN_CASE_ALIASES.values() for alias in aliases}
     extra_columns = [column for column in rows[0] if column not in used_input_columns]
     filled_fields: set[str] = set()
 
@@ -163,9 +161,7 @@ def _canonicalize_known_cases(rows: list[dict[str, str]]) -> tuple[list[dict[str
         try:
             fiscal_year = int(raw_year)
         except ValueError as exc:
-            raise ValueError(
-                f"known-case row={index}: fiscal_year must be an integer"
-            ) from exc
+            raise ValueError(f"known-case row={index}: fiscal_year must be an integer") from exc
         expected_case_id = EXPECTED_CASE_ID_BY_FIRM_YEAR.get((firm_id, fiscal_year))
         if expected_case_id is None:
             raise ValueError(
@@ -209,15 +205,11 @@ def _canonicalize_known_cases(rows: list[dict[str, str]]) -> tuple[list[dict[str
             output[column] = row.get(column, "")
         canonical.append(output)
 
-    observed = {
-        (row["case_id"], row["firm_id"], int(row["fiscal_year"])) for row in canonical
-    }
+    observed = {(row["case_id"], row["firm_id"], int(row["fiscal_year"])) for row in canonical}
     if observed != EXPECTED_KNOWN_CASES:
         missing = sorted(EXPECTED_KNOWN_CASES - observed)
         unexpected = sorted(observed - EXPECTED_KNOWN_CASES)
-        raise ValueError(
-            f"known-case registry mismatch missing={missing} unexpected={unexpected}"
-        )
+        raise ValueError(f"known-case registry mismatch missing={missing} unexpected={unexpected}")
     if len(canonical) != len(observed):
         raise ValueError("known-case registry contains duplicate case-firm-year rows")
     return canonical, {
@@ -228,12 +220,10 @@ def _canonicalize_known_cases(rows: list[dict[str, str]]) -> tuple[list[dict[str
 
 
 def _write_known_cases(path: Path, rows: list[dict[str, str]]) -> Path:
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup = path.with_name(f"{path.stem}.before_canonicalization.{timestamp}{path.suffix}")
     shutil.copy2(path, backup)
-    extra_columns = [
-        column for column in rows[0] if column not in CANONICAL_KNOWN_CASE_COLUMNS
-    ]
+    extra_columns = [column for column in rows[0] if column not in CANONICAL_KNOWN_CASE_COLUMNS]
     fieldnames = [*CANONICAL_KNOWN_CASE_COLUMNS, *extra_columns]
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
@@ -322,9 +312,7 @@ def main() -> int:
         known_case_rows, normalization = _canonicalize_known_cases(known_case_rows)
         normalization["write_applied"] = bool(args.write)
         if args.write:
-            normalization["backup_path"] = str(
-                _write_known_cases(known_case_path, known_case_rows)
-            )
+            normalization["backup_path"] = str(_write_known_cases(known_case_path, known_case_rows))
 
     result = {
         "status": "PASS",
@@ -335,8 +323,7 @@ def main() -> int:
     if normalization is not None:
         result["known_case_normalization"] = normalization
     print(
-        "PRODUCTION_SOURCE_CONTRACTS_JSON="
-        + json.dumps(result, ensure_ascii=False, sort_keys=True)
+        "PRODUCTION_SOURCE_CONTRACTS_JSON=" + json.dumps(result, ensure_ascii=False, sort_keys=True)
     )
     return 0
 

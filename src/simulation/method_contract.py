@@ -16,8 +16,8 @@ threshold selection.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 import importlib.util
+from collections.abc import Mapping, Sequence
 from typing import cast
 
 from core.semantic_keys import LEARNER_ID, METHOD_ID
@@ -344,7 +344,10 @@ def build_cost_sensitive_contract(simulation: Mapping[str, object]) -> dict[str,
         budgets.append({"review_budget_id": budget_id, "fraction": float(fraction)})
 
     validation_fraction = settings.get("threshold_validation_fraction", 0.25)
-    if not isinstance(validation_fraction, (int, float)) or not 0.10 <= float(validation_fraction) <= 0.50:
+    if (
+        not isinstance(validation_fraction, (int, float))
+        or not 0.10 <= float(validation_fraction) <= 0.50
+    ):
         raise ValueError("threshold_validation_fraction must be in [0.10,0.50]")
     maximum_cost_weight = settings.get("maximum_cost_weight", 100.0)
     if not isinstance(maximum_cost_weight, (int, float)) or float(maximum_cost_weight) < 1:
@@ -384,7 +387,6 @@ def build_cost_sensitive_contract(simulation: Mapping[str, object]) -> dict[str,
         "threshold_refit_rule": "select_on_validation_then_refit_on_full_training",
         "latent_truth_training_forbidden": True,
     }
-
 
 
 def build_imbalance_treatment_contract(simulation: Mapping[str, object]) -> dict[str, object]:
@@ -446,6 +448,7 @@ def build_imbalance_treatment_contract(simulation: Mapping[str, object]) -> dict
         "validation_resampling_forbidden": True,
     }
 
+
 def build_full_method_registry(
     simulation: Mapping[str, object],
     cost_contract: Mapping[str, object] | None = None,
@@ -455,9 +458,7 @@ def build_full_method_registry(
     enabled_strategies = _string_sequence(simulation.get("methods"), "simulation.methods")
     enabled_learners = _string_sequence(simulation.get("learners"), "simulation.learners")
     contract = dict(cost_contract or build_cost_sensitive_contract(simulation))
-    imbalance = dict(
-        imbalance_contract or build_imbalance_treatment_contract(simulation)
-    )
+    imbalance = dict(imbalance_contract or build_imbalance_treatment_contract(simulation))
 
     legacy_methods = {"observability_only", "content_only", "full", "anchor_pu"}
     present_legacy = sorted(set(enabled_strategies) & legacy_methods)
@@ -562,6 +563,7 @@ def build_full_method_registry(
     if len(ids) != len(set(ids)):
         raise ValueError("P08 method_id values must be unique")
     return registry
+
 
 def build_execution_profile_contract(
     simulation: Mapping[str, object],
@@ -802,12 +804,11 @@ def build_method_registry(
 ) -> list[dict[str, object]]:
     """Build the full library and activate only the config-locked execution profile."""
     cost = dict(cost_contract or build_cost_sensitive_contract(simulation))
-    imbalance = dict(
-        imbalance_contract or build_imbalance_treatment_contract(simulation)
-    )
+    imbalance = dict(imbalance_contract or build_imbalance_treatment_contract(simulation))
     full_registry = build_full_method_registry(simulation, cost, imbalance)
     profile_contract = build_execution_profile_contract(simulation, full_registry)
     return apply_execution_profile(full_registry, profile_contract)
+
 
 def predictive_required_metrics(cost_contract: Mapping[str, object]) -> list[str]:
     required = list(BASE_PREDICTIVE_REQUIRED_METRICS)
@@ -838,21 +839,27 @@ def expected_counts(
     imbalance_contract: Mapping[str, object] | None = None,
 ) -> dict[str, int]:
     """Counts for the complete available method library."""
-    core_cost_count = 3 if cost_contract is None else len(
-        cast(list[object], cost_contract["core_training_regime_ids"])
+    core_cost_count = (
+        3
+        if cost_contract is None
+        else len(cast(list[object], cost_contract["core_training_regime_ids"]))
     )
-    noncore_cost_count = 2 if cost_contract is None else len(
-        cast(list[object], cost_contract["extended_training_regime_ids"])
+    noncore_cost_count = (
+        2
+        if cost_contract is None
+        else len(cast(list[object], cost_contract["extended_training_regime_ids"]))
     )
-    imbalance_count = 12 if imbalance_contract is None else (
-        len(cast(list[object], imbalance_contract["robustness_learner_ids"]))
-        * len(cast(list[object], imbalance_contract["robustness_strategy_ids"]))
-        * len(cast(list[object], imbalance_contract["robustness_treatment_ids"]))
+    imbalance_count = (
+        12
+        if imbalance_contract is None
+        else (
+            len(cast(list[object], imbalance_contract["robustness_learner_ids"]))
+            * len(cast(list[object], imbalance_contract["robustness_strategy_ids"]))
+            * len(cast(list[object], imbalance_contract["robustness_treatment_ids"]))
+        )
     )
     core = len(CORE_LEARNERS) * len(CORE_STRATEGIES) * core_cost_count
-    methodological = (
-        len(METHODOLOGICAL_LEARNERS) * len(NONCORE_STRATEGIES) * noncore_cost_count
-    )
+    methodological = len(METHODOLOGICAL_LEARNERS) * len(NONCORE_STRATEGIES) * noncore_cost_count
     extended = len(EXTENDED_LEARNERS) * len(NONCORE_STRATEGIES) * noncore_cost_count
     standalone = len(STANDALONE_ESTIMATORS)
     neutral_core = len(CORE_LEARNERS) * len(CORE_STRATEGIES)
@@ -869,18 +876,15 @@ def expected_counts(
         "learner_total": len(ALL_LEARNERS),
     }
 
+
 def profile_expected_counts(
     registry: Sequence[Mapping[str, object]],
     *,
     active_only: bool = True,
 ) -> dict[str, object]:
-    selected = [
-        item for item in registry if not active_only or item.get(IS_ACTIVE) is True
-    ]
+    selected = [item for item in registry if not active_only or item.get(IS_ACTIVE) is True]
     predictive = [item for item in selected if item.get(METHOD_FAMILY) == "predictive"]
-    standalone = [
-        item for item in selected if item.get(METHOD_FAMILY) == "standalone_estimator"
-    ]
+    standalone = [item for item in selected if item.get(METHOD_FAMILY) == "standalone_estimator"]
     learners = {
         str(item[LEARNER_ID])
         for item in predictive
@@ -901,7 +905,6 @@ def profile_expected_counts(
         "analysis_role_counts": role_counts,
         "protocol_status_counts": status_counts,
     }
-
 
 
 def required_optional_dependencies(
@@ -930,13 +933,12 @@ def validate_optional_dependencies(
 ) -> list[str]:
     required = required_optional_dependencies(registry, active_only=active_only)
     missing = sorted(
-        dependency
-        for dependency in required
-        if importlib.util.find_spec(dependency) is None
+        dependency for dependency in required if importlib.util.find_spec(dependency) is None
     )
     if missing:
         raise ValueError(f"P08 active profile is missing optional dependencies={missing}")
     return sorted(required)
+
 
 def active_method_ids(scenario: Mapping[str, object]) -> set[str]:
     raw = scenario.get("active_method_ids")
@@ -975,6 +977,7 @@ def method_by_id(
             f"profile={method.get(EXECUTION_PROFILE)}"
         )
     return method
+
 
 def cost_regime_by_id(scenario: Mapping[str, object], cost_regime_id: str) -> dict[str, object]:
     raw = scenario.get("cost_regime_registry")
@@ -1048,6 +1051,7 @@ def _predictive_method(
         REQUIRED_METRICS: list(required_metrics),
         EVALUATION_TARGETS: list(PREDICTIVE_EVALUATION_TARGETS),
     }
+
 
 def _registered_ids(value: object, context: str, allowed: set[str]) -> list[str]:
     values = _string_sequence(value, context)

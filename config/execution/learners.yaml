@@ -111,7 +111,18 @@ learners:
     max_valid_configurations_per_learner_inner_fold: 50
     equivalent_budget_allowed: true
     runtime_and_valid_configuration_count_reported: true
-    search_spaces: {}
+    search_spaces:
+      elastic_net_logistic:
+        inverse_regularization: [0.1, 1.0, 10.0]
+        l1_ratio: [0.0, 0.5, 1.0]
+      random_forest:
+        trees: [200, 500]
+        minimum_leaf_size: [5, 10, 20]
+        maximum_features: [sqrt, log2]
+      main_boosting:
+        maximum_iterations: [100, 150]
+        learning_rate: [0.03, 0.05]
+        maximum_leaf_nodes: [7, 15]
 
   cost_sensitive_contract:
     sample_weight_supported: use_native_sample_weight

@@ -10,7 +10,6 @@ from typing import Any
 
 import yaml
 
-
 REQUIRED_PROFILES = {
     "financial_statement_core_long",
     "audit_annual_long",
@@ -58,7 +57,9 @@ def _validate_preparation(receipt: dict[str, Any]) -> None:
         raise ValueError("eligible unresolved sanction mappings must equal zero")
 
 
-def _validate_lock(lock: dict[str, Any]) -> tuple[list[float], dict[str, dict[str, float]], dict[str, Any]]:
+def _validate_lock(
+    lock: dict[str, Any],
+) -> tuple[list[float], dict[str, dict[str, float]], dict[str, Any]]:
     raw_grid = lock.get("fixed_pi_grid")
     if not isinstance(raw_grid, list) or not raw_grid:
         raise ValueError("fixed_pi_grid must be a nonempty list")
@@ -101,7 +102,9 @@ def _validate_lock(lock: dict[str, Any]) -> tuple[list[float], dict[str, dict[st
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--measurement-config", type=Path, default=Path("config/methodology/measurement.yaml"))
+    parser.add_argument(
+        "--measurement-config", type=Path, default=Path("config/methodology/measurement.yaml")
+    )
     parser.add_argument("--lock-file", type=Path, required=True)
     parser.add_argument("--preparation-receipt", type=Path, required=True)
     parser.add_argument("--write", action="store_true")

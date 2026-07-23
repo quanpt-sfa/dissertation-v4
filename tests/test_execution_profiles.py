@@ -63,21 +63,15 @@ def test_core_matches_vietnamese_learner_roster() -> None:
     predictive = [item for item in active if item[module.METHOD_FAMILY] == "predictive"]
     assert len(predictive) == 20
     assert len(active) == 22
-    assert {
-        item[module.LEARNER_ID] for item in predictive
-    } == {
+    assert {item[module.LEARNER_ID] for item in predictive} == {
         "logistic_regression",
         "linear_svm",
         "random_forest",
         "xgboost",
         "multilayer_perceptron",
     }
-    assert {item[module.LABEL_STRATEGY_ID] for item in predictive} == set(
-        module.LABEL_STRATEGIES
-    )
-    assert {item[module.TRAINING_COST_REGIME_ID] for item in predictive} == {
-        "symmetric"
-    }
+    assert {item[module.LABEL_STRATEGY_ID] for item in predictive} == set(module.LABEL_STRATEGIES)
+    assert {item[module.TRAINING_COST_REGIME_ID] for item in predictive} == {"symmetric"}
     assert {item[module.IMBALANCE_TREATMENT_ID] for item in predictive} == {"none"}
     assert contract["active_profile"] == "core"
 
@@ -119,25 +113,22 @@ def test_smote_adasyn_are_separate_from_ipw_and_pu() -> None:
         "smote",
         "adasyn",
     }
-    assert {item[module.TRAINING_COST_REGIME_ID] for item in active} == {
-        "symmetric"
-    }
+    assert {item[module.TRAINING_COST_REGIME_ID] for item in active} == {"symmetric"}
 
 
 def test_inactive_method_is_not_executable() -> None:
     module, _, _, _, _, _, registry = _registry_for("core")
     scenario = {
         "method_registry": registry,
-        "active_method_ids": [
-            item["method_id"] for item in registry if item[module.IS_ACTIVE]
-        ],
+        "active_method_ids": [item["method_id"] for item in registry if item[module.IS_ACTIVE]],
     }
     inactive = next(item for item in registry if not item[module.IS_ACTIVE])
     with pytest.raises(ValueError, match="inactive"):
         module.method_by_id(scenario, inactive["method_id"])
-    assert module.method_by_id(
-        scenario, inactive["method_id"], require_active=False
-    )["method_id"] == inactive["method_id"]
+    assert (
+        module.method_by_id(scenario, inactive["method_id"], require_active=False)["method_id"]
+        == inactive["method_id"]
+    )
 
 
 def test_all_methods_have_profile_membership_role_and_treatment() -> None:
