@@ -1693,7 +1693,8 @@
       "rule": "reportUnnecessaryCast"
     }
   ],
-  "generated_from": "3e9672822d52301a70ec809b3134ebc39950f00b",
-  "schema_version": 1,
+  "generated_from": "8a22e5725af9a96005d2668a22a1f9e8700c69f6",
+  "schema_version": 2,
+  "strict_since_commit": "8a22e5725af9a96005d2668a22a1f9e8700c69f6",
   "total_errors": 560
 }
