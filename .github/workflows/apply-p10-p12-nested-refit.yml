@@ -47,6 +47,8 @@ jobs:
             tests/stages/test_track_b_propagation.py
       - name: Pyright targeted validation
         run: |
+          mkdir -p artifacts/diagnostics
+          set -o pipefail
           uv run pyright \
             src/selection/nested_refit.py \
             src/selection/service.py \
@@ -54,7 +56,14 @@ jobs:
             scripts/p10_select_measurement.py \
             scripts/p11_freeze_models.py \
             scripts/p12_evaluate.py \
-            tests/stages/test_p10_nested_refit.py
+            tests/stages/test_p10_nested_refit.py \
+            2>&1 | tee artifacts/diagnostics/p10_p12_pyright.txt
+      - name: Upload Pyright diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p10-p12-pyright-diagnostics
+          path: artifacts/diagnostics/p10_p12_pyright.txt
       - name: Commit production integration
         if: github.event_name == 'push'
         run: |
