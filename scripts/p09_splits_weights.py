@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import pandas as pd
 
 from core.fold_control import require_primary_target
+from core.mcse_contract import require_p08_completion
 from core.pipeline import load_run, mapping, outer_fold_ids, physical_columns, sequence, stable_hash
 from splits.service import build_splits_and_weights
 
@@ -28,6 +29,8 @@ def main() -> int:
     if args.dry_run:
         print(f"P09 dry-run: folds={','.join(fold_ids)}")
         return 0
+    mcse_report = loaded.context.read("mcse_report", {})
+    require_p08_completion(mcse_report, "P09")
     panel = loaded.context.read("feature_panel", {})
     feature_registry = [
         mapping(item, "feature registry item")
