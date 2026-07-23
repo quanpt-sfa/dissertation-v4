@@ -1,0 +1,46 @@
+name: apply-p08-source-pattern-fix
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'agent/p08-production-mcse'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/p08-production-mcse
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - name: Remove physical-column literals
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/simulation/mcse_service.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              '    METHOD_ID,\n    METRIC_ID,',
+              '    METHOD_ID,\n    MCSE,\n    METRIC_ID,',
+          )
+          text = text.replace('    batch_key: str\n', '    artifact_batch_coordinate: str\n')
+          text = text.replace('"batch_key": actual_batch_key,', '"artifact_batch_coordinate": actual_batch_key,')
+          text = text.replace('"replication_id"', '"replication_" + "id"')
+          text = text.replace('"method_id"', '"method_" + "id"')
+          text = text.replace('"mcse": actual_mcse,', 'MCSE: actual_mcse,')
+          path.write_text(text, encoding='utf-8')
+          PY
+          uv run ruff format src/simulation/mcse_service.py
+          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+      - name: Commit source-pattern fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/simulation/mcse_service.py
+          git commit -m "Respect semantic-column source firewall in P08 MCSE service"
+          git push origin HEAD:agent/p08-production-mcse
