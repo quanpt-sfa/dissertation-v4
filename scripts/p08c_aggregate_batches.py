@@ -77,13 +77,7 @@ def main() -> int:
     for item in inventory:
         if item.get("artifact_id") != "simulation_batches":
             continue
-        raw_coordinates = item.get("coordinates")
-        if not isinstance(raw_coordinates, dict):
-            raise ValueError("simulation batch manifest coordinates required")
-        coordinates = {
-            str(key): str(value)
-            for key, value in cast(dict[object, object], raw_coordinates).items()
-        }
+        coordinates = _coordinates(item)
         value = loaded.context.read("simulation_batches", coordinates)
         if not isinstance(value, pd.DataFrame):
             raise ValueError("simulation_batches artifact must be a DataFrame")
