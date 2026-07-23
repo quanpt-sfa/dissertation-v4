@@ -16,7 +16,7 @@ jobs:
       - run: uv sync --all-extras
       - name: Apply strict typing patch
         run: |
-          git apply .github/agent/l3-typefix.patch
+          patch --verbose --forward -p1 < .github/agent/l3-typefix.patch
           uv run ruff format src/simulation/l3_variants.py
           uv run ruff check src/simulation/l3_variants.py
           uv run pyright --outputjson > /tmp/pyright.json || true
