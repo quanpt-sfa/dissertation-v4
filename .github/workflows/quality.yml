@@ -23,9 +23,9 @@ jobs:
           uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
           uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
       - name: Apply initial Ruff fixes
-        run: |
-          uv run ruff check --fix . || true
-          uv run ruff format .
+        run: uv run ruff check --fix . || true
+      - name: Apply initial Ruff formatting
+        run: uv run ruff format .
       - name: Update D05 assurance contract
         run: |
           python - <<'PY'
@@ -40,12 +40,14 @@ jobs:
           elif new not in text:
               raise SystemExit("D05 primary-target assertion is not recognized")
           PY
-      - name: Verify Ruff and formatting
-        run: |
-          uv run ruff check --fix . || true
-          uv run ruff format .
-          uv run ruff check .
-          uv run ruff format --check .
+      - name: Apply final Ruff fixes
+        run: uv run ruff check --fix . || true
+      - name: Apply final Ruff formatting
+        run: uv run ruff format .
+      - name: Verify Ruff lint
+        run: uv run ruff check .
+      - name: Verify Ruff formatting
+        run: uv run ruff format --check .
       - name: Verify Pyright
         run: uv run pyright
       - name: Verify pytest
