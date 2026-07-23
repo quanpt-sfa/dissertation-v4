@@ -11,7 +11,7 @@ from .errors import (
     MethodologicalInvariantError,
     UnknownReferenceError,
 )
-from .semantic_keys import CHANNEL_ID
+from .semantic_keys import CHANNEL_ID, PREDICTION_TIME
 
 StringMap = dict[str, Any]
 
@@ -258,7 +258,9 @@ def validate_methodology(
         simulation.get("protocol_role"),
         "simulation.protocol_role",
     )
-    prediction_time = _entry(study.get("prediction_time"), "study.prediction_time")
+    prediction_anchor_config = _entry(
+        study.get(PREDICTION_TIME), "study.prediction_time"
+    )
     sample_years = _entry(study.get("sample_fiscal_years"), "study.sample_fiscal_years")
     feature_store = _entry(features.get("store"), "features.store")
     availability_contract = _entry(
@@ -334,10 +336,10 @@ def validate_methodology(
             "hierarchical-pi cannot enter Gate 1",
         ),
         (
-            prediction_time.get("default_anchor")
+            prediction_anchor_config.get("default_anchor")
             == "synthetic_annual_anchor_31_march_fiscal_year_plus_one"
-            and prediction_time.get("observed_publication_date_available") is False
-            and prediction_time.get("anchor_assumption_disclosure_required") is True,
+            and prediction_anchor_config.get("observed_publication_date_available") is False
+            and prediction_anchor_config.get("anchor_assumption_disclosure_required") is True,
             "D01 synthetic annual anchor must be explicit and disclosed",
         ),
         (

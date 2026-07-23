@@ -25,9 +25,9 @@ _ROLES = {"content", "observability", "ambiguous", "administrative", "identifier
 _CONFIRMATORY = {"confirmatory", "robustness_only", "descriptive_only", "blocked"}
 _DECISION_STATUS = {"LOCKED", "RESEARCH_DECISION_REQUIRED", "UNAVAILABLE", "NOT_APPLICABLE"}
 MODEL_ELIGIBILITY_VALUES = frozenset(
-    {"eligible", "eligible_observability_view", "blocked_until_mapping_review"}
+    {ELIGIBLE, "eligible_observability_view", "blocked_until_mapping_review"}
 )
-FIT_MODEL_ELIGIBILITY_VALUES = frozenset({"eligible", "eligible_observability_view"})
+FIT_MODEL_ELIGIBILITY_VALUES = frozenset({ELIGIBLE, "eligible_observability_view"})
 _LEAKAGE_DECISIONS = {
     "ALLOW",
     "ALLOW_WITH_ABLATION",
