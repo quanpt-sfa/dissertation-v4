@@ -1,15 +1,14 @@
 name: apply-remediation-once
 
 on:
-  push:
-    branches:
-      - agent/pipeline-audit-remediation
+  pull_request:
 
 permissions:
   contents: write
 
 jobs:
   apply:
+    if: github.head_ref == 'agent/pipeline-audit-remediation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
