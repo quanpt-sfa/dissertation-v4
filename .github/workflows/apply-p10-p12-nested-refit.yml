@@ -18,6 +18,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --all-extras
       - run: uv run python .github/scripts/apply_p10_p12_semantic_hardening.py
+      - run: uv run python .github/scripts/fix_p10_semantic_types.py
       - name: Format hardened files
         run: |
           uv run ruff format \
@@ -50,22 +51,13 @@ jobs:
             tests/stages/test_track_b_propagation.py
       - name: Pyright nested hardening
         run: |
-          mkdir -p artifacts/diagnostics
-          set -o pipefail
           uv run pyright \
             src/selection/nested_refit.py \
             src/selection/service.py \
             scripts/p10_select_measurement.py \
             scripts/p11_freeze_models.py \
             scripts/p12_evaluate.py \
-            tests/stages/test_p10_nested_refit.py \
-            2>&1 | tee artifacts/diagnostics/p10_p12_semantic_pyright.txt
-      - name: Upload semantic Pyright diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: p10-p12-semantic-pyright
-          path: artifacts/diagnostics/p10_p12_semantic_pyright.txt
+            tests/stages/test_p10_nested_refit.py
       - name: Commit semantic hardening
         if: github.event_name == 'push'
         run: |
