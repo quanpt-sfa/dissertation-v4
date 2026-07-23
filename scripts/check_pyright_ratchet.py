@@ -30,7 +30,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("files", nargs="*", help="Changed files that must have zero Pyright errors")
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
-    parser.add_argument("--diff-base", help="Git base SHA/ref used to discover changed Python files")
+    parser.add_argument(
+        "--diff-base", help="Git base SHA/ref used to discover changed Python files"
+    )
     parser.add_argument("--write-baseline", action="store_true")
     parser.add_argument("--generated-from", default="")
     parser.add_argument("--report", type=Path)
