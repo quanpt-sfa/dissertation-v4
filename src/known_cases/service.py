@@ -20,7 +20,6 @@ def evaluate_known_cases(
     strong_percentile: float,
     columns: dict[str, str],
     weak_percentile: float = 0.5,
-    weak_percentile: float = 0.5,
 ) -> list[dict[str, Any]]:
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
