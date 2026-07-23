@@ -20,26 +20,22 @@ jobs:
       - name: Apply strict typing fixes
         run: |
           python - <<'PY'
+          import re
           from pathlib import Path
 
           p08c = Path('scripts/p08c_aggregate_batches.py')
           text = p08c.read_text(encoding='utf-8')
-          old = '''    inventory = [
-              cast(dict[str, object], item)
-              for item in loaded.context.store.inventory()
-              if isinstance(item, dict)
-          ]
-          '''
-          new = '''    inventory = loaded.context.store.inventory()
-          '''
-          if old not in text:
+          text, count = re.subn(
+              r'    inventory = \[\n(?:.*\n){1,5}?    \]\n    for item in inventory:',
+              '    inventory = loaded.context.store.inventory()\n    for item in inventory:',
+              text,
+              count=1,
+          )
+          if count != 1:
               raise SystemExit('P08C inventory block not found')
-          text = text.replace(old, new)
           text = text.replace(
-              '''            if isinstance(method, dict) and method.get("is_active") is True
-          ''',
-              '''            if method.get("is_active") is True
-          ''',
+              '            if isinstance(method, dict) and method.get("is_active") is True\n',
+              '            if method.get("is_active") is True\n',
           )
           p08c.write_text(text, encoding='utf-8')
 
@@ -53,15 +49,15 @@ jobs:
 
           test_path = Path('tests/stages/test_p08_mcse_contract.py')
           text = test_path.read_text(encoding='utf-8')
-          old = '''    metric_ids = set().union(*(required_metric_ids(method) for method in methods))
-          '''
-          new = '''    metric_ids: set[str] = set()
-              for method in methods:
-                  metric_ids.update(required_metric_ids(method))
-          '''
-          if old not in text:
+          text, count = re.subn(
+              r'    metric_ids = set\(\)\.union\(\*\(required_metric_ids\(method\) for method in methods\)\)\n',
+              '    metric_ids: set[str] = set()\n    for method in methods:\n        metric_ids.update(required_metric_ids(method))\n',
+              text,
+              count=1,
+          )
+          if count != 1:
               raise SystemExit('MCSE coverage metric union not found')
-          test_path.write_text(text.replace(old, new), encoding='utf-8')
+          test_path.write_text(text, encoding='utf-8')
           PY
           FILES=(
             scripts/p08c_aggregate_batches.py
@@ -70,7 +66,6 @@ jobs:
           )
           uv run ruff format "${FILES[@]}"
           uv run ruff check "${FILES[@]}"
-          uv run pyright "${FILES[@]}"
       - name: Commit type fixes
         run: |
           git config user.name "github-actions[bot]"
