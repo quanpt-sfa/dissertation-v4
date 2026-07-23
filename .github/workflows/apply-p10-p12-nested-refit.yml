@@ -26,6 +26,14 @@ jobs:
             scripts/p10_select_measurement.py \
             scripts/p12_evaluate.py \
             tests/stages/test_p10_nested_refit.py
+      - name: Apply safe Ruff fixes
+        run: |
+          uv run ruff check --fix \
+            src/selection/nested_refit.py \
+            src/selection/service.py \
+            scripts/p10_select_measurement.py \
+            scripts/p12_evaluate.py \
+            tests/stages/test_p10_nested_refit.py
       - name: Ruff hardened files
         run: |
           uv run ruff check \
