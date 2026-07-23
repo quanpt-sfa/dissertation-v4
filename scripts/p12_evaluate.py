@@ -47,6 +47,12 @@ def main() -> int:
         raise RuntimeError(f"fold={args.outer_fold}: a PASS model-freeze receipt is required")
     if freeze.get("protocol_hash") != loaded.protocol_hash:
         raise RuntimeError("model-freeze receipt protocol hash mismatch")
+    measurement_selection = mapping(
+        loaded.context.read("measurement_selection_registry", coordinates),
+        "measurement selection",
+    )
+    if freeze.get("measurement_selection_hash") != stable_hash(measurement_selection):
+        raise RuntimeError("measurement selection hash mismatch")
     channel_selection = mapping(
         loaded.context.read("channel_measurement_selection", coordinates),
         "channel measurement selection",
@@ -71,6 +77,7 @@ def main() -> int:
             "model_freeze_receipt", coordinates
         ),
         "mcse_report_hash": loaded.context.store.receipt_hash("mcse_report", {}),
+        "measurement_selection_hash": stable_hash(measurement_selection),
         "channel_measurement_selection_hash": stable_hash(channel_selection),
         "nested_selection_receipt_hash": stable_hash(nested_receipt),
         "opened_at_state": "FROZEN",

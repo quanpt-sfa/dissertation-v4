@@ -309,7 +309,7 @@ def fit_l3_fold_candidate(
                     for channel, value in channel_outcomes.items()
                     if channel != heldout
                 )
-                if heldout_value is None or remaining_observed < minimum_observed_channels:
+                if remaining_observed < minimum_observed_channels:
                     continue
                 heldout_target_rows.append(
                     {
@@ -319,6 +319,8 @@ def fit_l3_fold_candidate(
                         TARGET_VALUE: float(probability),
                     }
                 )
+                if heldout_value is None:
+                    continue
                 clipped = min(1.0 - 1e-6, max(1e-6, float(probability)))
                 outcome = float(bool(heldout_value))
                 losses.append(

@@ -232,19 +232,24 @@ def validate_nested_refit_receipt(
     outer_fold: str,
     required_optional_measurements: Sequence[str],
 ) -> dict[str, object]:
-    """Validate the P10 nested-selection receipt before P11/P12 may proceed."""
+    """Validate every nested candidate-by-channel cell before P11/P12 proceed."""
     raw = channel_selection.get("nested_refit_receipt")
     if not isinstance(raw, dict):
         raise RuntimeError("NESTED_CHANNEL_REFIT_RECEIPT_MISSING")
     receipt = _string_object_dict(cast(object, raw), "nested-refit receipt")
     if str(receipt.get(OUTER_FOLD)) != str(outer_fold):
         raise RuntimeError("NESTED_CHANNEL_REFIT_OUTER_FOLD_MISMATCH")
+    if receipt.get("selection_procedure") != "full_refit_channel_within_time":
+        raise RuntimeError("NESTED_CHANNEL_REFIT_PROCEDURE_INVALID")
     if receipt.get("fit_scope") != "development_history_only":
         raise RuntimeError("NESTED_CHANNEL_REFIT_SCOPE_INVALID")
     if receipt.get("outer_outcomes_accessed") is not False:
         raise RuntimeError("NESTED_CHANNEL_REFIT_OUTER_OUTCOME_FIREWALL_BREACH")
     if receipt.get("outer_rows_used_in_selection") != 0:
         raise RuntimeError("NESTED_CHANNEL_REFIT_OUTER_ROWS_USED")
+    if receipt.get("complete_channel_grid_required") is not True:
+        raise RuntimeError("NESTED_CHANNEL_REFIT_COMPLETE_GRID_NOT_REQUIRED")
+
     removed = receipt.get("heldout_channel_removed_from")
     if not isinstance(removed, list):
         raise RuntimeError("NESTED_CHANNEL_REFIT_REMOVAL_CONTRACT_INVALID")
@@ -252,21 +257,92 @@ def validate_nested_refit_receipt(
     if set(removed_values) != set(_REMOVED_INPUTS):
         raise RuntimeError("NESTED_CHANNEL_REFIT_REMOVAL_CONTRACT_INVALID")
 
+    expected_raw = receipt.get("expected_channels")
+    if not isinstance(expected_raw, list):
+        raise RuntimeError("NESTED_CHANNEL_REFIT_EXPECTED_CHANNELS_MISSING")
+    expected_channels = [str(value) for value in cast(list[object], expected_raw)]
+    if not expected_channels or len(expected_channels) != len(set(expected_channels)):
+        raise RuntimeError("NESTED_CHANNEL_REFIT_EXPECTED_CHANNELS_INVALID")
+
     candidate_rows_raw = receipt.get("candidate_results")
+    cell_rows_raw = receipt.get("cell_results")
     if not isinstance(candidate_rows_raw, list):
         raise RuntimeError("NESTED_CHANNEL_REFIT_CANDIDATES_MISSING")
+    if not isinstance(cell_rows_raw, list):
+        raise RuntimeError("NESTED_CHANNEL_REFIT_CELLS_MISSING")
     candidate_rows = [
         _string_object_dict(cast(object, item), "nested-refit candidate")
         for item in cast(list[object], candidate_rows_raw)
         if isinstance(item, dict)
     ]
+    cell_rows = [
+        _string_object_dict(cast(object, item), "nested-refit cell")
+        for item in cast(list[object], cell_rows_raw)
+        if isinstance(item, dict)
+    ]
     by_candidate = {str(item.get("candidate")): item for item in candidate_rows}
-    for measurement_id in required_optional_measurements:
-        candidate = by_candidate.get(str(measurement_id))
+    for measurement_id_raw in required_optional_measurements:
+        measurement_id = str(measurement_id_raw)
+        candidate = by_candidate.get(measurement_id)
         if candidate is None or candidate.get(ELIGIBLE) is not True:
             raise RuntimeError(
                 f"NESTED_CHANNEL_REFIT_REQUIRED_CANDIDATE_INCOMPLETE:{measurement_id}"
             )
+        objective = candidate.get("objective")
+        if (
+            not isinstance(objective, (int, float))
+            or isinstance(objective, bool)
+            or not math.isfinite(float(objective))
+        ):
+            raise RuntimeError(f"NESTED_CHANNEL_REFIT_OBJECTIVE_INVALID:{measurement_id}")
+        if candidate.get("required_heldout_channels") != len(expected_channels) or candidate.get(
+            "completed_heldout_channels"
+        ) != len(expected_channels):
+            raise RuntimeError(f"NESTED_CHANNEL_REFIT_COUNTS_INVALID:{measurement_id}")
+
+        cells = [item for item in cell_rows if str(item.get("candidate")) == measurement_id]
+        heldout_channels = [str(item.get(_HELDOUT_CHANNEL)) for item in cells]
+        if len(cells) != len(expected_channels) or set(heldout_channels) != set(expected_channels):
+            raise RuntimeError(f"NESTED_CHANNEL_REFIT_CHANNEL_GRID_INCOMPLETE:{measurement_id}")
+        for cell in cells:
+            heldout = str(cell.get(_HELDOUT_CHANNEL))
+            row_count = cell.get("rows")
+            cell_objective = cell.get("soft_cross_entropy")
+            if cell.get("status") != "PASS":
+                raise RuntimeError(f"NESTED_CHANNEL_REFIT_CELL_NOT_PASS:{measurement_id}:{heldout}")
+            if not isinstance(row_count, int) or isinstance(row_count, bool) or row_count < 1:
+                raise RuntimeError(
+                    f"NESTED_CHANNEL_REFIT_CELL_ROWS_INVALID:{measurement_id}:{heldout}"
+                )
+            if (
+                not isinstance(cell_objective, (int, float))
+                or isinstance(cell_objective, bool)
+                or not math.isfinite(float(cell_objective))
+            ):
+                raise RuntimeError(
+                    f"NESTED_CHANNEL_REFIT_CELL_OBJECTIVE_INVALID:{measurement_id}:{heldout}"
+                )
+            if (
+                cell.get("fit_scope") != "development_history_only"
+                or cell.get("outer_rows_used") != 0
+                or cell.get("outer_outcomes_accessed") is not False
+            ):
+                raise RuntimeError(
+                    f"NESTED_CHANNEL_REFIT_CELL_SCOPE_INVALID:{measurement_id}:{heldout}"
+                )
+            if any(
+                cell.get(flag) is not True
+                for flag in (
+                    "heldout_removed_from_target",
+                    "heldout_removed_from_label_model",
+                    "heldout_removed_from_features",
+                    "heldout_removed_from_tuning",
+                    "heldout_removed_from_calibration",
+                )
+            ):
+                raise RuntimeError(
+                    f"NESTED_CHANNEL_REFIT_CELL_REMOVAL_INVALID:{measurement_id}:{heldout}"
+                )
     if required_optional_measurements and receipt.get("status") != "PASS":
         raise RuntimeError("NESTED_CHANNEL_REFIT_REQUIRED_PASS_MISSING")
     return receipt

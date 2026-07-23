@@ -186,10 +186,18 @@ def main() -> int:
         "optional_candidate_selected_for_diagnostics": result.selection.get("selected_measurement"),
         "optional_selection_scope": result.selection.get("selection_scope"),
     }
-    channel_selection = {
-        **dict(result.channel_selection),
-        "nested_refit_receipt": nested.receipt,
+    nested_cells_raw = nested.receipt.get("cell_results")
+    if not isinstance(nested_cells_raw, list):
+        raise RuntimeError("P10_NESTED_REFIT_CELL_RESULTS_MISSING")
+    nested_cells = cast(list[object], nested_cells_raw)
+    proxy_raw = result.channel_selection.get("strict_channel_results", [])
+    proxy_channel_diagnostics = cast(list[object], proxy_raw) if isinstance(proxy_raw, list) else []
+    channel_selection: dict[str, object] = {
+        str(key): cast(object, value) for key, value in result.channel_selection.items()
     }
+    channel_selection["proxy_only_channel_diagnostics"] = proxy_channel_diagnostics
+    channel_selection["strict_channel_results"] = nested_cells
+    channel_selection["nested_refit_receipt"] = nested.receipt
     if l3_fold_result is not None and l3_fold_result.get("status") == "PASS":
         channel_selection.update(
             {
