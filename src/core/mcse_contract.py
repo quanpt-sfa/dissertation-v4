@@ -20,6 +20,4 @@ def p08_completion_blockers(report: object) -> list[str]:
 def require_p08_completion(report: object, stage_id: str) -> None:
     blockers = p08_completion_blockers(report)
     if blockers:
-        raise RuntimeError(
-            f"{stage_id}_PRODUCTION_PATH_BLOCKED: blockers={','.join(blockers)}"
-        )
+        raise RuntimeError(f"{stage_id}_PRODUCTION_PATH_BLOCKED: blockers={','.join(blockers)}")

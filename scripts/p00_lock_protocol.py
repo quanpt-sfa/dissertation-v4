@@ -23,14 +23,13 @@ from core.registry_compiler import (
     source_manifest,
 )
 from core.schema_registry import contract_registry
-from core.semantic_keys import SCENARIO_ID, SCENARIO_KEY, METHOD_KEY, BATCH_KEY
+from core.semantic_keys import BATCH_KEY, METHOD_KEY, SCENARIO_ID, SCENARIO_KEY
 from simulation.coordinate_contract import (
-    SCENARIO_KEY_PREFIX,
     METHOD_KEY_PREFIX,
+    SCENARIO_KEY_PREFIX,
     SHORT_KEY_HEX_LENGTH,
 )
 from simulation.scenario_contract import validate_scenario_target_identity
-
 
 P08_EMPIRICAL_ARCHITECTURE_VERSION = "p02-p05-p07-calibrated-replication-paired-v2"
 P08_REQUIRED_READS = frozenset(
@@ -104,7 +103,9 @@ def _validate_path_budgets(registry: dict[str, Any], output_root: Path | None, r
     artifacts = registry.get("artifacts", {})
     reproducibility = registry.get("reproducibility", {})
     output_root_template = reproducibility.get("output_root_template", "artifacts/runs/{run_id}")
-    run_root = output_root / run_id if output_root else Path(output_root_template.format(run_id=run_id))
+    run_root = (
+        output_root / run_id if output_root else Path(output_root_template.format(run_id=run_id))
+    )
     run_root = run_root.resolve()
 
     mock_values = {
@@ -159,8 +160,7 @@ def _validate_path_budgets(registry: dict[str, Any], output_root: Path | None, r
 
     if violations:
         details = "\n".join(
-            f"  - {art_id} ({l} chars): {p}"
-            for art_id, p, l in violations
+            f"  - {art_id} ({length} chars): {path}" for art_id, path, length in violations
         )
         raise ValueError(
             f"P00 path budget exceeded (limit {max_path_limit} characters):\n{details}\n"
@@ -227,9 +227,7 @@ def main() -> int:
         p("registry_lock"): registry,
         p("protocol_hash"): compiled.protocol_hash + "\n",
         p("source_config_manifest"): source_manifest(compiled, root),
-        p("capability_seed"): {
-            key: value["initial_status"] for key, value in capabilities.items()
-        },
+        p("capability_seed"): {key: value["initial_status"] for key, value in capabilities.items()},
         p("decision_traceability"): registry["decision_traceability"],
         p("artifact_catalog"): artifacts,
         p("schema_catalog"): registry["schemas"],
@@ -423,7 +421,9 @@ def _validate_execution_profiles(simulation: Mapping[str, Any]) -> dict[str, obj
             )
             unknown = sorted(set(members) - set(profiles))
             if unknown:
-                raise ValueError(f"execution profile={profile_id}: unknown union profiles {unknown}")
+                raise ValueError(
+                    f"execution profile={profile_id}: unknown union profiles {unknown}"
+                )
             if profile_id in members:
                 raise ValueError(f"execution profile={profile_id}: self-reference is forbidden")
         if profile.get("blocks") is not None:
@@ -511,12 +511,8 @@ def _validate_p08_access_contract(
         raise ValueError("steps.P08.allowed_next_states must include SIMULATED")
 
     matrix_p08 = _mapping(access_matrix.get("P08"), "access_matrix.P08")
-    matrix_reads = set(
-        _string_sequence(matrix_p08.get("reads"), "access_matrix.P08.reads")
-    )
-    matrix_writes = set(
-        _string_sequence(matrix_p08.get("writes"), "access_matrix.P08.writes")
-    )
+    matrix_reads = set(_string_sequence(matrix_p08.get("reads"), "access_matrix.P08.reads"))
+    matrix_writes = set(_string_sequence(matrix_p08.get("writes"), "access_matrix.P08.writes"))
     if matrix_reads != reads or matrix_writes != writes:
         raise ValueError("compiled access_matrix.P08 does not match steps.P08")
 
@@ -610,18 +606,18 @@ def _validate_operational_scenarios(
                 )
             risk_strength = scenario.get("latent_risk_strength")
             if not isinstance(risk_strength, (int, float)) or isinstance(risk_strength, bool):
-                raise ValueError(
-                    f"scenario={scenario_id}: latent_risk_strength must be numeric"
-                )
+                raise ValueError(f"scenario={scenario_id}: latent_risk_strength must be numeric")
             if float(risk_strength) <= 0.0:
-                raise ValueError(
-                    f"scenario={scenario_id}: latent_risk_strength must be positive"
-                )
+                raise ValueError(f"scenario={scenario_id}: latent_risk_strength must be positive")
         elif tier == FULLY_SYNTHETIC_TIER:
             fully_count += 1
             sample_size = scenario.get("sample_size")
             prevalence = scenario.get("prevalence")
-            if not isinstance(sample_size, int) or isinstance(sample_size, bool) or sample_size <= 0:
+            if (
+                not isinstance(sample_size, int)
+                or isinstance(sample_size, bool)
+                or sample_size <= 0
+            ):
                 raise ValueError(
                     f"scenario={scenario_id}: fully synthetic sample_size must be a positive integer"
                 )
@@ -719,8 +715,7 @@ def _report(
     p08_architecture: Mapping[str, object],
 ) -> str:
     calibration_targets = ", ".join(
-        str(value)
-        for value in cast(Sequence[object], p08_architecture["calibration_targets"])
+        str(value) for value in cast(Sequence[object], p08_architecture["calibration_targets"])
     )
     return "\n".join(
         (

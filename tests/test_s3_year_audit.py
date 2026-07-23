@@ -61,20 +61,92 @@ def _sources() -> dict[str, object]:
 def test_prevalence_anchors_use_each_channel_once() -> None:
     source_coverage = pd.DataFrame(
         [
-            {SOURCE_ID: "S1_profit_adjustment", "profile_id": "financial_statement_core_long", CHANNEL_ID: "S1", "observed_outcomes": 100, "observed_positive_rate": 0.20},
-            {SOURCE_ID: "S1_revenue_adjustment", "profile_id": "financial_statement_core_long", CHANNEL_ID: "S1", "observed_outcomes": 100, "observed_positive_rate": 0.10},
-            {SOURCE_ID: "S2_audit_opinion", "profile_id": "audit_annual_long", CHANNEL_ID: "S2", "observed_outcomes": 100, "observed_positive_rate": 0.12},
-            {SOURCE_ID: "S3_BROAD", "profile_id": "sanction_evidence", CHANNEL_ID: "S3", "observed_outcomes": 100, "observed_positive_rate": 0.0},
-            {SOURCE_ID: "S3_REPORTING", "profile_id": "sanction_evidence", CHANNEL_ID: "S3", "observed_outcomes": 100, "observed_positive_rate": 0.0},
-            {SOURCE_ID: "S3_CONTENT", "profile_id": "sanction_evidence", CHANNEL_ID: "S3", "observed_outcomes": 100, "observed_positive_rate": 0.0},
-            {SOURCE_ID: "S3_TIMELINESS", "profile_id": "sanction_evidence", CHANNEL_ID: "S3", "observed_outcomes": 100, "observed_positive_rate": 0.0},
+            {
+                SOURCE_ID: "S1_profit_adjustment",
+                "profile_id": "financial_statement_core_long",
+                CHANNEL_ID: "S1",
+                "observed_outcomes": 100,
+                "observed_positive_rate": 0.20,
+            },
+            {
+                SOURCE_ID: "S1_revenue_adjustment",
+                "profile_id": "financial_statement_core_long",
+                CHANNEL_ID: "S1",
+                "observed_outcomes": 100,
+                "observed_positive_rate": 0.10,
+            },
+            {
+                SOURCE_ID: "S2_audit_opinion",
+                "profile_id": "audit_annual_long",
+                CHANNEL_ID: "S2",
+                "observed_outcomes": 100,
+                "observed_positive_rate": 0.12,
+            },
+            {
+                SOURCE_ID: "S3_BROAD",
+                "profile_id": "sanction_evidence",
+                CHANNEL_ID: "S3",
+                "observed_outcomes": 100,
+                "observed_positive_rate": 0.0,
+            },
+            {
+                SOURCE_ID: "S3_REPORTING",
+                "profile_id": "sanction_evidence",
+                CHANNEL_ID: "S3",
+                "observed_outcomes": 100,
+                "observed_positive_rate": 0.0,
+            },
+            {
+                SOURCE_ID: "S3_CONTENT",
+                "profile_id": "sanction_evidence",
+                CHANNEL_ID: "S3",
+                "observed_outcomes": 100,
+                "observed_positive_rate": 0.0,
+            },
+            {
+                SOURCE_ID: "S3_TIMELINESS",
+                "profile_id": "sanction_evidence",
+                CHANNEL_ID: "S3",
+                "observed_outcomes": 100,
+                "observed_positive_rate": 0.0,
+            },
         ]
     )
     channel_coverage = pd.DataFrame(
         [
-            {CHANNEL_ID: "S1", "development_rows": 100, "observed_outcomes": 100, "observed_opportunities": 100, "positive": 25, "explicit_negative": 75, "unknown": 0, "coverage_fraction": 1.0, "observed_positive_rate": 0.25},
-            {CHANNEL_ID: "S2", "development_rows": 100, "observed_outcomes": 100, "observed_opportunities": 100, "positive": 12, "explicit_negative": 88, "unknown": 0, "coverage_fraction": 1.0, "observed_positive_rate": 0.12},
-            {CHANNEL_ID: "S3", "development_rows": 100, "observed_outcomes": 100, "observed_opportunities": 100, "positive": 0, "explicit_negative": 100, "unknown": 0, "coverage_fraction": 1.0, "observed_positive_rate": 0.0},
+            {
+                CHANNEL_ID: "S1",
+                "development_rows": 100,
+                "observed_outcomes": 100,
+                "observed_opportunities": 100,
+                "positive": 25,
+                "explicit_negative": 75,
+                "unknown": 0,
+                "coverage_fraction": 1.0,
+                "observed_positive_rate": 0.25,
+            },
+            {
+                CHANNEL_ID: "S2",
+                "development_rows": 100,
+                "observed_outcomes": 100,
+                "observed_opportunities": 100,
+                "positive": 12,
+                "explicit_negative": 88,
+                "unknown": 0,
+                "coverage_fraction": 1.0,
+                "observed_positive_rate": 0.12,
+            },
+            {
+                CHANNEL_ID: "S3",
+                "development_rows": 100,
+                "observed_outcomes": 100,
+                "observed_opportunities": 100,
+                "positive": 0,
+                "explicit_negative": 100,
+                "unknown": 0,
+                "coverage_fraction": 1.0,
+                "observed_positive_rate": 0.0,
+            },
         ]
     )
 
@@ -91,13 +163,48 @@ def test_prevalence_anchors_use_each_channel_once() -> None:
 def test_prior_worksheet_does_not_multiply_s3_endpoint_count() -> None:
     source_coverage = pd.DataFrame(
         [
-            {SOURCE_ID: "S1_profit_adjustment", "profile_id": "financial_statement_core_long", CHANNEL_ID: "S1", "observed_outcomes": 90},
-            {SOURCE_ID: "S1_revenue_adjustment", "profile_id": "financial_statement_core_long", CHANNEL_ID: "S1", "observed_outcomes": 80},
-            {SOURCE_ID: "S2_audit_opinion", "profile_id": "audit_annual_long", CHANNEL_ID: "S2", "observed_outcomes": 95},
-            {SOURCE_ID: "S3_BROAD", "profile_id": "sanction_evidence", CHANNEL_ID: "S3", "observed_outcomes": 100},
-            {SOURCE_ID: "S3_REPORTING", "profile_id": "sanction_evidence", CHANNEL_ID: "S3", "observed_outcomes": 100},
-            {SOURCE_ID: "S3_CONTENT", "profile_id": "sanction_evidence", CHANNEL_ID: "S3", "observed_outcomes": 100},
-            {SOURCE_ID: "S3_TIMELINESS", "profile_id": "sanction_evidence", CHANNEL_ID: "S3", "observed_outcomes": 100},
+            {
+                SOURCE_ID: "S1_profit_adjustment",
+                "profile_id": "financial_statement_core_long",
+                CHANNEL_ID: "S1",
+                "observed_outcomes": 90,
+            },
+            {
+                SOURCE_ID: "S1_revenue_adjustment",
+                "profile_id": "financial_statement_core_long",
+                CHANNEL_ID: "S1",
+                "observed_outcomes": 80,
+            },
+            {
+                SOURCE_ID: "S2_audit_opinion",
+                "profile_id": "audit_annual_long",
+                CHANNEL_ID: "S2",
+                "observed_outcomes": 95,
+            },
+            {
+                SOURCE_ID: "S3_BROAD",
+                "profile_id": "sanction_evidence",
+                CHANNEL_ID: "S3",
+                "observed_outcomes": 100,
+            },
+            {
+                SOURCE_ID: "S3_REPORTING",
+                "profile_id": "sanction_evidence",
+                CHANNEL_ID: "S3",
+                "observed_outcomes": 100,
+            },
+            {
+                SOURCE_ID: "S3_CONTENT",
+                "profile_id": "sanction_evidence",
+                CHANNEL_ID: "S3",
+                "observed_outcomes": 100,
+            },
+            {
+                SOURCE_ID: "S3_TIMELINESS",
+                "profile_id": "sanction_evidence",
+                CHANNEL_ID: "S3",
+                "observed_outcomes": 100,
+            },
         ]
     )
     physical = pd.DataFrame(
@@ -132,14 +239,36 @@ def test_s3_reconciliation_surfaces_p03_to_p05_outcome_drift() -> None:
     }
     evidence = pd.DataFrame(
         [
-            {FIRM_ID: "F1", FISCAL_YEAR: 2019, SOURCE_ID: "S3_BROAD", OUTCOME: True, SOURCE_OPPORTUNITY: True},
-            {FIRM_ID: "F2", FISCAL_YEAR: 2019, SOURCE_ID: "S3_BROAD", OUTCOME: False, SOURCE_OPPORTUNITY: True},
+            {
+                FIRM_ID: "F1",
+                FISCAL_YEAR: 2019,
+                SOURCE_ID: "S3_BROAD",
+                OUTCOME: True,
+                SOURCE_OPPORTUNITY: True,
+            },
+            {
+                FIRM_ID: "F2",
+                FISCAL_YEAR: 2019,
+                SOURCE_ID: "S3_BROAD",
+                OUTCOME: False,
+                SOURCE_OPPORTUNITY: True,
+            },
         ]
     )
     matrices: dict[str, Any] = {
         "rows": [
-            {FIRM_ID: "F1", FISCAL_YEAR: 2019, "source_outcomes": {"S3_BROAD": True}, "source_opportunities": {"S3_BROAD": True}},
-            {FIRM_ID: "F2", FISCAL_YEAR: 2019, "source_outcomes": {"S3_BROAD": None}, "source_opportunities": {"S3_BROAD": True}},
+            {
+                FIRM_ID: "F1",
+                FISCAL_YEAR: 2019,
+                "source_outcomes": {"S3_BROAD": True},
+                "source_opportunities": {"S3_BROAD": True},
+            },
+            {
+                FIRM_ID: "F2",
+                FISCAL_YEAR: 2019,
+                "source_outcomes": {"S3_BROAD": None},
+                "source_opportunities": {"S3_BROAD": True},
+            },
         ]
     }
 

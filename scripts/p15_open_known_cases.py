@@ -149,7 +149,9 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
             "model_selection_include_flag": False,
             "external_validation_include_flag": True,
         }:
-            raise ValueError("known case inclusion flags violate the sealed external-validation role")
+            raise ValueError(
+                "known case inclusion flags violate the sealed external-validation role"
+            )
         rows.append(
             {
                 "case_id": str(row[str(semantics["case_id"])]),

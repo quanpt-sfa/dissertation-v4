@@ -79,16 +79,14 @@ L3_VARIANT_SPECS: dict[str, dict[str, object]] = {
     },
     "l3_wrong_fixed_pi": {
         "description": (
-            "L3 misspecification that fixes prevalence to a prespecified "
-            "incorrect value."
+            "L3 misspecification that fixes prevalence to a prespecified incorrect value."
         ),
         "chapter_2_role": "l3_fixed_pi_misspecification",
         "assumption_role": "misspecified",
     },
     "l3_clean_anchor": {
         "description": (
-            "L3 misspecification that incorrectly assumes the anchor has no "
-            "false positives."
+            "L3 misspecification that incorrectly assumes the anchor has no false positives."
         ),
         "chapter_2_role": "l3_clean_anchor_misspecification",
         "assumption_role": "misspecified",
@@ -108,10 +106,7 @@ def extend_method_registry(
     if len(configured) != len(set(configured)):
         raise ValueError("simulation.l3_variants must be unique")
     if set(configured) != set(L3_VARIANT_IDS):
-        raise ValueError(
-            "simulation.l3_variants must register exactly "
-            f"{sorted(L3_VARIANT_IDS)}"
-        )
+        raise ValueError(f"simulation.l3_variants must register exactly {sorted(L3_VARIANT_IDS)}")
 
     settings = simulation.get("l3_variant_settings")
     if not isinstance(settings, dict):
@@ -263,31 +258,19 @@ def run_l3_variant_batch(
             "prevalence_squared_error": (estimate - true_prevalence) ** 2,
             "prevalence_coverage": float(lower <= true_prevalence <= upper),
             "interval_width": upper - lower,
-            "prevalence_misspecification_regret": float(
-                result["misspecification_regret"]
-            ),
-            "empirical_panel_rows": float(
-                scenario.get("empirical_panel_rows", 0.0)
-            ),
+            "prevalence_misspecification_regret": float(result["misspecification_regret"]),
+            "empirical_panel_rows": float(scenario.get("empirical_panel_rows", 0.0)),
             "empirical_observed_positive_rate": float(
                 scenario.get(
                     "empirical_observed_positive_rate",
-                    np.mean(
-                        [
-                            any(value is True for value in row.values())
-                            for row in source_rows
-                        ]
-                    ),
+                    np.mean([any(value is True for value in row.values()) for row in source_rows]),
                 )
             ),
             "empirical_known_label_rate": float(
                 scenario.get(
                     "empirical_known_label_rate",
                     np.mean(
-                        [
-                            any(value is not None for value in row.values())
-                            for row in source_rows
-                        ]
+                        [any(value is not None for value in row.values()) for row in source_rows]
                     ),
                 )
             ),
@@ -402,16 +385,8 @@ def _pattern_probability(
 
     anchor_sensitivity, anchor_specificity = accuracy["anchor"]
     weak_sensitivity, weak_specificity = accuracy["weak"]
-    p_anchor = (
-        float(anchor_sensitivity)
-        if latent
-        else 1.0 - float(anchor_specificity)
-    )
-    p_weak = (
-        float(weak_sensitivity)
-        if latent
-        else 1.0 - float(weak_specificity)
-    )
+    p_anchor = float(anchor_sensitivity) if latent else 1.0 - float(anchor_specificity)
+    p_weak = float(weak_sensitivity) if latent else 1.0 - float(weak_specificity)
 
     source_probability = 1.0
     if weak_value is None and anchor_value is not None:
@@ -419,19 +394,14 @@ def _pattern_probability(
     elif anchor_value is None and weak_value is not None:
         source_probability = p_weak if bool(weak_value) else 1.0 - p_weak
     elif anchor_value is not None and weak_value is not None:
-        p11 = (
-            dependence * min(p_anchor, p_weak)
-            + (1.0 - dependence) * p_anchor * p_weak
-        )
+        p11 = dependence * min(p_anchor, p_weak) + (1.0 - dependence) * p_anchor * p_weak
         probabilities = {
             (True, True): p11,
             (True, False): p_anchor - p11,
             (False, True): p_weak - p11,
             (False, False): 1.0 - p_anchor - p_weak + p11,
         }
-        source_probability = probabilities[
-            (bool(anchor_value), bool(weak_value))
-        ]
+        source_probability = probabilities[(bool(anchor_value), bool(weak_value))]
 
     selective = float(scenario.get("selective_verification_strength", 0.0))
     latent_float = float(latent)
@@ -462,18 +432,12 @@ def _pattern_probability(
     if anchor_present and weak_present:
         observation_probability = maturity_probability * q_anchor * q_weak
     elif anchor_present:
-        observation_probability = (
-            maturity_probability * q_anchor * (1.0 - q_weak)
-        )
+        observation_probability = maturity_probability * q_anchor * (1.0 - q_weak)
     elif weak_present:
-        observation_probability = (
-            maturity_probability * (1.0 - q_anchor) * q_weak
-        )
+        observation_probability = maturity_probability * (1.0 - q_anchor) * q_weak
     else:
         observation_probability = (
-            1.0
-            - maturity_probability
-            + maturity_probability * (1.0 - q_anchor) * (1.0 - q_weak)
+            1.0 - maturity_probability + maturity_probability * (1.0 - q_anchor) * (1.0 - q_weak)
         )
 
     return float(

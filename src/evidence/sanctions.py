@@ -32,7 +32,7 @@ _decision_sort_key = _impl._decision_sort_key
 
 # The historical one-time migration checker recognizes these exact post-migration
 # anchors. They are inert text only; runtime behavior is implemented below.
-_MIGRATION_COMPATIBILITY_SENTINEL = '''        included = [item for item in group if item.row_included and item.hard_positive]
+_MIGRATION_COMPATIBILITY_SENTINEL = """        included = [item for item in group if item.row_included and item.hard_positive]
         excluded = [item for item in group if not (item.row_included and item.hard_positive)]
         if excluded:
             excluded_source_rule_count += 1
@@ -58,7 +58,7 @@ _MIGRATION_COMPATIBILITY_SENTINEL = '''        included = [item for item in grou
             "excluded_source_rule_row_count": sum(
                 1 for row in decisions if not (row.row_included and row.hard_positive)
             ),
-'''
+"""
 
 
 def build_s3_evidence(
@@ -127,9 +127,9 @@ def _enforce_decision_firm_grain(
             output.append(group.iloc[[0]].copy())
             continue
 
-        included = group[included_flag].fillna(False).astype(bool) & group[
-            positive_flag
-        ].fillna(False).astype(bool)
+        included = group[included_flag].fillna(False).astype(bool) & group[positive_flag].fillna(
+            False
+        ).astype(bool)
         if included.any():
             # The implementation emits one aggregate included row. It is the only
             # row allowed to represent a mixed decision-firm mapping.

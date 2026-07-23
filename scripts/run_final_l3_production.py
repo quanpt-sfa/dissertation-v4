@@ -70,7 +70,9 @@ def _require_hardening_applied(project_root: Path) -> None:
                 "review and commit the generated changes before production."
             )
         if result.returncode != 0:
-            raise subprocess.CalledProcessError(result.returncode, [sys.executable, script, "--check"])
+            raise subprocess.CalledProcessError(
+                result.returncode, [sys.executable, script, "--check"]
+            )
 
 
 def _require_clean_tree(root: Path) -> None:
@@ -133,7 +135,9 @@ def _validate_locked_config(config_path: Path) -> None:
         raise ValueError("primary source set is malformed")
     s3_sources = sorted(str(value) for value in primary["sources"] if str(value).startswith("S3_"))
     if s3_sources != ["S3_CONTENT"]:
-        raise ValueError("final primary source set must contain S3_CONTENT and no other S3 endpoint")
+        raise ValueError(
+            "final primary source set must contain S3_CONTENT and no other S3 endpoint"
+        )
     l3 = measurement.get("l3_model")
     operational = l3.get("operational") if isinstance(l3, dict) else None
     if not isinstance(operational, dict):
@@ -147,7 +151,10 @@ def _validate_locked_config(config_path: Path) -> None:
         raise ValueError("accuracy_priors_by_profile must be locked before final run")
     if not isinstance(lock, dict) or lock.get("status") != "LOCKED":
         raise ValueError("L3 parameter_lock receipt is required")
-    if lock.get("outer_outcomes_accessed") is not False or lock.get("known_cases_accessed") is not False:
+    if (
+        lock.get("outer_outcomes_accessed") is not False
+        or lock.get("known_cases_accessed") is not False
+    ):
         raise ValueError("L3 lock receipt violates sealed-evidence constraints")
 
 
@@ -263,7 +270,9 @@ def main() -> int:
     capability = mapping(p06.context.read("l3_pilot_capability", {}), "L3 capability")
     matrices = mapping(p06.context.read("source_channel_matrices", {}), "source matrices")
     if capability.get("status") != "AVAILABLE" or capability.get("pilot_executed") is not True:
-        blockers.append(f"L3_PILOT_{capability.get('status', 'UNKNOWN')}_{capability.get('reason_code')}")
+        blockers.append(
+            f"L3_PILOT_{capability.get('status', 'UNKNOWN')}_{capability.get('reason_code')}"
+        )
     primary_sources = matrices.get("primary_measurement_sources")
     if not isinstance(primary_sources, list):
         blockers.append("PRIMARY_MEASUREMENT_SOURCE_RECEIPT_MISSING")

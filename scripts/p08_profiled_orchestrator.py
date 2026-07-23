@@ -23,10 +23,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from core.pipeline import load_run, mapping, sequence
 from core.semantic_keys import METHOD_ID, SCENARIO_ID
 from simulation.method_contract import (
-    IMBALANCE_TREATMENT_ID,
-    LEARNER_TIER,
-    METHOD_FAMILY,
-    TRAINING_COST_REGIME_ID,
     active_method_ids,
     method_by_id,
 )
@@ -198,8 +194,7 @@ def main() -> int:
                 default=0,
             )
             precision_met = bool(rows) and all(
-                item.get("minimum_replications_met") is True
-                and item.get("mcse_target_met") is True
+                item.get("minimum_replications_met") is True and item.get("mcse_target_met") is True
                 for item in rows
             )
             terminal_at_cap = bool(rows) and all(
@@ -331,9 +326,10 @@ def _artifact_exists(
         if item.get("artifact_id") != artifact_id:
             continue
         raw = item.get("coordinates")
-        if isinstance(raw, dict) and {
-            str(key): str(value) for key, value in raw.items()
-        } == coordinates:
+        if (
+            isinstance(raw, dict)
+            and {str(key): str(value) for key, value in raw.items()} == coordinates
+        ):
             context.read(artifact_id, coordinates)
             return True
     return False
@@ -363,9 +359,7 @@ def _incomplete_batch_commands(
                 continue
             raw = item.get("coordinates")
             if isinstance(raw, dict):
-                result.add(
-                    tuple(sorted((str(k), str(v)) for k, v in raw.items()))
-                )
+                result.add(tuple(sorted((str(k), str(v)) for k, v in raw.items())))
         return result
 
     batch_coords = _coords_set("simulation_batches")
@@ -377,8 +371,7 @@ def _incomplete_batch_commands(
     scenario_key_str = "scenario_" + "key"
     method_key_str = "method_" + "key"
     jobs_by_keys: dict[tuple[str, str], dict[str, object]] = {
-        (str(job[scenario_key_str]), str(job[method_key_str])): job
-        for job in jobs
+        (str(job[scenario_key_str]), str(job[method_key_str])): job for job in jobs
     }
 
     commands: list[list[str]] = []
@@ -452,10 +445,7 @@ def _run_parallel(
     if not commands:
         return
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [
-            executor.submit(_run, command, cwd=cwd, env=env)
-            for command in commands
-        ]
+        futures = [executor.submit(_run, command, cwd=cwd, env=env) for command in commands]
         for future in futures:
             future.result()
 

@@ -138,8 +138,7 @@ def _source_coverage(
     output: list[dict[str, object]] = []
     for source_id, source in sorted(sources.items()):
         outcomes = [
-            cast(dict[str, object], row.get("source_outcomes", {})).get(source_id)
-            for row in rows
+            cast(dict[str, object], row.get("source_outcomes", {})).get(source_id) for row in rows
         ]
         opportunities = [
             cast(dict[str, object], row.get("source_opportunities", {})).get(source_id)
@@ -170,8 +169,7 @@ def _channel_coverage(rows: list[dict[str, Any]], matrices: dict[str, Any]) -> p
     channels = [str(value) for value in sequence(matrices.get("expected_channels"), "channels")]
     for channel_id in sorted(channels):
         outcomes = [
-            cast(dict[str, object], row.get("channel_outcomes", {})).get(channel_id)
-            for row in rows
+            cast(dict[str, object], row.get("channel_outcomes", {})).get(channel_id) for row in rows
         ]
         opportunities = [
             cast(dict[str, object], row.get("channel_opportunities", {})).get(channel_id)
@@ -213,7 +211,9 @@ def _physical_channel_coverage(
         rows.append(
             {
                 **row,
-                "physical_profile_ids": ",".join(sorted(profiles_by_channel.get(channel_id, set()))),
+                "physical_profile_ids": ",".join(
+                    sorted(profiles_by_channel.get(channel_id, set()))
+                ),
                 "logical_source_ids": ",".join(sorted(logical_by_channel.get(channel_id, set()))),
                 "anchor_included": True,
                 "anchor_unit": "unique_measurement_channel",
@@ -354,8 +354,7 @@ def _prior_worksheet(
 ) -> dict[str, object]:
     profiles = sorted({source.profile_id for source in sources.values()})
     channel_rows = {
-        str(row[CHANNEL_ID]): row
-        for row in physical_channel_coverage.to_dict(orient="records")
+        str(row[CHANNEL_ID]): row for row in physical_channel_coverage.to_dict(orient="records")
     }
     rows: list[dict[str, object]] = []
     for profile_id in profiles:

@@ -10,7 +10,6 @@ from typing import Any, cast
 import pandas as pd
 
 from core.semantic_keys import (
-    AFFECTED_FISCAL_YEAR,
     CHANNEL_ID,
     CONSTRUCT_FAMILY,
     CONSTRUCT_TARGET,
@@ -313,11 +312,7 @@ def build_s3_evidence(
                 endpoint_values[endpoint] = None
             else:
                 endpoint_values[endpoint] = False
-        reason = (
-            "UNMAPPED_S3_TAXONOMY"
-            if unmapped
-            else None
-        )
+        reason = "UNMAPPED_S3_TAXONOMY" if unmapped else None
         metadata = _decision_metadata(included)
         ledger_rows.append(
             _decision_ledger_row(

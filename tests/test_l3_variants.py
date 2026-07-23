@@ -77,10 +77,7 @@ def test_l3_variants_use_distinct_locked_assumptions() -> None:
         for variant in L3_VARIANT_IDS
     }
 
-    assert (
-        estimates["l3_correct"]["misspecification_regret"]
-        == 0.0
-    )
+    assert estimates["l3_correct"]["misspecification_regret"] == 0.0
     assert not np.isclose(
         estimates["l3_correct"]["estimate"],
         estimates["l3_ignore_dependence"]["estimate"],
@@ -93,10 +90,7 @@ def test_l3_variants_use_distinct_locked_assumptions() -> None:
         estimates["l3_wrong_fixed_pi"]["estimate"],
         0.15,
     )
-    assert (
-        estimates["l3_wrong_fixed_pi"]["lower"]
-        == estimates["l3_wrong_fixed_pi"]["upper"]
-    )
+    assert estimates["l3_wrong_fixed_pi"]["lower"] == estimates["l3_wrong_fixed_pi"]["upper"]
 
 
 def test_l3_variant_batch_is_paired_and_metric_complete() -> None:
@@ -105,9 +99,7 @@ def test_l3_variant_batch_is_paired_and_metric_complete() -> None:
     def data_rng_factory(
         replication_id: int,
     ) -> np.random.Generator:
-        return np.random.default_rng(
-            1000 + replication_id
-        )
+        return np.random.default_rng(1000 + replication_id)
 
     outputs = {}
     for variant in L3_VARIANT_IDS:
@@ -120,12 +112,8 @@ def test_l3_variant_batch_is_paired_and_metric_complete() -> None:
             diagnostics=diagnostics,
         )
         outputs[variant] = batch
-        assert set(batch["metric_id"].astype(str)) == set(
-            L3_REQUIRED_METRICS
-        )
-        assert set(
-            batch["replication_id"].astype(int)
-        ) == {0, 1}
+        assert set(batch["metric_id"].astype(str)) == set(L3_REQUIRED_METRICS)
+        assert set(batch["replication_id"].astype(int)) == {0, 1}
         assert diagnostics == {
             "fit_failures": {},
             "resampling_failures": {},
@@ -133,9 +121,7 @@ def test_l3_variant_batch_is_paired_and_metric_complete() -> None:
             "affected_replication_ids": [],
         }
 
-    correct = outputs["l3_correct"].set_index(
-        ["replication_id", "metric_id"]
-    )["estimate"]
+    correct = outputs["l3_correct"].set_index(["replication_id", "metric_id"])["estimate"]
     assert (
         correct.xs(
             "prevalence_misspecification_regret",

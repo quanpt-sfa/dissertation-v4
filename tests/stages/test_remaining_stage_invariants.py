@@ -648,23 +648,28 @@ def test_p10_p11_reject_descriptive_and_prospective_fold_roles(role: str) -> Non
 
 
 def test_p08_batch_is_deterministic_for_same_registered_rng_seed() -> None:
-    from simulation.method_contract import (
-        build_cost_sensitive_contract,
-        build_full_method_registry,
-        build_execution_profile_contract,
-        apply_execution_profile,
-    )
-    import yaml
     from pathlib import Path
+
+    import yaml
+
+    from simulation.method_contract import (
+        apply_execution_profile,
+        build_cost_sensitive_contract,
+        build_execution_profile_contract,
+        build_full_method_registry,
+    )
+
     root = Path(__file__).resolve().parents[2]
-    simulation = yaml.safe_load((root / "config" / "execution" / "simulation.yaml").read_text(encoding="utf-8"))["simulation"]
-    
+    simulation = yaml.safe_load(
+        (root / "config" / "execution" / "simulation.yaml").read_text(encoding="utf-8")
+    )["simulation"]
+
     cost_contract = build_cost_sensitive_contract(simulation)
     full_registry = build_full_method_registry(simulation, cost_contract)
     profile_contract = build_execution_profile_contract(simulation, full_registry)
     active_profile = str(profile_contract["active_profile"])
     method_registry = apply_execution_profile(full_registry, profile_contract)
-    
+
     scenario = {
         "scenario_id": "s1",
         "sample_size": 50,
@@ -681,7 +686,9 @@ def test_p08_batch_is_deterministic_for_same_registered_rng_seed() -> None:
         "execution_profile": active_profile,
         "execution_profile_registry": [dict(value) for value in profile_contract["profiles"]],
         "cost_regime_registry": [dict(value) for value in cost_contract["cost_regime_registry"]],
-        "review_budget_registry": [dict(value) for value in cost_contract["review_budget_registry"]],
+        "review_budget_registry": [
+            dict(value) for value in cost_contract["review_budget_registry"]
+        ],
         "cost_sensitive_settings": {
             key: value
             for key, value in cost_contract.items()
@@ -1056,39 +1063,48 @@ def test_scenario_id_target_marker_must_match():
     from simulation.scenario_contract import validate_scenario_target_identity
 
     # Valid matching target marker for semi-synthetic tier
-    validate_scenario_target_identity({
-        "scenario_id": "empirical_baseline__target_L1_ANNUAL",
-        "calibration_target_id": "L1_ANNUAL",
-        "tier": "semi_synthetic_development_covariates",
-    })
+    validate_scenario_target_identity(
+        {
+            "scenario_id": "empirical_baseline__target_L1_ANNUAL",
+            "calibration_target_id": "L1_ANNUAL",
+            "tier": "semi_synthetic_development_covariates",
+        }
+    )
 
     # Fully synthetic scenarios skip validation
-    validate_scenario_target_identity({
-        "scenario_id": "fully_synthetic_no_target_marker",
-        "calibration_target_id": "L1_ANNUAL",
-        "tier": "fully_synthetic",
-    })
+    validate_scenario_target_identity(
+        {
+            "scenario_id": "fully_synthetic_no_target_marker",
+            "calibration_target_id": "L1_ANNUAL",
+            "tier": "fully_synthetic",
+        }
+    )
 
     # Non-matching target marker for semi-synthetic tier
     with pytest.raises(ValueError, match="differs from calibration_target_id"):
-        validate_scenario_target_identity({
-            "scenario_id": "empirical_baseline__target_L1_CONTENT_STRICT",
-            "calibration_target_id": "L1_ANNUAL",
-            "tier": "semi_synthetic_development_covariates",
-        })
+        validate_scenario_target_identity(
+            {
+                "scenario_id": "empirical_baseline__target_L1_CONTENT_STRICT",
+                "calibration_target_id": "L1_ANNUAL",
+                "tier": "semi_synthetic_development_covariates",
+            }
+        )
 
     # Missing target marker for semi-synthetic tier
     with pytest.raises(ValueError, match="must contain"):
-        validate_scenario_target_identity({
-            "scenario_id": "empirical_baseline_L1_ANNUAL",
-            "calibration_target_id": "L1_ANNUAL",
-            "tier": "semi_synthetic_development_covariates",
-        })
+        validate_scenario_target_identity(
+            {
+                "scenario_id": "empirical_baseline_L1_ANNUAL",
+                "calibration_target_id": "L1_ANNUAL",
+                "tier": "semi_synthetic_development_covariates",
+            }
+        )
 
 
 def test_short_key_collision_fail_closed():
     import sys
     from pathlib import Path
+
     project_root = Path(__file__).resolve().parents[2]
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
@@ -1103,6 +1119,7 @@ def test_short_key_collision_fail_closed():
 
 def test_replication_dgp_pairing_consistency():
     from core.rng import generator
+
     # Verify that different replication sizes still use the same simulated population at replication level.
     # Replication 150 should receive identical population across core and standalone/extended tiers.
     rep_id = 150
@@ -1131,61 +1148,53 @@ def test_replication_dgp_pairing_consistency():
 def test_p08c_exit_code_policies():
     import sys
     from pathlib import Path
+
     project_root = Path(__file__).resolve().parents[2]
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
     from unittest.mock import MagicMock, patch
+
     import scripts.p08c_aggregate_batches as p08c
 
     mock_loaded = MagicMock()
     mock_loaded.registry = {
         "simulation": {
             "active_profile": "core",
-            "protocol_role": {
-                "must_complete_before_outer_test": True
-            },
+            "protocol_role": {"must_complete_before_outer_test": True},
             "core": {
                 "minimum_replications": 10,
                 "maximum_replications": 50,
                 "pass_fail_mcse_max": 0.05,
-                "batch_size": 10
+                "batch_size": 10,
             },
             "l3": {
                 "initial_replications": 10,
                 "maximum_replications": 50,
                 "pass_fail_mcse_max": 0.05,
-                "batch_size": 10
+                "batch_size": 10,
             },
             "extended_replication": {
                 "minimum_replications": 10,
                 "maximum_replications": 50,
                 "pass_fail_mcse_max": 0.05,
-                "batch_size": 10
+                "batch_size": 10,
             },
             "cost_sensitive_replication": {
                 "minimum_replications": 10,
                 "maximum_replications": 50,
                 "pass_fail_mcse_max": 0.05,
-                "batch_size": 10
+                "batch_size": 10,
             },
             "cost_sensitive": {
                 "cost_mcse_relative_fraction": 0.1,
-                "cost_neutral_regime_id": "cost_neutral"
+                "cost_neutral_regime_id": "cost_neutral",
             },
-            "continuous_metrics": {
-                "mcse_fraction_of_minimum_meaningful_improvement_max": 0.1
-            }
+            "continuous_metrics": {"mcse_fraction_of_minimum_meaningful_improvement_max": 0.1},
         },
-        "evaluation": {
-            "gate2": {
-                "minimum_meaningful_improvement": {
-                    "absolute": 0.02
-                }
-            }
-        }
+        "evaluation": {"gate2": {"minimum_meaningful_improvement": {"absolute": 0.02}}},
     }
-    
+
     # We patch argparse to return different values
     mock_args = MagicMock()
     mock_args.registry = Path("mock_registry.json")
@@ -1198,38 +1207,34 @@ def test_p08c_exit_code_policies():
     def run_test(mock_parse, mock_filter, mock_val, mock_load, summarize_return, check_only):
         mock_parse.return_value = mock_args
         mock_args.check_only = check_only
-        
+
         # Mock inventory to return one batches item to prevent empty loop
         mock_loaded.context.store.inventory.return_value = [
             {
                 "artifact_id": "simulation_batches",
-                "coordinates": {
-                    "scenario_key": "s1",
-                    "method_key": "m1",
-                    "batch_key": "b0000"
-                }
+                "coordinates": {"scenario_key": "s1", "method_key": "m1", "batch_key": "b0000"},
             },
             {
                 "artifact_id": "model_diagnostics",
-                "coordinates": {
-                    "scenario_key": "s1",
-                    "method_key": "m1",
-                    "batch_key": "b0000"
-                }
-            }
+                "coordinates": {"scenario_key": "s1", "method_key": "m1", "batch_key": "b0000"},
+            },
         ]
-        
+
         # Make load read return a dataframe
         import pandas as pd
-        from core.semantic_keys import SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID
-        df = pd.DataFrame({
-            SCENARIO_ID: ["empirical_baseline__target_L1_ANNUAL"],
-            METHOD_ID: ["naive_observed_as_negative__multilayer_perceptron__train"],
-            REPLICATION_ID: [0],
-            METRIC_ID: ["primary_metric"],
-        })
+
+        from core.semantic_keys import METHOD_ID, METRIC_ID, REPLICATION_ID, SCENARIO_ID
+
+        df = pd.DataFrame(
+            {
+                SCENARIO_ID: ["empirical_baseline__target_L1_ANNUAL"],
+                METHOD_ID: ["naive_observed_as_negative__multilayer_perceptron__train"],
+                REPLICATION_ID: [0],
+                METRIC_ID: ["primary_metric"],
+            }
+        )
         mock_loaded.context.read.return_value = df
-        
+
         # Scenarios mapping
         mock_scenarios = [
             {
@@ -1246,12 +1251,14 @@ def test_p08c_exit_code_policies():
                         "method_family": "multilayer_perceptron",
                         "learner_tier": "core",
                         "training_cost_regime_id": "cost_neutral",
-                        "imbalance_treatment_id": "none"
+                        "imbalance_treatment_id": "none",
                     }
-                ]
+                ],
             }
         ]
-        mock_loaded.context.read.side_effect = lambda artifact_id, *a, **k: mock_scenarios if artifact_id == "simulation_scenario_registry" else df
+        mock_loaded.context.read.side_effect = lambda artifact_id, *a, **k: (
+            mock_scenarios if artifact_id == "simulation_scenario_registry" else df
+        )
 
         with patch("scripts.p08c_aggregate_batches.summarize_mcse", return_value=summarize_return):
             return p08c.main()
@@ -1282,11 +1289,13 @@ def test_run_batch_diagnostics_capture():
     Uses simulation.yaml to build full cost_sensitive_settings (avoids missing
     evaluation_regime_ids and other required config keys).
     """
-    import yaml
     from pathlib import Path
-    from simulation.service import run_batch
-    from simulation.method_contract import build_cost_sensitive_contract
+
     import numpy as np
+    import yaml
+
+    from simulation.method_contract import build_cost_sensitive_contract
+    from simulation.service import run_batch
 
     root = Path(__file__).resolve().parents[2]
     simulation = yaml.safe_load(
@@ -1297,14 +1306,14 @@ def test_run_batch_diagnostics_capture():
     mock_scenario = {
         "scenario_id": "diagnostics_capture_test",
         "tier": "fully_synthetic",
-        "prevalence": 0.0,   # All latent labels False → unique(y_train)<2 → InsufficientData
+        "prevalence": 0.0,  # All latent labels False → unique(y_train)<2 → InsufficientData
         "sample_size": 50,
         "content_signal": 0.0,
         "signal_structure": "linear",
         "anchor_sensitivity": 0.8,
-        "anchor_false_positive": 0.0,   # No false positives so y_train stays all-zero
+        "anchor_false_positive": 0.0,  # No false positives so y_train stays all-zero
         "weak_sensitivity": 0.5,
-        "weak_false_positive": 0.0,     # No false positives so y_train stays all-zero
+        "weak_false_positive": 0.0,  # No false positives so y_train stays all-zero
         "anchor_verification_probability": 1.0,
         "weak_verification_probability": 1.0,
         "selective_verification_strength": 0.0,
@@ -1361,8 +1370,10 @@ def test_p08c_bijection_check_missing_diagnostics_fails():
     import sys
     from pathlib import Path
     from unittest.mock import MagicMock, patch
+
     import pandas as pd
-    from core.semantic_keys import SCENARIO_ID, METHOD_ID, REPLICATION_ID, METRIC_ID
+
+    from core.semantic_keys import METHOD_ID, METRIC_ID, REPLICATION_ID, SCENARIO_ID
 
     project_root = Path(__file__).resolve().parents[2]
     if str(project_root) not in sys.path:
@@ -1374,48 +1385,38 @@ def test_p08c_bijection_check_missing_diagnostics_fails():
     mock_loaded.registry = {
         "simulation": {
             "active_profile": "core",
-            "protocol_role": {
-                "must_complete_before_outer_test": True
-            },
+            "protocol_role": {"must_complete_before_outer_test": True},
             "core": {
                 "minimum_replications": 10,
                 "maximum_replications": 50,
                 "pass_fail_mcse_max": 0.05,
-                "batch_size": 10
+                "batch_size": 10,
             },
             "l3": {
                 "initial_replications": 10,
                 "maximum_replications": 50,
                 "pass_fail_mcse_max": 0.05,
-                "batch_size": 10
+                "batch_size": 10,
             },
             "extended_replication": {
                 "minimum_replications": 10,
                 "maximum_replications": 50,
                 "pass_fail_mcse_max": 0.05,
-                "batch_size": 10
+                "batch_size": 10,
             },
             "cost_sensitive_replication": {
                 "minimum_replications": 10,
                 "maximum_replications": 50,
                 "pass_fail_mcse_max": 0.05,
-                "batch_size": 10
+                "batch_size": 10,
             },
             "cost_sensitive": {
                 "cost_mcse_relative_fraction": 0.1,
-                "cost_neutral_regime_id": "cost_neutral"
+                "cost_neutral_regime_id": "cost_neutral",
             },
-            "continuous_metrics": {
-                "mcse_fraction_of_minimum_meaningful_improvement_max": 0.1
-            }
+            "continuous_metrics": {"mcse_fraction_of_minimum_meaningful_improvement_max": 0.1},
         },
-        "evaluation": {
-            "gate2": {
-                "minimum_meaningful_improvement": {
-                    "absolute": 0.02
-                }
-            }
-        }
+        "evaluation": {"gate2": {"minimum_meaningful_improvement": {"absolute": 0.02}}},
     }
     mock_args = MagicMock()
     mock_args.registry = Path("mock_registry.json")
@@ -1426,20 +1427,18 @@ def test_p08c_bijection_check_missing_diagnostics_fails():
     mock_loaded.context.store.inventory.return_value = [
         {
             "artifact_id": "simulation_batches",
-            "coordinates": {
-                "scenario_key": "s1",
-                "method_key": "m1",
-                "batch_key": "b0000"
-            }
+            "coordinates": {"scenario_key": "s1", "method_key": "m1", "batch_key": "b0000"},
         }
     ]
 
-    df = pd.DataFrame({
-        SCENARIO_ID: ["empirical_baseline__target_L1_ANNUAL"],
-        METHOD_ID: ["naive_observed_as_negative__multilayer_perceptron__train"],
-        REPLICATION_ID: [0],
-        METRIC_ID: ["primary_metric"],
-    })
+    df = pd.DataFrame(
+        {
+            SCENARIO_ID: ["empirical_baseline__target_L1_ANNUAL"],
+            METHOD_ID: ["naive_observed_as_negative__multilayer_perceptron__train"],
+            REPLICATION_ID: [0],
+            METRIC_ID: ["primary_metric"],
+        }
+    )
     mock_loaded.context.read.return_value = df
 
     mock_scenarios = [
@@ -1457,17 +1456,22 @@ def test_p08c_bijection_check_missing_diagnostics_fails():
                     "method_family": "multilayer_perceptron",
                     "learner_tier": "core",
                     "training_cost_regime_id": "cost_neutral",
-                    "imbalance_treatment_id": "none"
+                    "imbalance_treatment_id": "none",
                 }
-            ]
+            ],
         }
     ]
-    mock_loaded.context.read.side_effect = lambda artifact_id, *a, **k: mock_scenarios if artifact_id == "simulation_scenario_registry" else df
+    mock_loaded.context.read.side_effect = lambda artifact_id, *a, **k: (
+        mock_scenarios if artifact_id == "simulation_scenario_registry" else df
+    )
 
     @patch("scripts.p08c_aggregate_batches.load_run", return_value=mock_loaded)
-    @patch("scripts.p08c_aggregate_batches.argparse.ArgumentParser.parse_args", return_value=mock_args)
+    @patch(
+        "scripts.p08c_aggregate_batches.argparse.ArgumentParser.parse_args", return_value=mock_args
+    )
     def run_aggregate(mock_parse, mock_load):
         import pytest
+
         with pytest.raises(ValueError, match="batch-diagnostics coordinate mismatch"):
             p08c.main()
 
@@ -1491,13 +1495,14 @@ def test_model_diagnostics_warnings_capture():
     assert 99 in collector.affected_replication_ids
 
 
-
 # ---------------------------------------------------------------------------
 # _batch_exists() resume-semantics tests
 # ---------------------------------------------------------------------------
 
+
 def _make_loaded(inventory_items: list[dict]) -> object:
     """Build a minimal mock of the 'loaded' object used by _batch_exists."""
+
     class _Store:
         def __init__(self, items: list[dict]) -> None:
             self._items = items
@@ -1534,6 +1539,7 @@ def test_batch_exists_both_present_skips() -> None:
     """
     import sys
     from pathlib import Path
+
     project_root = Path(__file__).resolve().parents[2]
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
@@ -1562,6 +1568,7 @@ def test_batch_exists_diagnostics_missing_reruns() -> None:
     """
     import sys
     from pathlib import Path
+
     project_root = Path(__file__).resolve().parents[2]
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
@@ -1591,6 +1598,7 @@ def test_batch_exists_batch_missing_reruns() -> None:
     """
     import sys
     from pathlib import Path
+
     project_root = Path(__file__).resolve().parents[2]
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
@@ -1620,6 +1628,7 @@ def test_incomplete_batch_commands_adaptive_resume() -> None:
     """
     import sys
     from pathlib import Path
+
     project_root = Path(__file__).resolve().parents[2]
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
@@ -1676,17 +1685,17 @@ def test_convergence_warning_captured_from_estimator() -> None:
     into the active DiagnosticCollector.
     """
     import warnings
+    from pathlib import Path
     from unittest.mock import patch
+
+    import numpy as np
+    import yaml
     from sklearn.exceptions import ConvergenceWarning
+
+    from simulation.method_contract import build_cost_sensitive_contract
     from simulation.service import (
-        DiagnosticCollector,
-        diagnostic_capture,
         run_batch,
     )
-    import yaml
-    from pathlib import Path
-    from simulation.method_contract import build_cost_sensitive_contract
-    import numpy as np
 
     root = Path(__file__).resolve().parents[2]
     simulation = yaml.safe_load(

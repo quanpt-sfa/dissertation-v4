@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -45,8 +44,8 @@ def _replace_once(text: str, old: str, new: str, label: str) -> tuple[str, bool]
 
 def _patch_sanctions(path: Path, *, apply: bool) -> bool:
     text = _read(path)
-    old = '''        included = [item for item in group if item.row_included and item.hard_positive]\n        if not included:\n            ledger_rows.append(\n                _excluded_ledger_row(\n                    group,\n                    columns,\n                    reason="EXCLUDED_BY_SOURCE_RULE",\n                )\n            )\n            excluded_source_rule_count += 1\n            years_group = {resolve_sanction_year(item)[0] for item in group}\n            years_group.discard(None)\n            if len(years_group) != 1 or any(resolve_sanction_year(item)[0] is None for item in group):\n                excluded_unresolved_count += 1\n            continue\n\n        years = {resolve_sanction_year(item)[0] for item in included}\n'''
-    new = '''        included = [item for item in group if item.row_included and item.hard_positive]\n        excluded = [item for item in group if not (item.row_included and item.hard_positive)]\n        if excluded:\n            excluded_source_rule_count += 1\n            if any(resolve_sanction_year(item)[0] is None for item in excluded):\n                excluded_unresolved_count += 1\n            for item in excluded:\n                ledger_rows.append(\n                    _excluded_ledger_row(\n                        [item],\n                        columns,\n                        reason="EXCLUDED_BY_SOURCE_RULE",\n                    )\n                )\n        if not included:\n            continue\n\n        years = {resolve_sanction_year(item)[0] for item in included}\n'''
+    old = """        included = [item for item in group if item.row_included and item.hard_positive]\n        if not included:\n            ledger_rows.append(\n                _excluded_ledger_row(\n                    group,\n                    columns,\n                    reason="EXCLUDED_BY_SOURCE_RULE",\n                )\n            )\n            excluded_source_rule_count += 1\n            years_group = {resolve_sanction_year(item)[0] for item in group}\n            years_group.discard(None)\n            if len(years_group) != 1 or any(resolve_sanction_year(item)[0] is None for item in group):\n                excluded_unresolved_count += 1\n            continue\n\n        years = {resolve_sanction_year(item)[0] for item in included}\n"""
+    new = """        included = [item for item in group if item.row_included and item.hard_positive]\n        excluded = [item for item in group if not (item.row_included and item.hard_positive)]\n        if excluded:\n            excluded_source_rule_count += 1\n            if any(resolve_sanction_year(item)[0] is None for item in excluded):\n                excluded_unresolved_count += 1\n            for item in excluded:\n                ledger_rows.append(\n                    _excluded_ledger_row(\n                        [item],\n                        columns,\n                        reason="EXCLUDED_BY_SOURCE_RULE",\n                    )\n                )\n        if not included:\n            continue\n\n        years = {resolve_sanction_year(item)[0] for item in included}\n"""
     text, changed1 = _replace_once(text, old, new, "S3 included/excluded split")
     text, changed2 = _replace_once(
         text,
@@ -59,8 +58,8 @@ def _patch_sanctions(path: Path, *, apply: bool) -> bool:
         '            "excluded_source_rule_mapping_count": excluded_source_rule_count,\n',
         '            "excluded_source_rule_mapping_count": excluded_source_rule_count,\n'
         '            "excluded_source_rule_row_count": sum(\n'
-        '                1 for row in decisions if not (row.row_included and row.hard_positive)\n'
-        '            ),\n',
+        "                1 for row in decisions if not (row.row_included and row.hard_positive)\n"
+        "            ),\n",
         "S3 excluded row audit",
     )
     return _write(path, text, apply=apply) or changed1 or changed2 or changed3
@@ -130,10 +129,10 @@ def _patch_measurement_service(path: Path, *, apply: bool) -> bool:
         "    unknown_primary_sources = sorted(set(primary_source_ids) - set(expected_source_ids))\n"
         "    if unknown_primary_sources:\n"
         "        raise ValueError(\n"
-        "            f\"primary measurement source set references unknown sources {unknown_primary_sources}\"\n"
+        '            f"primary measurement source set references unknown sources {unknown_primary_sources}"\n'
         "        )\n"
         "    if not primary_source_ids:\n"
-        "        raise ValueError(\"primary measurement source set must not be empty\")\n"
+        '        raise ValueError("primary measurement source set must not be empty")\n'
         "    primary_expected_sources = {\n"
         "        source_id: expected_sources[source_id] for source_id in primary_source_ids\n"
         "    }\n"
@@ -193,14 +192,13 @@ def _patch_p05(path: Path, *, apply: bool) -> bool:
     )
     text, c2 = _replace_once(
         text,
-        "        candidate_targets=candidate_targets,\n"
-        "    )\n",
+        "        candidate_targets=candidate_targets,\n    )\n",
         "        candidate_targets=candidate_targets,\n"
         "        primary_measurement_sources=primary_measurement_sources,\n"
         "    )\n",
         "P05 primary source pass-through",
     )
-    helper = '''\n\ndef _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:\n    source_set_id = measurement.get("primary_source_set_id")\n    if not isinstance(source_set_id, str) or not source_set_id:\n        raise ValueError("measurement.primary_source_set_id must be locked")\n    source_sets = mapping(measurement.get("source_sets"), "measurement.source_sets")\n    source_set = mapping(source_sets.get(source_set_id), f"measurement.source_sets.{source_set_id}")\n    sources = [\n        str(value)\n        for value in sequence(\n            source_set.get("sources"), f"measurement.source_sets.{source_set_id}.sources"\n        )\n    ]\n    s3_sources = sorted(source for source in sources if source.startswith("S3_"))\n    if s3_sources != ["S3_CONTENT"]:\n        raise ValueError("primary measurement source set must contain S3_CONTENT and no other S3 endpoint")\n    return sources\n'''
+    helper = """\n\ndef _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:\n    source_set_id = measurement.get("primary_source_set_id")\n    if not isinstance(source_set_id, str) or not source_set_id:\n        raise ValueError("measurement.primary_source_set_id must be locked")\n    source_sets = mapping(measurement.get("source_sets"), "measurement.source_sets")\n    source_set = mapping(source_sets.get(source_set_id), f"measurement.source_sets.{source_set_id}")\n    sources = [\n        str(value)\n        for value in sequence(\n            source_set.get("sources"), f"measurement.source_sets.{source_set_id}.sources"\n        )\n    ]\n    s3_sources = sorted(source for source in sources if source.startswith("S3_"))\n    if s3_sources != ["S3_CONTENT"]:\n        raise ValueError("primary measurement source set must contain S3_CONTENT and no other S3 endpoint")\n    return sources\n"""
     text, c3 = _replace_once(
         text,
         "\ndef _evidence_sources(\n",
@@ -243,14 +241,14 @@ def _patch_p10(path: Path, *, apply: bool) -> bool:
         "    allowed = set(sources) if allowed_source_ids is None else set(allowed_source_ids)\n"
         "    unknown = sorted(allowed - set(sources))\n"
         "    if unknown:\n"
-        "        raise ValueError(f\"primary L3 source set contains unknown sources {unknown}\")\n"
+        '        raise ValueError(f"primary L3 source set contains unknown sources {unknown}")\n'
         "    for logical_source_id, source in sorted(sources.items()):\n"
         "        if logical_source_id not in allowed:\n"
         "            continue\n"
         "        raw_prior: object = priors_by_profile.get(source.profile_id)\n",
         "P10 filter logical sources",
     )
-    helper = '''\n\ndef _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:\n    source_set_id = measurement.get("primary_source_set_id")\n    if not isinstance(source_set_id, str) or not source_set_id:\n        raise ValueError("measurement.primary_source_set_id must be locked")\n    source_sets = mapping(measurement.get("source_sets"), "measurement.source_sets")\n    source_set = mapping(source_sets.get(source_set_id), f"measurement.source_sets.{source_set_id}")\n    sources = [\n        str(value)\n        for value in sequence(\n            source_set.get("sources"), f"measurement.source_sets.{source_set_id}.sources"\n        )\n    ]\n    s3_sources = sorted(source for source in sources if source.startswith("S3_"))\n    if s3_sources != ["S3_CONTENT"]:\n        raise ValueError("primary L3 source set must contain S3_CONTENT and no other S3 endpoint")\n    return sources\n'''
+    helper = """\n\ndef _primary_measurement_sources(measurement: dict[str, object]) -> list[str]:\n    source_set_id = measurement.get("primary_source_set_id")\n    if not isinstance(source_set_id, str) or not source_set_id:\n        raise ValueError("measurement.primary_source_set_id must be locked")\n    source_sets = mapping(measurement.get("source_sets"), "measurement.source_sets")\n    source_set = mapping(source_sets.get(source_set_id), f"measurement.source_sets.{source_set_id}")\n    sources = [\n        str(value)\n        for value in sequence(\n            source_set.get("sources"), f"measurement.source_sets.{source_set_id}.sources"\n        )\n    ]\n    s3_sources = sorted(source for source in sources if source.startswith("S3_"))\n    if s3_sources != ["S3_CONTENT"]:\n        raise ValueError("primary L3 source set must contain S3_CONTENT and no other S3 endpoint")\n    return sources\n"""
     text, c4 = _replace_once(
         text,
         "\ndef _l3_bindings(\n",
@@ -298,27 +296,27 @@ def _patch_p15(path: Path, *, apply: bool) -> bool:
     text, c1 = _replace_once(
         text,
         '    required = {"case_id", FIRM_ID, FISCAL_YEAR}\n',
-        '    required = {\n'
+        "    required = {\n"
         '        "case_id",\n'
-        '        FIRM_ID,\n'
-        '        FISCAL_YEAR,\n'
+        "        FIRM_ID,\n"
+        "        FISCAL_YEAR,\n"
         '        "case_construct",\n'
         '        "case_role",\n'
         '        "training_include_flag",\n'
         '        "calibration_include_flag",\n'
         '        "model_selection_include_flag",\n'
         '        "external_validation_include_flag",\n'
-        '    }\n',
+        "    }\n",
         "P15 known-case semantic contract",
     )
-    old = '''        rows.append(\n            {\n                "case_id": str(row[str(semantics["case_id"])]),\n                columns[FIRM_ID]: canonical,\n                columns[FISCAL_YEAR]: int(str(row[str(semantics[FISCAL_YEAR])])),\n            }\n        )\n'''
-    new = '''        case_construct = str(row[str(semantics["case_construct"])]).strip()\n        case_role = str(row[str(semantics["case_role"])]).strip()\n        flags = {\n            name: _parse_bool(row[str(semantics[name])], name)\n            for name in (\n                "training_include_flag",\n                "calibration_include_flag",\n                "model_selection_include_flag",\n                "external_validation_include_flag",\n            )\n        }\n        if case_construct != "CONFIRMED_FINANCIAL_REPORTING_CASE":\n            raise ValueError("known case construct must be CONFIRMED_FINANCIAL_REPORTING_CASE")\n        if case_role != "SIMULATION_EXTERNAL_VALIDATION":\n            raise ValueError("known case role must be SIMULATION_EXTERNAL_VALIDATION")\n        if flags != {\n            "training_include_flag": False,\n            "calibration_include_flag": False,\n            "model_selection_include_flag": False,\n            "external_validation_include_flag": True,\n        }:\n            raise ValueError("known case inclusion flags violate the sealed external-validation role")\n        rows.append(\n            {\n                "case_id": str(row[str(semantics["case_id"])]),\n                columns[FIRM_ID]: canonical,\n                columns[FISCAL_YEAR]: int(str(row[str(semantics[FISCAL_YEAR])])),\n            }\n        )\n'''
+    old = """        rows.append(\n            {\n                "case_id": str(row[str(semantics["case_id"])]),\n                columns[FIRM_ID]: canonical,\n                columns[FISCAL_YEAR]: int(str(row[str(semantics[FISCAL_YEAR])])),\n            }\n        )\n"""
+    new = """        case_construct = str(row[str(semantics["case_construct"])]).strip()\n        case_role = str(row[str(semantics["case_role"])]).strip()\n        flags = {\n            name: _parse_bool(row[str(semantics[name])], name)\n            for name in (\n                "training_include_flag",\n                "calibration_include_flag",\n                "model_selection_include_flag",\n                "external_validation_include_flag",\n            )\n        }\n        if case_construct != "CONFIRMED_FINANCIAL_REPORTING_CASE":\n            raise ValueError("known case construct must be CONFIRMED_FINANCIAL_REPORTING_CASE")\n        if case_role != "SIMULATION_EXTERNAL_VALIDATION":\n            raise ValueError("known case role must be SIMULATION_EXTERNAL_VALIDATION")\n        if flags != {\n            "training_include_flag": False,\n            "calibration_include_flag": False,\n            "model_selection_include_flag": False,\n            "external_validation_include_flag": True,\n        }:\n            raise ValueError("known case inclusion flags violate the sealed external-validation role")\n        rows.append(\n            {\n                "case_id": str(row[str(semantics["case_id"])]),\n                columns[FIRM_ID]: canonical,\n                columns[FISCAL_YEAR]: int(str(row[str(semantics[FISCAL_YEAR])])),\n            }\n        )\n"""
     text, c2 = _replace_once(text, old, new, "P15 known-case row validation")
-    helper = '''\n\ndef _parse_bool(value: object, field: str) -> bool:\n    if isinstance(value, bool):\n        return value\n    normalized = str(value).strip().lower()\n    if normalized in {"true", "1", "yes", "y"}:\n        return True\n    if normalized in {"false", "0", "no", "n"}:\n        return False\n    raise ValueError(f"known case field={field}: boolean value required")\n'''
+    helper = """\n\ndef _parse_bool(value: object, field: str) -> bool:\n    if isinstance(value, bool):\n        return value\n    normalized = str(value).strip().lower()\n    if normalized in {"true", "1", "yes", "y"}:\n        return True\n    if normalized in {"false", "0", "no", "n"}:\n        return False\n    raise ValueError(f"known case field={field}: boolean value required")\n"""
     text, c3 = _replace_once(
         text,
-        "\n\nif __name__ == \"__main__\":\n",
-        helper + "\n\nif __name__ == \"__main__\":\n",
+        '\n\nif __name__ == "__main__":\n',
+        helper + '\n\nif __name__ == "__main__":\n',
         "P15 boolean parser",
     )
     return _write(path, text, apply=apply) or any((c1, c2, c3))
@@ -328,21 +326,21 @@ def _patch_s3_report(path: Path, *, apply: bool) -> bool:
     text = _read(path)
     text, c1 = _replace_once(
         text,
-        "    development_positive = int(development[\"positive\"].sum()) if not development.empty else 0\n",
-        "    development_positive = int(development[\"positive\"].sum()) if not development.empty else 0\n"
+        '    development_positive = int(development["positive"].sum()) if not development.empty else 0\n',
+        '    development_positive = int(development["positive"].sum()) if not development.empty else 0\n'
         "    development_positive_by_endpoint = (\n"
         "        {\n"
-        "            str(endpoint): int(group[\"positive\"].sum())\n"
+        '            str(endpoint): int(group["positive"].sum())\n'
         "            for endpoint, group in development.groupby(SOURCE_ID, sort=True)\n"
         "        }\n"
         "        if not development.empty\n"
         "        else {}\n"
         "    )\n"
-        "    content_positive = int(development_positive_by_endpoint.get(\"S3_CONTENT\", 0))\n"
+        '    content_positive = int(development_positive_by_endpoint.get("S3_CONTENT", 0))\n'
         "    sanction_year_unresolved_firm_year_count = int(\n"
         "        unknown_reasons.loc[\n"
-        "            unknown_reasons[OUTCOME_BASIS].astype(str).eq(\"SANCTION_YEAR_UNRESOLVED\"),\n"
-        "            \"unknown_count\",\n"
+        '            unknown_reasons[OUTCOME_BASIS].astype(str).eq("SANCTION_YEAR_UNRESOLVED"),\n'
+        '            "unknown_count",\n'
         "        ].sum()\n"
         "    ) if not unknown_reasons.empty else 0\n",
         "S3 endpoint-specific development counts",
@@ -366,13 +364,13 @@ def _patch_s3_report(path: Path, *, apply: bool) -> bool:
         text,
         '        "excluded_source_rule_mapping_count": sanction_audit.get(\n'
         '            "excluded_source_rule_mapping_count"\n'
-        '        ),\n',
+        "        ),\n",
         '        "excluded_source_rule_mapping_count": sanction_audit.get(\n'
         '            "excluded_source_rule_mapping_count"\n'
-        '        ),\n'
+        "        ),\n"
         '        "excluded_source_rule_row_count": sanction_audit.get(\n'
         '            "excluded_source_rule_row_count"\n'
-        '        ),\n',
+        "        ),\n",
         "S3 excluded row summary",
     )
     return _write(path, text, apply=apply) or any((c1, c2, c3, c4))
@@ -380,7 +378,7 @@ def _patch_s3_report(path: Path, *, apply: bool) -> bool:
 
 def _write_regression_tests(root: Path, *, apply: bool) -> bool:
     path = root / "tests" / "stages" / "test_s3_l3_production_hardening.py"
-    content = '''from __future__ import annotations\n\nfrom pathlib import Path\n\nimport yaml\n\n\ndef test_primary_source_set_uses_only_s3_content() -> None:\n    config = yaml.safe_load(Path("config/methodology/measurement.yaml").read_text(encoding="utf-8"))\n    measurement = config["measurement"]\n    primary = measurement["source_sets"][measurement["primary_source_set_id"]]["sources"]\n    assert measurement["primary_s3_endpoint"] == "S3_CONTENT"\n    assert sorted(source for source in primary if source.startswith("S3_")) == ["S3_CONTENT"]\n\n\ndef test_known_case_registry_contract_is_external_validation_only() -> None:\n    config = yaml.safe_load(Path("config/methodology/source_catalog.yaml").read_text(encoding="utf-8"))\n    known = config["source_catalog"]["profiles"]["known_cases"]\n    assert known["discovery"]["globs"] == ["data/source/known_case_registry.csv"]\n    required = set(known["required_semantic_fields"])\n    assert {\n        "case_construct",\n        "case_role",\n        "training_include_flag",\n        "calibration_include_flag",\n        "model_selection_include_flag",\n        "external_validation_include_flag",\n    }.issubset(required)\n'''
+    content = """from __future__ import annotations\n\nfrom pathlib import Path\n\nimport yaml\n\n\ndef test_primary_source_set_uses_only_s3_content() -> None:\n    config = yaml.safe_load(Path("config/methodology/measurement.yaml").read_text(encoding="utf-8"))\n    measurement = config["measurement"]\n    primary = measurement["source_sets"][measurement["primary_source_set_id"]]["sources"]\n    assert measurement["primary_s3_endpoint"] == "S3_CONTENT"\n    assert sorted(source for source in primary if source.startswith("S3_")) == ["S3_CONTENT"]\n\n\ndef test_known_case_registry_contract_is_external_validation_only() -> None:\n    config = yaml.safe_load(Path("config/methodology/source_catalog.yaml").read_text(encoding="utf-8"))\n    known = config["source_catalog"]["profiles"]["known_cases"]\n    assert known["discovery"]["globs"] == ["data/source/known_case_registry.csv"]\n    required = set(known["required_semantic_fields"])\n    assert {\n        "case_construct",\n        "case_role",\n        "training_include_flag",\n        "calibration_include_flag",\n        "model_selection_include_flag",\n        "external_validation_include_flag",\n    }.issubset(required)\n"""
     if path.exists() and _read(path) == content:
         return False
     if apply:
@@ -414,9 +412,7 @@ def main() -> int:
         "known_case_catalog": _patch_known_case_catalog(
             root / "config/methodology/source_catalog.yaml", apply=apply
         ),
-        "known_case_validation": _patch_p15(
-            root / "scripts/p15_open_known_cases.py", apply=apply
-        ),
+        "known_case_validation": _patch_p15(root / "scripts/p15_open_known_cases.py", apply=apply),
         "s3_endpoint_audit": _patch_s3_report(
             root / "scripts/report_s3_year_audit.py", apply=apply
         ),

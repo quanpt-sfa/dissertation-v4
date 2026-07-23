@@ -48,17 +48,14 @@ def build_short_key_map(
     reverse: dict[str, str] = {}
 
     for canonical_id in sorted(ids):
-        digest = hashlib.sha256(
-            canonical_id.encode("utf-8")
-        ).hexdigest()[:hex_length]
+        digest = hashlib.sha256(canonical_id.encode("utf-8")).hexdigest()[:hex_length]
 
         key = f"{prefix}{digest}"
 
         existing = reverse.get(key)
         if existing is not None and existing != canonical_id:
             raise ValueError(
-                f"short-key collision: {existing} and "
-                f"{canonical_id} both map to {key}"
+                f"short-key collision: {existing} and {canonical_id} both map to {key}"
             )
 
         result[canonical_id] = key
@@ -151,9 +148,7 @@ def main() -> int:
     if not isinstance(feature_panel, pd.DataFrame):
         raise ValueError("P08 feature panel must be a DataFrame")
     if not isinstance(source_channel_matrices, dict):
-        raise ValueError(
-            "P08 P05 source-channel matrices must be a JSON object"
-        )
+        raise ValueError("P08 P05 source-channel matrices must be a JSON object")
 
     folds = mapping(loaded.registry.get("folds"), "folds")
     empirical_settings = mapping(
@@ -174,9 +169,7 @@ def main() -> int:
         firm_column=columns[FIRM_ID],
         year_column=columns[FISCAL_YEAR],
         development_year_maximum=int(folds["initial_outer_year"]) - 1,
-        calibration_repeats=int(
-            empirical_settings.get("calibration_repeats", 64)
-        ),
+        calibration_repeats=int(empirical_settings.get("calibration_repeats", 64)),
     )
     scenarios = validate_scenarios(scenarios)
 
@@ -209,29 +202,20 @@ def main() -> int:
             method_spec["method_" + "key"] = method_keys[method_id]
             updated_method_registry.append(method_spec)
         item["method_registry"] = updated_method_registry
-        item["active_method_ids"] = list(
-            profile_contract["active_method_ids"]
-        )
+        item["active_method_ids"] = list(profile_contract["active_method_ids"])
         item["execution_profile"] = active_profile
-        item["execution_profile_registry"] = [
-            dict(value) for value in profile_contract["profiles"]
-        ]
+        item["execution_profile_registry"] = [dict(value) for value in profile_contract["profiles"]]
         item["cost_regime_registry"] = [
-            dict(value)
-            for value in cost_contract["cost_regime_registry"]
+            dict(value) for value in cost_contract["cost_regime_registry"]
         ]
         item["review_budget_registry"] = [
-            dict(value)
-            for value in cost_contract["review_budget_registry"]
+            dict(value) for value in cost_contract["review_budget_registry"]
         ]
         item["imbalance_treatment_registry"] = [
-            dict(value)
-            for value in imbalance_contract["treatment_registry"]
+            dict(value) for value in imbalance_contract["treatment_registry"]
         ]
         item["imbalance_treatment_settings"] = {
-            key: value
-            for key, value in imbalance_contract.items()
-            if key != "treatment_registry"
+            key: value for key, value in imbalance_contract.items() if key != "treatment_registry"
         }
         item["cost_sensitive_settings"] = {
             key: value
@@ -243,9 +227,7 @@ def main() -> int:
             }
         }
         item["methodology_contract"] = {
-            "comparison_design": (
-                "profiled_blocked_label_strategy_by_learner_by_training_cost"
-            ),
+            "comparison_design": ("profiled_blocked_label_strategy_by_learner_by_training_cost"),
             "active_profile": active_profile,
             "full_library_counts": full_counts,
             "active_profile_counts": active_counts,
@@ -278,11 +260,7 @@ def main() -> int:
         return 0
 
     loaded.context.write("simulation_scenario_registry", locked, {})
-    status = (
-        "PASS"
-        if locked
-        else "SKIPPED reason=NO_OPERATIONAL_SCENARIOS"
-    )
+    status = "PASS" if locked else "SKIPPED reason=NO_OPERATIONAL_SCENARIOS"
     print(
         f"P08A registry status={status} scenarios={len(locked)} "
         f"profile={active_profile} "

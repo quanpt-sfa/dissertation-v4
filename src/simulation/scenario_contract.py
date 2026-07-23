@@ -26,16 +26,11 @@ def validate_scenario_target_identity(
         raise ValueError("scenario_id must be a nonempty string")
 
     if not isinstance(target_id, str) or not target_id:
-        raise ValueError(
-            f"scenario={scenario_id}: calibration_target_id is required"
-        )
+        raise ValueError(f"scenario={scenario_id}: calibration_target_id is required")
 
     marker = "__target_"
     if marker not in scenario_id:
-        raise ValueError(
-            f"scenario={scenario_id}: scenario_id must contain "
-            f"'{marker}{target_id}'"
-        )
+        raise ValueError(f"scenario={scenario_id}: scenario_id must contain '{marker}{target_id}'")
 
     embedded_target = scenario_id.split(marker, 1)[1].split("__", 1)[0]
 

@@ -29,7 +29,10 @@ def replication_plan(
             "batch_size": int(settings["batch_size"]),
             "maximum": int(settings["maximum_replications"]),
         }
-    if imbalance_treatment not in {"none", "not_applicable"} or tier in {"extended", "methodological"}:
+    if imbalance_treatment not in {"none", "not_applicable"} or tier in {
+        "extended",
+        "methodological",
+    }:
         settings = mapping(
             simulation.get("extended_replication"),
             "simulation.extended_replication",

@@ -18,15 +18,13 @@ from core.semantic_keys import (
 from evaluation.pairing import validate_paired_prediction_keys
 from gates.evidence_contract import prepare_gate2_inputs
 
-
 CANDIDATES = [
     "track_l1:elastic_net_logistic:full",
     "track_l1:random_forest:full",
     "track_l1:main_boosting:full",
 ]
 REFERENCES = {
-    candidate: candidate.removesuffix(":full") + ":observability_only"
-    for candidate in CANDIDATES
+    candidate: candidate.removesuffix(":full") + ":observability_only" for candidate in CANDIDATES
 }
 FOLDS = ["2021", "2022", "2023", "2024"]
 
@@ -35,9 +33,9 @@ def test_production_configuration_locks_target_and_tuning_grids() -> None:
     measurement = yaml.safe_load(
         Path("config/methodology/measurement.yaml").read_text(encoding="utf-8")
     )["measurement"]
-    learners = yaml.safe_load(
-        Path("config/execution/learners.yaml").read_text(encoding="utf-8")
-    )["learners"]
+    learners = yaml.safe_load(Path("config/execution/learners.yaml").read_text(encoding="utf-8"))[
+        "learners"
+    ]
     assert measurement["primary_target_id"] == "L1_ANNUAL"
     assert "primary_target_id" not in measurement["execution_tracks"]
     search_spaces = learners["tuning"]["search_spaces"]
@@ -52,14 +50,10 @@ def test_production_configuration_locks_target_and_tuning_grids() -> None:
 
 def test_p08_completion_contract_rejects_intermediate_statuses() -> None:
     assert p08_completion_blockers({"status": "PASS", "precision_target_met": True}) == []
-    blockers = p08_completion_blockers(
-        {"status": "CONTINUE", "precision_target_met": False}
-    )
+    blockers = p08_completion_blockers({"status": "CONTINUE", "precision_target_met": False})
     assert blockers == ["P08_STATUS_NOT_PASS", "P08_PRECISION_TARGET_NOT_MET"]
     with pytest.raises(RuntimeError, match="P09_PRODUCTION_PATH_BLOCKED"):
-        require_p08_completion(
-            {"status": "INCOMPLETE", "precision_target_met": False}, "P09"
-        )
+        require_p08_completion({"status": "INCOMPLETE", "precision_target_met": False}, "P09")
 
 
 def test_p12_pairing_requires_exact_firm_year_support() -> None:
@@ -83,9 +77,7 @@ def test_p12_pairing_requires_exact_firm_year_support() -> None:
     assert audit["status"] == "PASS"
     assert audit["pair_count"] == 1
 
-    mismatch = exact.loc[
-        ~(exact["model_key"].eq(reference) & exact["firm_key"].eq("F2"))
-    ].copy()
+    mismatch = exact.loc[~(exact["model_key"].eq(reference) & exact["firm_key"].eq("F2"))].copy()
     with pytest.raises(RuntimeError, match="FIRM_YEAR_SUPPORT_MISMATCH"):
         validate_paired_prediction_keys(mismatch, columns)
 
@@ -137,9 +129,7 @@ def test_gate2_contract_requires_complete_yield_and_bootstrap_evidence() -> None
                     "delta_ap_samples": [0.05] * 1800,
                 }
             )
-        evaluations.append(
-            {OUTER_FOLD: fold, "models": models, "comparisons": comparisons}
-        )
+        evaluations.append({OUTER_FOLD: fold, "models": models, "comparisons": comparisons})
         bootstraps.append(batch)
 
     complete = prepare_gate2_inputs(

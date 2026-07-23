@@ -24,7 +24,9 @@ def test_primary_source_set_excludes_next_year_s3_enforcement() -> None:
 
 
 def test_known_case_registry_contract_is_external_validation_only() -> None:
-    config = yaml.safe_load(Path("config/methodology/source_catalog.yaml").read_text(encoding="utf-8"))
+    config = yaml.safe_load(
+        Path("config/methodology/source_catalog.yaml").read_text(encoding="utf-8")
+    )
     known = config["source_catalog"]["profiles"]["known_cases"]
     assert known["discovery"]["globs"] == ["data/source/known_case_registry.csv"]
     required = set(known["required_semantic_fields"])

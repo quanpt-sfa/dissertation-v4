@@ -86,9 +86,7 @@ def prepare_gate2_inputs(
         model_rows = _dict_rows(cast(list[object], raw_models))
         comparison_rows = _dict_rows(cast(list[object], raw_comparisons))
         model_index = _unique_index(model_rows, LEARNER_ID, fold, "MODEL", blockers)
-        comparison_index = _unique_index(
-            comparison_rows, "candidate", fold, "COMPARISON", blockers
-        )
+        comparison_index = _unique_index(comparison_rows, "candidate", fold, "COMPARISON", blockers)
         selected_models: list[JsonRow] = []
         selected_comparisons: list[JsonRow] = []
         for candidate in candidate_ids:
@@ -114,9 +112,7 @@ def prepare_gate2_inputs(
                     blockers.append(f"GATE2_AP_MISSING:{fold}:{model_id}")
                 if _finite_float(model.get("precision_at_primary_budget")) is None:
                     blockers.append(f"GATE2_YIELD_MISSING:{fold}:{model_id}")
-            reference_precision = _finite_float(
-                reference_model.get("precision_at_primary_budget")
-            )
+            reference_precision = _finite_float(reference_model.get("precision_at_primary_budget"))
             if reference_precision is not None and reference_precision <= 0.0:
                 blockers.append(f"GATE2_REFERENCE_YIELD_NONPOSITIVE:{fold}:{candidate}")
             positives = candidate_model.get("positives")
@@ -172,9 +168,7 @@ def prepare_gate2_inputs(
     }
 
 
-def insufficient_gate2_verdict(
-    blockers: list[str], candidate_ids: list[str]
-) -> dict[str, object]:
+def insufficient_gate2_verdict(blockers: list[str], candidate_ids: list[str]) -> dict[str, object]:
     return {
         "status": "INSUFFICIENT_EVIDENCE",
         "gate_id": "GATE2",

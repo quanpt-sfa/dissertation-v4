@@ -50,14 +50,18 @@ def validate_paired_prediction_keys(
                 "P12_PAIRED_COMPARISON_BLOCKED: FIRM_YEAR_SUPPORT_MISMATCH:"
                 f"{candidate}:candidate_only={len(candidate_only)}:reference_only={len(reference_only)}"
             )
-        candidate_truth_order = candidate_frame.sort_values([firm, year], kind="stable")[[
-            firm,
-            year,
-        ]]
-        reference_truth_order = reference_frame.sort_values([firm, year], kind="stable")[[
-            firm,
-            year,
-        ]]
+        candidate_truth_order = candidate_frame.sort_values([firm, year], kind="stable")[
+            [
+                firm,
+                year,
+            ]
+        ]
+        reference_truth_order = reference_frame.sort_values([firm, year], kind="stable")[
+            [
+                firm,
+                year,
+            ]
+        ]
         if not candidate_truth_order.reset_index(drop=True).equals(
             reference_truth_order.reset_index(drop=True)
         ):

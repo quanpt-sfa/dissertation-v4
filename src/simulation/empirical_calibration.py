@@ -16,7 +16,7 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
-from core.semantic_keys import ELIGIBLE, FIRM_ID, FISCAL_YEAR, SCENARIO_ID
+from core.semantic_keys import FIRM_ID, FISCAL_YEAR, SCENARIO_ID
 
 
 def attach_empirical_panel_calibration(
@@ -65,9 +65,7 @@ def attach_empirical_panel_calibration(
         raise ValueError("P07 feature panel must have unique firm-year keys")
 
     feature_bindings = {
-        str(item.get("feature_id")): str(
-            item.get("physical_column", item.get("feature_id"))
-        )
+        str(item.get("feature_id")): str(item.get("physical_column", item.get("feature_id")))
         for item in feature_registry
         if item.get("feature_id") is not None
     }
@@ -269,7 +267,7 @@ def _ascertainment_probabilities(
 ) -> tuple[float, float, float]:
     scenario_id = str(scenario.get(SCENARIO_ID, "scenario"))
     seed = int.from_bytes(
-        hashlib.sha256(f"P08_CALIBRATION|{scenario_id}".encode("utf-8")).digest()[:8],
+        hashlib.sha256(f"P08_CALIBRATION|{scenario_id}".encode()).digest()[:8],
         "big",
     )
     rng = np.random.default_rng(seed)
@@ -308,9 +306,9 @@ def _observed_positive_rate(
     elif structure == "nonlinear":
         effect = strength * latent.astype(float) * np.tanh(base_score)
     elif structure == "interaction":
-        effect = strength * latent.astype(float) * (
-            base_score > np.median(base_score)
-        ).astype(float)
+        effect = (
+            strength * latent.astype(float) * (base_score > np.median(base_score)).astype(float)
+        )
     else:
         raise ValueError(f"unsupported signal structure: {structure}")
     content = base_score + effect
@@ -351,9 +349,7 @@ def _observed_positive_rate(
     )
     delay = rng.exponential(float(scenario.get("detection_delay_mean_days", 30.0)), n)
     mature = delay <= float(scenario.get("horizon_days", 365.0))
-    observed_positive = mature & (
-        (anchor & anchor_observed) | (weak & weak_observed)
-    )
+    observed_positive = mature & ((anchor & anchor_observed) | (weak & weak_observed))
     return float(observed_positive.mean())
 
 

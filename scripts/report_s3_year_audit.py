@@ -8,7 +8,7 @@ import json
 import math
 import sys
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -103,13 +103,19 @@ def main() -> int:
         else {}
     )
     content_positive = int(development_positive_by_endpoint.get("S3_CONTENT", 0))
-    sanction_year_unresolved_firm_year_count = int(
-        unknown_reasons.loc[
-            unknown_reasons[OUTCOME_BASIS].astype(str).eq("SANCTION_YEAR_UNRESOLVED"),
-            "unknown_count",
-        ].sum()
-    ) if not unknown_reasons.empty else 0
-    mismatch_count = int(reconciliation["outcome_mismatch"].sum()) if not reconciliation.empty else 0
+    sanction_year_unresolved_firm_year_count = (
+        int(
+            unknown_reasons.loc[
+                unknown_reasons[OUTCOME_BASIS].astype(str).eq("SANCTION_YEAR_UNRESOLVED"),
+                "unknown_count",
+            ].sum()
+        )
+        if not unknown_reasons.empty
+        else 0
+    )
+    mismatch_count = (
+        int(reconciliation["outcome_mismatch"].sum()) if not reconciliation.empty else 0
+    )
     missing_key_count = (
         int(reconciliation["p03_missing_key"].sum() + reconciliation["p05_missing_key"].sum())
         if not reconciliation.empty
@@ -147,9 +153,7 @@ def main() -> int:
         "excluded_source_rule_mapping_count": sanction_audit.get(
             "excluded_source_rule_mapping_count"
         ),
-        "excluded_source_rule_row_count": sanction_audit.get(
-            "excluded_source_rule_row_count"
-        ),
+        "excluded_source_rule_row_count": sanction_audit.get("excluded_source_rule_row_count"),
         "excluded_unresolved_mapping_count": sanction_audit.get(
             "excluded_unresolved_mapping_count"
         ),
@@ -182,7 +186,9 @@ def _decision_counts_by_year(frame: pd.DataFrame, columns: dict[str, str]) -> pd
 
     rows: list[dict[str, object]] = []
     working = frame.copy()
-    working["__year_group__"] = working[target_year].astype("Int64").astype("string").fillna("UNRESOLVED")
+    working["__year_group__"] = (
+        working[target_year].astype("Int64").astype("string").fillna("UNRESOLVED")
+    )
     for year_group, group in working.groupby("__year_group__", sort=True, dropna=False):
         included_mask = group[included].eq(True)
         hard_mask = group[hard_positive].eq(True)
@@ -332,9 +338,9 @@ def _unknown_reasons_by_year(
         .reset_index()
     )
     result["development_history"] = result[year].astype(int) < initial_outer_year
-    return result.rename(
-        columns={year: FISCAL_YEAR, source: SOURCE_ID, basis: OUTCOME_BASIS}
-    )[[FISCAL_YEAR, SOURCE_ID, OUTCOME_BASIS, "development_history", "unknown_count"]]
+    return result.rename(columns={year: FISCAL_YEAR, source: SOURCE_ID, basis: OUTCOME_BASIS})[
+        [FISCAL_YEAR, SOURCE_ID, OUTCOME_BASIS, "development_history", "unknown_count"]
+    ]
 
 
 def _reconcile_p03_p05(
@@ -414,12 +420,10 @@ def _reconcile_p03_p05(
                 "p03_missing_key": sum(key not in p03 for key in group_keys),
                 "p05_missing_key": sum(key not in p05 for key in group_keys),
                 "outcome_mismatch": sum(
-                    key in p03 and key in p05 and p03[key][0] != p05[key][0]
-                    for key in group_keys
+                    key in p03 and key in p05 and p03[key][0] != p05[key][0] for key in group_keys
                 ),
                 "opportunity_mismatch": sum(
-                    key in p03 and key in p05 and p03[key][1] != p05[key][1]
-                    for key in group_keys
+                    key in p03 and key in p05 and p03[key][1] != p05[key][1] for key in group_keys
                 ),
             }
         )

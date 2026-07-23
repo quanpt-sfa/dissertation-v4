@@ -83,8 +83,7 @@ def main() -> int:
         l3_model = mapping(measurement.get("l3_model"), "measurement.l3_model")
         operational = mapping(l3_model.get("operational"), "measurement.l3_model.operational")
         fixed_pi_grid = [
-            float(value)
-            for value in sequence(operational.get("fixed_pi_grid"), "L3 fixed-pi grid")
+            float(value) for value in sequence(operational.get("fixed_pi_grid"), "L3 fixed-pi grid")
         ]
         source_channels, accuracy_priors = _l3_bindings(
             registry=loaded.registry,
@@ -210,9 +209,7 @@ def _l3_bindings(
         parsed_prior: dict[str, float] = {}
         for key, value in prior.items():
             if not isinstance(value, (int, float)) or isinstance(value, bool):
-                raise ValueError(
-                    f"profile={source.profile_id}: L3 prior values must be numeric"
-                )
+                raise ValueError(f"profile={source.profile_id}: L3 prior values must be numeric")
             parsed_prior[str(key)] = float(value)
         source_channels[logical_source_id] = source.channel_id
         accuracy_priors[logical_source_id] = parsed_prior
