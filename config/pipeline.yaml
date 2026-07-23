@@ -26,6 +26,7 @@ modules:
   weighting: execution/weighting.yaml
   learners: execution/learners.yaml
   simulation: execution/simulation.yaml
+  simulation_mcse: execution/simulation_mcse.yaml
   reproducibility: execution/reproducibility.yaml
   appendix_b: assurance/appendix_b.yaml
   decisions: assurance/decisions.yaml
