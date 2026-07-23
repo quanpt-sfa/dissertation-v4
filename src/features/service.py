@@ -24,8 +24,18 @@ from core.semantic_keys import (
 _ROLES = {"content", "observability", "ambiguous", "administrative", "identifier"}
 _CONFIRMATORY = {"confirmatory", "robustness_only", "descriptive_only", "blocked"}
 _DECISION_STATUS = {"LOCKED", "RESEARCH_DECISION_REQUIRED", "UNAVAILABLE", "NOT_APPLICABLE"}
+# Valid registry states for model_eligibility. "ablation_only_by_target" marks a
+# retained target-component feature that the leakage registry flags ABLATION_ONLY
+# (methodology 3.5): it stays in the store for component-reconstruction diagnostics
+# but must never enter a model matrix. It is therefore accepted by validation but
+# excluded from FIT_MODEL_ELIGIBILITY_VALUES below.
 MODEL_ELIGIBILITY_VALUES = frozenset(
-    {ELIGIBLE, "eligible_observability_view", "blocked_until_mapping_review"}
+    {
+        ELIGIBLE,
+        "eligible_observability_view",
+        "blocked_until_mapping_review",
+        "ablation_only_by_target",
+    }
 )
 FIT_MODEL_ELIGIBILITY_VALUES = frozenset({ELIGIBLE, "eligible_observability_view"})
 _LEAKAGE_DECISIONS = {

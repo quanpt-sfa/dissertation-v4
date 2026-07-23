@@ -35,6 +35,39 @@ def test_model_eligibility_is_a_closed_enum() -> None:
         validate_feature_definition(definition)
 
 
+def test_every_production_feature_passes_validation() -> None:
+    # P07 validates every registry (and intended-registry) definition before it
+    # builds the panel. A single invalid feature aborts the whole stage, so the
+    # real locked config -- not a curated fixture -- must satisfy the contract.
+    registry = _registry()
+    features = cast(dict[str, Any], registry["features"])
+    definitions = [
+        *cast(list[dict[str, Any]], features.get("registry", [])),
+        *cast(list[dict[str, Any]], features.get("intended_registry", [])),
+    ]
+    for definition in definitions:
+        validate_feature_definition(dict(definition))
+
+
+def test_target_component_features_are_retained_but_never_fit() -> None:
+    # Methodology 3.5: target components stay in the store as ABLATION_ONLY and
+    # must never reach a model matrix.
+    registry = _registry()
+    features = cast(dict[str, Any], registry["features"])
+    definitions = cast(list[dict[str, Any]], features["registry"])
+    target_components = {
+        str(item["feature_id"])
+        for item in definitions
+        if item.get("model_eligibility") == "ablation_only_by_target"
+    }
+    assert target_components, "expected at least one retained target-component feature"
+    groups = feature_groups(definitions)
+    fit_features = (
+        set(groups["full"]) | set(groups["content_only"]) | set(groups["observability_only"])
+    )
+    assert target_components.isdisjoint(fit_features)
+
+
 def test_l3_unlocked_parameters_are_explicitly_nonreportable() -> None:
     registry = _registry()
     measurement = cast(dict[str, Any], registry["measurement"])
