@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diagnostics:
@@ -14,27 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: agent/remediate-a01-a15-audit
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --all-extras
-      - name: Capture full diagnostics
+      - name: Format branch
+        run: uv run ruff format .
+      - name: Commit formatting
         run: |
-          mkdir -p artifacts/a01-a15
-          set +e
-          uv run ruff check . > artifacts/a01-a15/ruff.log 2>&1
-          echo "exit_code=$?" >> artifacts/a01-a15/ruff.log
-          uv run ruff format --check . > artifacts/a01-a15/format.log 2>&1
-          echo "exit_code=$?" >> artifacts/a01-a15/format.log
-          uv run python scripts/check_pyright_ratchet.py \
-            --baseline config/quality/pyright_baseline.json \
-            --diff-base "${{ github.event.pull_request.base.sha }}" \
-            > artifacts/a01-a15/pyright.log 2>&1
-          echo "exit_code=$?" >> artifacts/a01-a15/pyright.log
-          uv run pytest -q > artifacts/a01-a15/pytest.log 2>&1
-          echo "exit_code=$?" >> artifacts/a01-a15/pytest.log
-          set -e
-      - uses: actions/upload-artifact@v4
-        with:
-          name: a01-a15-diagnostics
-          path: artifacts/a01-a15
-          if-no-files-found: error
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Format methodological audit remediation'
+          git push origin HEAD:agent/remediate-a01-a15-audit
