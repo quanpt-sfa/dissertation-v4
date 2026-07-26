@@ -33,3 +33,9 @@ work/
 data/**
 !data/**/
 !data/**/.gitkeep
+
+# Raw-root extract provenance manifest (per-environment vendor metadata).
+extract_provenance.json
+
+# Thesis source tree (kept locally alongside the code, not tracked here).
+docs/PhD_Thesis_Chapter3_Annual_Estimand_Feature_Registry_v20/
