@@ -15,8 +15,10 @@ from core.artifact_store import dataframe_to_csv
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.semantic_keys import FIRM_ID, FISCAL_YEAR, PREDICTION_TIME, TARGET_ID
 from features.diagnostics import build_feature_diagnostics
+from features.panel_source import assemble_from_raw
 from features.service import build_feature_panel
-from features.store import assemble_feature_input_panel
+from p01.registry import resolve_source
+from p02.models import EntityResolutionSpec
 
 
 def main() -> int:
@@ -46,12 +48,17 @@ def main() -> int:
     if not isinstance(panel, pd.DataFrame) or not isinstance(risk_sets, pd.DataFrame):
         raise ValueError("P07 panel inputs must be DataFrames")
     columns = physical_columns(loaded.registry)
-    store_result = assemble_feature_input_panel(
+    entity_spec = EntityResolutionSpec.from_mapping(loaded.registry.get("entity_resolution"))
+    source_spec, source_path = resolve_source(
+        cast(dict[str, object], loaded.registry), "financial_statement_core_long"
+    )
+    store_result = assemble_from_raw(
         base_panel=panel,
         feature_definitions=cast(list[dict[str, object]], definitions),
         intended_definitions=cast(list[dict[str, object]], intended),
-        features_config=features,
-        repository_root=Path(__file__).resolve().parents[1],
+        entity_spec=entity_spec,
+        raw_source_path=source_path,
+        reader={"encoding": source_spec.encoding},
         firm_column=columns[FIRM_ID],
         year_column=columns[FISCAL_YEAR],
         prediction_time_column=columns[PREDICTION_TIME],

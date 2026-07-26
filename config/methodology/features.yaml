@@ -1,21 +1,10 @@
 features:
-  store:
-    package_root: data/dissertation_v4_p07_feature_store
-    root: data/dissertation_v4_p07_feature_store/feature_store
-    manifest: manifests/feature_files_manifest.csv
-    build_manifest: manifests/feature_build_manifest.json
-    generated_registry_source: data/dissertation_v4_p07_feature_store/config/methodology/features_store.generated.yaml
-    values_root: values
+  feature_panel:
+    # Feature values are computed directly from the registered raw source at P07
+    # (src/features/compute.py); there is no pre-computed feature store. This block
+    # keeps only the feature-panel methodology contracts.
     allowed_fiscal_year_min: 2015
     allowed_fiscal_year_max: 2025
-    availability_violation_tolerance: 0
-    expected_feature_count: 151
-    expected_locked_feature_count: 142
-    expected_unresolved_feature_count: 9
-    strict_hash_validation: true
-    reject_duplicate_keys: true
-    reject_unknown_features: true
-    allow_unregistered_files: false
     availability_policy: synthetic_annual_anchor_explicit_assumption
     availability_contract:
       observed_publication_dates_available: false
@@ -35,15 +24,6 @@ features:
     canonical_key:
     - firm_master_id
     - fiscal_year
-    identifier_contract:
-      store_entity_column: firm_master_id
-      canonical_entity_column: firm_master_id
-      source_ticker_column: issuer_ticker
-      crosswalk: mappings/firm_ticker_crosswalk.csv
-      mapping_rule: registered_year_valid_crosswalk_then_canonical_normalization
-      normalization_rule: approved_entity_resolution_normalization
-      ambiguity_policy: fail_closed
-      unmatched_policy: retain_panel_row_and_report
   label_model_allows_content: false
   label_model_allowed_blocks:
   - S

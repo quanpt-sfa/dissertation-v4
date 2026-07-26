@@ -56,7 +56,12 @@ REPOSITORY_MAINTENANCE_SCRIPTS = {
     "scripts/lock_l3_parameters.py",
 }
 PRODUCTION_DATA_BOUNDARIES = {
-    "src/features/store.py",
+    # P07 feature-computation data layer (replaced the pre-computed feature store):
+    # reads the registered raw financial-statement source and computes features
+    # directly, so it works with physical firm-year/source column names.
+    "src/features/raw_loader.py",
+    "src/features/compute.py",
+    "src/features/panel_source.py",
     # Explicit documentation-export boundaries. These scripts read only verified
     # runtime artifacts and write researcher-facing audit/calibration tables outside
     # the immutable production artifact namespace.

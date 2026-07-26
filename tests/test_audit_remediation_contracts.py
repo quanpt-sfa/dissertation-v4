@@ -83,9 +83,9 @@ def test_temporal_and_provenance_contracts_are_explicit() -> None:
     study = cast(dict[str, Any], registry["study"])
     folds = cast(dict[str, Any], registry["folds"])
     features = cast(dict[str, Any], registry["features"])
-    store = cast(dict[str, Any], features["store"])
+    feature_panel = cast(dict[str, Any], features["feature_panel"])
     assert cast(dict[str, Any], study["sample_fiscal_years"])["end"] == 2025
-    assert store["allowed_fiscal_year_max"] == 2025
+    assert feature_panel["allowed_fiscal_year_max"] == 2025
     assert folds["prospective_year"] == 2026
     assert folds["prospective_feature_status"] == "unavailable_by_data_cutoff"
     assert (

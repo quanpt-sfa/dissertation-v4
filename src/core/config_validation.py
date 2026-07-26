@@ -260,14 +260,14 @@ def validate_methodology(
     )
     prediction_anchor_config = _entry(study.get(PREDICTION_TIME), "study.prediction_time")
     sample_years = _entry(study.get("sample_fiscal_years"), "study.sample_fiscal_years")
-    feature_store = _entry(features.get("store"), "features.store")
+    feature_panel = _entry(features.get("feature_panel"), "features.feature_panel")
     availability_contract = _entry(
-        feature_store.get("availability_contract"), "features.store.availability_contract"
+        feature_panel.get("availability_contract"), "features.feature_panel.availability_contract"
     )
     revision_contract = _entry(
-        feature_store.get("revision_contract"), "features.store.revision_contract"
+        feature_panel.get("revision_contract"), "features.feature_panel.revision_contract"
     )
-    preprocessing = _entry(feature_store.get("preprocessing"), "features.store.preprocessing")
+    preprocessing = _entry(feature_panel.get("preprocessing"), "features.feature_panel.preprocessing")
     l3_operational = _entry(l3_model.get("operational"), "measurement.l3_model.operational")
     execution_tracks = _entry(measurement.get("execution_tracks"), "measurement.execution_tracks")
     source_registry = _entry(sources.get("source_registry"), "data_sources.source_registry")
@@ -359,7 +359,7 @@ def validate_methodology(
             "feature preprocessing policy must be explicit and leakage-safe",
         ),
         (
-            sample_years.get("end") == feature_store.get("allowed_fiscal_year_max")
+            sample_years.get("end") == feature_panel.get("allowed_fiscal_year_max")
             and folds.get("prospective_year") == study.get("prospective_target_year")
             and int(folds.get("prospective_year", 0)) == int(sample_years.get("end", 0)) + 1
             and folds.get("prospective_feature_status") == "unavailable_by_data_cutoff"
