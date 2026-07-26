@@ -16,7 +16,11 @@ features:
     revision_contract:
       point_in_time_vintages_available: false
       revision_policy_source: extract_provenance.revision_policy
-      restatement_sensitivity_required: true
+      institutional_context: vietnam_no_statutory_restatement_regime
+      restatement_prevalence: negligible_fewer_than_10_historical_cases
+      treated_as_point_in_time: true
+      restatement_sensitivity_required: false
+      restatement_sensitivity_scope: exclude_identified_restatement_cases_if_any
     preprocessing:
       winsorization: none
       p1_p99_role: diagnostics_only

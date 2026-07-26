@@ -349,8 +349,10 @@ def validate_methodology(
         ),
         (
             revision_contract.get("point_in_time_vintages_available") is False
-            and revision_contract.get("restatement_sensitivity_required") is True,
-            "point-in-time limitation and restatement sensitivity must be explicit",
+            and revision_contract.get("treated_as_point_in_time") is True
+            and bool(revision_contract.get("institutional_context"))
+            and bool(revision_contract.get("restatement_prevalence")),
+            "restatement revision policy (Vietnam point-in-time treatment) must be explicit",
         ),
         (
             preprocessing.get("winsorization") == "none"
