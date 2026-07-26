@@ -11,4 +11,5 @@ agent_contract:
     - S3 is a next-calendar-year regulatory-event target: map sanction year y to fiscal year y-1, and do not use prediction-date or horizon filters to redefine it.
     - Content predictors cannot enter label models; hierarchical-pi is sensitivity only.
     - Outer outcomes and K1-K4 content remain sealed until their configured opening steps.
+    - Partitioned stages (P01, P08, P10, P11, P12) run units in parallel via --workers N subprocess workers; each worker is single-threaded and writes to its own coordinate path.
     - Notebooks do not write artifacts; run required tests before committing.

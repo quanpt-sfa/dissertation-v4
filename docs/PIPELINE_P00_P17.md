@@ -41,18 +41,27 @@ uv run python scripts/run_pipeline.py `
   --run-id dissertation-2015-2026-start-v1 `
   --raw-root "D:\Works\dissertation\dissertation-v4" `
   --output-root "D:\Works\dissertation\dissertation-v4\artifacts\runs" `
+  --workers 5 `
   --through P17
 ```
 
-`--through Pxx` dừng sau stage tương ứng. Runner mặc định yêu cầu Git tree sạch;
-`--allow-dirty` chỉ dùng cho phát triển có chủ ý, không dùng để chấp nhận run cuối.
-`--resume` chỉ tiếp tục cùng run sau khi runner xác minh lại raw SHA-256, code,
-config, snapshot, manifest và content hash của từng unit đã hoàn tất.
+`--through Pxx` dừng sau stage tương ứng. `--workers N` bật song song cho các
+stage có partition (độc lập theo `source_id` hoặc `outer_fold`); mặc định
+`--workers 1` giữ hành vi tuần tự. P08 dùng biến môi trường `P08_WORKERS` để
+ghi đè riêng; nếu không set, P08 kế thừa `--workers`.
+
+Runner mặc định yêu cầu Git tree sạch; `--allow-dirty` chỉ dùng cho phát triển
+có chủ ý, không dùng để chấp nhận run cuối. `--resume` chỉ tiếp tục cùng run
+sau khi runner xác minh lại raw SHA-256, code, config, snapshot, manifest và
+content hash của từng unit đã hoàn tất.
 
 Luồng runner:
 
 ```text
-snapshot → P00 → P01 từng source → P02 → ... → P17
+snapshot → P00 → P01 [parallel per source] → P02 → P03–P07 →
+P08 [parallel per batch] → P09 →
+P10 [parallel per fold] → P11 [parallel per fold] → P12 [parallel per fold] →
+P13–P17
 ```
 
 Runner không gọi script đăng ký nguồn/panel/alias thủ công. Source được nhận diện
@@ -735,7 +744,8 @@ Không điền các setting này bằng suy đoán từ outer results hoặc K1�
 - Artifact là immutable; exact retry chỉ idempotent khi content và dependency
   provenance giống hệt nhau.
 - P01/P08/P09/P10/P11/P12 có đơn vị partition nên có thể rerun trong một run mới
-  với coordinates tương ứng.
+  với coordinates tương ứng. `--workers N` chạy các unit song song; `--resume`
+  tự nhận diện unit đã hoàn tất và chỉ chạy lại unit thiếu.
 - Nếu một run dừng giữa chừng, chạy lại đúng lệnh với `--resume`. Recovery policy
   chỉ quarantine artifact/manifest pair không hoàn chỉnh; unit đủ contract và hash
   được skip, unit chưa đủ được chạy lại.

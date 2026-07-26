@@ -6,6 +6,7 @@ import argparse
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import cast
 
@@ -93,6 +94,47 @@ def _run_capture(command: list[str], *, cwd: Path, env: dict[str, str]) -> str:
     return result.stdout
 
 
+def _run_units_parallel(
+    units: list[tuple[list[str], list[tuple[str, dict[str, str]]]]],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    registry: dict[str, object],
+    run_root: Path,
+    protocol_hash: str,
+    workers: int,
+) -> None:
+    """Run independent partitioned units in parallel via subprocess workers."""
+    if workers <= 1 or len(units) <= 1:
+        for command, artifacts in units:
+            _run_unit(
+                command,
+                cwd=cwd,
+                env=env,
+                registry=registry,
+                run_root=run_root,
+                protocol_hash=protocol_hash,
+                artifacts=artifacts,
+            )
+        return
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [
+            executor.submit(
+                _run_unit,
+                command,
+                cwd=cwd,
+                env=env,
+                registry=registry,
+                run_root=run_root,
+                protocol_hash=protocol_hash,
+                artifacts=artifacts,
+            )
+            for command, artifacts in units
+        ]
+        for future in futures:
+            future.result()
+
+
 def _require_clean_tree(root: Path) -> None:
     result = subprocess.run(
         ["git", "status", "--porcelain"], cwd=root, text=True, capture_output=True, check=True
@@ -115,7 +157,14 @@ def main() -> int:
         action="store_true",
         help="Resume the same immutable run after verifying code, config, snapshot, and artifacts.",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Parallel workers for partitioned stages (P01, P10, P11, P12).",
+    )
     args = parser.parse_args()
+    workers = max(1, args.workers)
 
     project_root = args.config.resolve().parent.parent
     if not args.allow_dirty:
@@ -200,26 +249,33 @@ def main() -> int:
         if registered.get("role") != "known_case":
             source_ids.append(source_id)
 
+    p01_units: list[tuple[list[str], list[tuple[str, dict[str, str]]]]] = []
     for source_id in sorted(source_ids):
         source_coordinates = {"source_id": source_id}
-        _run_unit(
-            [
-                python,
-                "scripts/p01_audit_raw.py",
-                "--registry",
-                str(registry_path),
-                "--run-id",
-                args.run_id,
-                "--source-id",
-                source_id,
-            ],
-            cwd=project_root,
-            env=env,
-            registry=registry,
-            run_root=run_root,
-            protocol_hash=protocol_hash,
-            artifacts=[("raw_audit", source_coordinates)],
+        p01_units.append(
+            (
+                [
+                    python,
+                    "scripts/p01_audit_raw.py",
+                    "--registry",
+                    str(registry_path),
+                    "--run-id",
+                    args.run_id,
+                    "--source-id",
+                    source_id,
+                ],
+                [("raw_audit", source_coordinates)],
+            )
         )
+    _run_units_parallel(
+        p01_units,
+        cwd=project_root,
+        env=env,
+        registry=registry,
+        run_root=run_root,
+        protocol_hash=protocol_hash,
+        workers=workers,
+    )
     if args.through == "P01":
         return 0
 
@@ -272,7 +328,7 @@ def main() -> int:
         "--run-id",
         args.run_id,
         "--workers",
-        str(max(1, int(os.environ.get("P08_WORKERS", "1")))),
+        str(max(1, int(os.environ.get("P08_WORKERS", str(workers))))),
     ]
     if args.resume:
         p08_command.append("--resume")
@@ -332,70 +388,91 @@ def main() -> int:
     if args.through == "P09":
         return 0
 
+    p10_units: list[tuple[list[str], list[tuple[str, dict[str, str]]]]] = []
     for fold_id in outer_folds:
         fold_coordinates = {"outer_fold": fold_id}
-        _run_unit(
-            [
-                python,
-                "scripts/p10_select_measurement.py",
-                "--registry",
-                str(registry_path),
-                "--run-id",
-                args.run_id,
-                "--outer-fold",
-                fold_id,
-            ],
-            cwd=project_root,
-            env=env,
-            registry=registry,
-            run_root=run_root,
-            protocol_hash=protocol_hash,
-            artifacts=_step_outputs(registry, "P10", fold_coordinates),
+        p10_units.append(
+            (
+                [
+                    python,
+                    "scripts/p10_select_measurement.py",
+                    "--registry",
+                    str(registry_path),
+                    "--run-id",
+                    args.run_id,
+                    "--outer-fold",
+                    fold_id,
+                ],
+                _step_outputs(registry, "P10", fold_coordinates),
+            )
         )
+    _run_units_parallel(
+        p10_units,
+        cwd=project_root,
+        env=env,
+        registry=registry,
+        run_root=run_root,
+        protocol_hash=protocol_hash,
+        workers=workers,
+    )
     if args.through == "P10":
         return 0
+    p11_units: list[tuple[list[str], list[tuple[str, dict[str, str]]]]] = []
     for fold_id in outer_folds:
         fold_coordinates = {"outer_fold": fold_id}
-        _run_unit(
-            [
-                python,
-                "scripts/p11_freeze_models.py",
-                "--registry",
-                str(registry_path),
-                "--run-id",
-                args.run_id,
-                "--outer-fold",
-                fold_id,
-            ],
-            cwd=project_root,
-            env=env,
-            registry=registry,
-            run_root=run_root,
-            protocol_hash=protocol_hash,
-            artifacts=_step_outputs(registry, "P11", fold_coordinates),
+        p11_units.append(
+            (
+                [
+                    python,
+                    "scripts/p11_freeze_models.py",
+                    "--registry",
+                    str(registry_path),
+                    "--run-id",
+                    args.run_id,
+                    "--outer-fold",
+                    fold_id,
+                ],
+                _step_outputs(registry, "P11", fold_coordinates),
+            )
         )
+    _run_units_parallel(
+        p11_units,
+        cwd=project_root,
+        env=env,
+        registry=registry,
+        run_root=run_root,
+        protocol_hash=protocol_hash,
+        workers=workers,
+    )
     if args.through == "P11":
         return 0
+    p12_units: list[tuple[list[str], list[tuple[str, dict[str, str]]]]] = []
     for fold_id in outer_folds:
         fold_coordinates = {"outer_fold": fold_id}
-        _run_unit(
-            [
-                python,
-                "scripts/p12_evaluate.py",
-                "--registry",
-                str(registry_path),
-                "--run-id",
-                args.run_id,
-                "--outer-fold",
-                fold_id,
-            ],
-            cwd=project_root,
-            env=env,
-            registry=registry,
-            run_root=run_root,
-            protocol_hash=protocol_hash,
-            artifacts=_step_outputs(registry, "P12", fold_coordinates),
+        p12_units.append(
+            (
+                [
+                    python,
+                    "scripts/p12_evaluate.py",
+                    "--registry",
+                    str(registry_path),
+                    "--run-id",
+                    args.run_id,
+                    "--outer-fold",
+                    fold_id,
+                ],
+                _step_outputs(registry, "P12", fold_coordinates),
+            )
         )
+    _run_units_parallel(
+        p12_units,
+        cwd=project_root,
+        env=env,
+        registry=registry,
+        run_root=run_root,
+        protocol_hash=protocol_hash,
+        workers=workers,
+    )
     if args.through == "P12":
         return 0
 

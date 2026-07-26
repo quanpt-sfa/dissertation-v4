@@ -145,12 +145,29 @@ qua registry; không chép literal physical column vào stage code.
 
 ## 6. Cấu trúc `scripts/`
 
-- `run_pipeline.py`: orchestration duy nhất cho luồng định kỳ.
+- `run_pipeline.py`: orchestration duy nhất cho luồng định kỳ; `--workers N` bật
+  song song cho các stage có partition (P01, P10, P11, P12); mặc định `--workers 1`
+  giữ hành vi tuần tự.
 - `create_data_snapshot.py`: snapshot các file đúng catalog trước P00.
 - `p00_lock_protocol.py`: compile và khóa protocol.
 - `p01_*`, `p02_*`: CLI stage và compatibility wrappers.
 - `p03_*` đến `p17_*`: CLI mỏng; nghiệp vụ nằm trong `src/<package>/service.py`.
-- P08 có coordinator, worker theo batch và collector MCSE riêng.
+- P08 có coordinator, worker theo batch và collector MCSE riêng; `P08_WORKERS` env
+  var ghi đè `--workers` cho riêng P08.
+
+Parallelism model: runner dispatch các unit cùng stage qua
+`ThreadPoolExecutor` + `subprocess.run`. Mỗi worker là một subprocess đơn luồng
+ghi artifact theo coordinate riêng; không chia sẻ state giữa các worker.
+
+Các stage được song song hóa:
+
+| Stage | Partition unit | Ghi chú |
+| --- | --- | --- |
+| P01 | `source_id` | Mỗi nguồn audit độc lập |
+| P08 | `scenario_id × method_id × batch_id` | Có orchestrator riêng và adaptive MCSE |
+| P10 | `outer_fold` | Measurement selection theo fold |
+| P11 | `outer_fold` | Model fit và freeze theo fold |
+| P12 | `outer_fold` | Evaluation và calibration theo fold |
 
 Script được phép parse CLI và gọi service/core I/O. Không đặt thuật toán lớn,
 đường dẫn artifact trực tiếp hoặc `pandas.read_*`/`to_*` artifact I/O trong script.
