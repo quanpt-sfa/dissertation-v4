@@ -85,7 +85,9 @@ def prepare_model_feature_contract(
         development_non_null = (
             int(panel.loc[development_mask, feature_id].notna().sum()) if column_exists else 0
         )
-        outer_non_null = int(panel.loc[outer_mask, feature_id].notna().sum()) if column_exists else 0
+        outer_non_null = (
+            int(panel.loc[outer_mask, feature_id].notna().sum()) if column_exists else 0
+        )
 
         reason: str | None = None
         if requested_for_fit and not column_exists:

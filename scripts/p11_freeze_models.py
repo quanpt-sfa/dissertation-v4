@@ -252,8 +252,7 @@ def main() -> int:
             )
         optional_started = time.perf_counter()
         _progress(
-            f"P11 track_start fold={args.outer_fold} track={track_id} "
-            f"learners={optional_learners}"
+            f"P11 track_start fold={args.outer_fold} track={track_id} learners={optional_learners}"
         )
         optional_fit = fit_fold_models(
             feature_panel=cast(pd.DataFrame, panel),
@@ -292,9 +291,7 @@ def main() -> int:
             anchor_capability.get("anchor_source_ids"), "anchor source IDs"
         ):
             pu_started = time.perf_counter()
-            _progress(
-                f"P11 anchor_pu_start fold={args.outer_fold} source={anchor_source_id}"
-            )
+            _progress(f"P11 anchor_pu_start fold={args.outer_fold} source={anchor_source_id}")
             pu_fit = fit_anchor_pu_fold(
                 feature_panel=cast(pd.DataFrame, panel),
                 feature_registry=effective_feature_registry,

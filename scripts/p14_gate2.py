@@ -31,9 +31,7 @@ def main() -> int:
     gate_config = mapping(evaluation_config.get("gate2"), "evaluation.gate2")
     execution_mode = str(gate_config.get("execution_mode", "comparative"))
     if execution_mode not in {"comparative", "baseline_only"}:
-        raise ValueError(
-            "evaluation.gate2.execution_mode must be comparative or baseline_only"
-        )
+        raise ValueError("evaluation.gate2.execution_mode must be comparative or baseline_only")
     if execution_mode == "baseline_only":
         result = baseline_only_gate2_verdict()
         result["protocol_hash"] = loaded.protocol_hash
