@@ -28,8 +28,8 @@ def build_observability_registry(
         channel_id = metadata.get(CHANNEL_ID)
         if not isinstance(channel_id, str):
             raise ValueError(f"source={source_id}: channel_id required")
-        status = str(metadata.get("verification_status", "unknown"))
-        verification = _verification_classification(status)
+        raw_status = str(metadata.get("verification_status", "unknown"))
+        verification = _verification_classification(raw_status)
         evidence_mapping = metadata.get("evidence_mapping")
         opportunity_semantic = (
             cast(dict[str, Any], evidence_mapping).get("opportunity_semantic")
@@ -51,6 +51,8 @@ def build_observability_registry(
         source_entry.update(
             {
                 CHANNEL_ID: channel_id,
+                "raw_verification_metadata": raw_status,
+                "legacy_high_confirmation_is_not_verification": raw_status == "high_confirmation",
                 "opportunity_semantic": opportunity_semantic,
                 "source_opportunity_coverage_rate": None,
                 "source_opportunity_coverage_status": (
@@ -163,6 +165,12 @@ def build_observability_registry(
         "fit_scope": "descriptive_full_sample",
         "analytical_use": "prohibited",
         "analytical_weights_created": False,
+        "terminology_contract": {
+            "zero_label": "observed_endpoint_zero",
+            "zero_label_is_latent_negative": False,
+            "high_confirmation_is_observed_verification": False,
+            "verification_requires_direct_observation": True,
+        },
         "channel_overlap": overlaps,
     }
 
@@ -176,7 +184,7 @@ def _empty_observability_entry(
         "mature_observed_count": 0,
         "prospective_observed_count": 0,
         "positive_count": 0,
-        "explicit_negative_count": 0,
+        "observed_endpoint_zero_count": 0,
         "eligible_count": eligible_count,
         "mature_count": mature_count,
         "prospective_count": prospective_count,
@@ -194,7 +202,7 @@ def _count_outcome(entry: dict[str, Any], value: object, *, mature: bool) -> Non
         entry["mature_observed_count"] = int(entry["mature_observed_count"]) + 1
     else:
         entry["prospective_observed_count"] = int(entry["prospective_observed_count"]) + 1
-    count_key = "positive_count" if bool(value) else "explicit_negative_count"
+    count_key = "positive_count" if bool(value) else "observed_endpoint_zero_count"
     entry[count_key] = int(entry[count_key]) + 1
 
 
@@ -228,6 +236,9 @@ def _finalize_entry(entry: dict[str, Any]) -> None:
     entry["event_incidence_fraction"] = entry["positive_incidence_fraction"]
     entry["observed_outcome_fraction"] = observed / eligible if eligible else None
     entry["mature_cohort_observed_fraction"] = mature_observed / mature if mature else None
+    # Backward-compatible output only.  The preferred term is observed endpoint zero.
+    entry["explicit_negative_count"] = int(entry["observed_endpoint_zero_count"])
+    entry["explicit_negative_count_deprecated"] = True
 
 
 def _channel_overlap(rows: list[dict[str, Any]], channel_ids: list[str]) -> list[dict[str, object]]:
@@ -268,8 +279,9 @@ def _channel_overlap(rows: list[dict[str, Any]], channel_ids: list[str]) -> list
 
 
 def _verification_classification(status: str) -> str:
-    if status in {"observed_verification", "high_confirmation"}:
+    if status == "observed_verification":
         return "observed_verification"
     if status in {"observed", "derived_from_audited_filings", "observed_opportunity_only"}:
         return "observed_opportunity_only"
+    # Legacy labels such as high_confirmation describe evidentiary provenance, not V.
     return "unknown"
