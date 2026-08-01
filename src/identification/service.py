@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any
+from typing import Any, cast
 
 IDENTIFIED_SET = "identified_set"
 SENSITIVITY_REGION = "sensitivity_region"
@@ -186,13 +186,28 @@ def model_selection_set(
 ) -> list[str]:
     """Return models not uniformly dominated by another model."""
 
-    dominance = paired_difference_dominance(
-        metric_surface,
-        higher_is_better=higher_is_better,
-        tolerance=tolerance,
-    )
-    dominated = {str(row["model_b"]) for row in dominance if row["dominates"] is True}
-    return sorted(set(metric_surface) - dominated)
+    _validate_surface(metric_surface)
+    models = sorted(metric_surface)
+    direction = 1.0 if higher_is_better else -1.0
+    dominated: set[str] = set()
+    for model_a in models:
+        for model_b in models:
+            if model_a == model_b:
+                continue
+            common = set(metric_surface[model_a]) & set(metric_surface[model_b])
+            if not common:
+                continue
+            worst = min(
+                direction
+                * (
+                    float(metric_surface[model_a][scenario])
+                    - float(metric_surface[model_b][scenario])
+                )
+                for scenario in common
+            )
+            if worst > tolerance:
+                dominated.add(model_b)
+    return sorted(set(models) - dominated)
 
 
 def minimax_regret(
@@ -253,11 +268,16 @@ def build_identification_summary(
     becoming an identifying restriction.
     """
 
-    raw_identification = measurement_config.get("identification")
-    identification = dict(raw_identification) if isinstance(raw_identification, Mapping) else {}
-    raw_restrictions = identification.get("restrictions")
-    restrictions = dict(raw_restrictions) if isinstance(raw_restrictions, Mapping) else {}
-    independently_justified = bool(identification.get("independent_justification_confirmed", False))
+    raw_identification: object = measurement_config.get("identification")
+    identification = _string_object_mapping(raw_identification, "measurement.identification")
+    raw_restrictions: object = identification.get("restrictions")
+    restrictions = _string_object_mapping(
+        raw_restrictions,
+        "measurement.identification.restrictions",
+    )
+    independently_justified = bool(
+        identification.get("independent_justification_confirmed", False)
+    )
 
     false_positive_upper = _optional_probability(
         restrictions.get("enforcement_false_positive_upper"),
@@ -323,15 +343,29 @@ def _validate_surface(metric_surface: Mapping[str, Mapping[str, float]]) -> None
     if not metric_surface:
         raise ValueError("metric_surface must contain at least one model")
     for model, values in metric_surface.items():
-        if not isinstance(model, str) or not model:
+        if not model:
             raise ValueError("model identifiers must be nonempty strings")
         if not values:
             raise ValueError(f"model={model}: at least one configuration is required")
         for scenario, value in values.items():
-            if not isinstance(scenario, str) or not scenario:
+            if not scenario:
                 raise ValueError("configuration identifiers must be nonempty strings")
             if not isfinite(float(value)):
                 raise ValueError(f"model={model}, configuration={scenario}: finite metric required")
+
+
+def _string_object_mapping(value: object, name: str) -> dict[str, object]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be a mapping")
+    raw = cast(Mapping[object, object], value)
+    result: dict[str, object] = {}
+    for key, item in raw.items():
+        if not isinstance(key, str) or not key:
+            raise ValueError(f"{name} keys must be nonempty strings")
+        result[key] = item
+    return result
 
 
 def _probability(value: float, name: str) -> float:
