@@ -13,7 +13,8 @@ def build_raw_computation_decision_report(base: str, summary: dict[str, object])
     unsupported_raw = store.get("unsupported_features")
     if not isinstance(unsupported_raw, list):
         raise ValueError("P07 feature_store.unsupported_features must be a list")
-    unsupported = [str(value) for value in unsupported_raw]
+    unsupported_values = cast(list[object], unsupported_raw)
+    unsupported = [str(value) for value in unsupported_values]
     stage_status = _required_text(store, "stage_status")
     source = _required_text(store, "source")
     computation_mode = _required_text(store, "computation_mode")
