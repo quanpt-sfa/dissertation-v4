@@ -159,12 +159,32 @@ def prepare_gate2_inputs(
             selected_bootstraps.append(item)
         filtered_bootstraps.append(selected_bootstraps)
 
+    unique_blockers = sorted(set(blockers))
     return {
         "evaluations": filtered_evaluations,
         "bootstraps": filtered_bootstraps,
         "candidate_ids": candidate_ids,
         "reference_by_candidate": reference_by_candidate,
-        "blockers": sorted(set(blockers)),
+        "blockers": unique_blockers,
+        "blocker_details": gate2_blocker_details(unique_blockers),
+    }
+
+
+def baseline_only_gate2_verdict() -> dict[str, object]:
+    """Return a non-failure verdict when no comparative candidate family was run."""
+
+    return {
+        "status": "NOT_APPLICABLE",
+        "gate_id": "GATE2",
+        "verdict": "NOT_APPLICABLE",
+        "candidates": [],
+        "locked_candidate_ids": [],
+        "domain_robust_scenario_fraction": None,
+        "evidence_complete": False,
+        "reason_code": "BASELINE_ONLY_NO_COMPARATIVE_CANDIDATE_FAMILY",
+        "evidence_blockers": [],
+        "evidence_blocker_details": [],
+        "criteria_source": "execution_profile",
     }
 
 
@@ -179,8 +199,26 @@ def insufficient_gate2_verdict(blockers: list[str], candidate_ids: list[str]) ->
         "evidence_complete": False,
         "reason_code": "REQUIRED_GATE2_EVIDENCE_INCOMPLETE",
         "evidence_blockers": blockers,
+        "evidence_blocker_details": gate2_blocker_details(blockers),
         "criteria_source": "locked_registry",
     }
+
+
+def gate2_blocker_details(blockers: list[str]) -> list[dict[str, str | None]]:
+    """Parse compact blocker codes into reportable fold/candidate detail rows."""
+
+    rows: list[dict[str, str | None]] = []
+    for blocker in sorted(set(blockers)):
+        parts = blocker.split(":")
+        rows.append(
+            {
+                "reason_code": parts[0],
+                "outer_fold": parts[1] if len(parts) > 1 and parts[1] else None,
+                "candidate_or_model": parts[2] if len(parts) > 2 and parts[2] else None,
+                "raw_blocker": blocker,
+            }
+        )
+    return rows
 
 
 def _dict_rows(value: list[object]) -> list[JsonRow]:
