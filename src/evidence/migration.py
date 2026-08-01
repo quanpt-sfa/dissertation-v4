@@ -88,10 +88,27 @@ def migrate_evidence_ledger_v6_to_v7(
             raise ValueError("legacy layer_observed_mask conflicts with materialised O-V-D-R-S")
     result[LAYER_OBSERVED_MASK] = expected_masks
 
-    expected_reasons = result.apply(_row_reason_unknown, axis=1).astype("string")
+    expected_reasons = pd.Series(
+        "SOURCE_LABEL_UNKNOWN",
+        index=result.index,
+        dtype="string",
+    )
+    source_label_observed = result[OBSERVED_SOURCE_LABEL].notna()
+    opportunity = result[OBSERVATION_OPPORTUNITY].astype("boolean")
+    recording = result[RECORDING_STATUS].astype("boolean")
+    expected_reasons.loc[source_label_observed] = pd.NA
+    expected_reasons.loc[~source_label_observed & opportunity.isna()] = (
+        "OBSERVATION_OPPORTUNITY_UNKNOWN"
+    )
+    expected_reasons.loc[~source_label_observed & opportunity.eq(False)] = (
+        "NO_OBSERVATION_OPPORTUNITY"
+    )
+    expected_reasons.loc[
+        ~source_label_observed & opportunity.eq(True) & recording.eq(False)
+    ] = "DETERMINATION_NOT_RECORDED"
     if REASON_UNKNOWN in result.columns:
         existing_reason = result[REASON_UNKNOWN].astype("string")
-        observed_with_reason = result[OBSERVED_SOURCE_LABEL].notna() & existing_reason.notna()
+        observed_with_reason = source_label_observed & existing_reason.notna()
         if bool(observed_with_reason.any()):
             raise ValueError("reason_unknown cannot be populated when S is observed")
         expected_reasons = existing_reason.fillna(expected_reasons)
