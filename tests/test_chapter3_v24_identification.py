@@ -160,5 +160,9 @@ def test_simulation_generates_distinct_ovdr_layers() -> None:
         assert len(layers["O"]) == 200
         assert np.all(~layers["V"] | layers["O"])
         assert np.all(~layers["R"] | layers["V"])
-    assert 0.0 <= float(generated["verification_rate"]) <= 1.0
-    assert 0.0 <= float(generated["recording_rate"]) <= 1.0
+    verification_rate = generated["verification_rate"]
+    recording_rate = generated["recording_rate"]
+    assert isinstance(verification_rate, (int, float))
+    assert isinstance(recording_rate, (int, float))
+    assert 0.0 <= float(verification_rate) <= 1.0
+    assert 0.0 <= float(recording_rate) <= 1.0
