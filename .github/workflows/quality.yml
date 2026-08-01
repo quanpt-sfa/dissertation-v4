@@ -2,9 +2,6 @@ name: quality
 
 on: [push, pull_request]
 
-permissions:
-  contents: write
-
 jobs:
   p0:
     runs-on: ubuntu-latest
@@ -12,99 +9,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --all-extras
       - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
       - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
       - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
-      - name: Apply Pyright-safe typing patches
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          def replace_once(path: str, old: str, new: str) -> None:
-              target = Path(path)
-              text = target.read_text(encoding="utf-8")
-              if new in text:
-                  return
-              if old not in text:
-                  raise RuntimeError(f"expected patch context missing in {path}")
-              target.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-          replace_once(
-              "src/features/compute.py",
-              "from dataclasses import dataclass\n\nimport numpy as np",
-              "from dataclasses import dataclass\nfrom typing import Any, cast\n\nimport numpy as np",
-          )
-          replace_once(
-              "src/features/compute.py",
-              '''def _lineage(definition: Mapping[str, object]) -> list[Mapping[str, object]]:\n    raw = definition.get("lineage")\n    if not isinstance(raw, list):\n        return []\n    return [item for item in raw if isinstance(item, Mapping)]\n''',
-              '''def _lineage(definition: Mapping[str, object]) -> list[Mapping[str, object]]:\n    raw: object = definition.get("lineage")\n    if not isinstance(raw, list):\n        return []\n    result: list[Mapping[str, object]] = []\n    for raw_item in cast(list[object], raw):\n        if not isinstance(raw_item, Mapping):\n            continue\n        item_mapping = cast(Mapping[object, object], raw_item)\n        normalized: dict[str, object] = {}\n        for key, value in item_mapping.items():\n            if not isinstance(key, str) or not key:\n                raise ValueError("lineage keys must be nonempty strings")\n            normalized[key] = value\n        result.append(normalized)\n    return result\n''',
-          )
-          replace_once(
-              "src/features/compute.py",
-              '''    incomplete_rows = [\n        {\n            FIRM: str(key[0]),\n            YEAR: int(key[1]),\n            "present_component_count": int(present.loc[key].sum()),\n        }\n        for key in frame.index[incomplete]\n    ]\n''',
-              '''    incomplete_rows: list[dict[str, object]] = []\n    present_matrix = present.to_numpy(dtype=bool)\n    index_values = frame.index.to_list()\n    incomplete_positions = np.flatnonzero(incomplete.to_numpy(dtype=bool)).tolist()\n    for position in incomplete_positions:\n        raw_key: object = index_values[int(position)]\n        if not isinstance(raw_key, tuple) or len(raw_key) != 2:\n            raise ValueError("component_sum requires a two-level firm-year index")\n        key = cast(tuple[object, object], raw_key)\n        firm_value, year_value = key\n        if not isinstance(year_value, (int, np.integer)):\n            raise ValueError("component_sum fiscal year must be integer-like")\n        incomplete_rows.append(\n            {\n                FIRM: str(firm_value),\n                YEAR: int(year_value),\n                "present_component_count": int(present_matrix[int(position)].sum()),\n            }\n        )\n''',
-          )
-          replace_once(
-              "src/features/compute.py",
-              '''    for key in index:\n        operand_values = {\n            name: float(series.get(key, np.nan)) for name, series in series_by_operand.items()\n        }\n        results[key] = evaluate_ratio_formula(formula, operand_values)\n''',
-              '''    for raw_key in index:\n        if not isinstance(raw_key, tuple) or len(raw_key) != 2:\n            raise ValueError("registered_ratio requires a two-level firm-year index")\n        key_values = cast(tuple[object, object], raw_key)\n        firm_value, year_value = key_values\n        if not isinstance(year_value, (int, np.integer)):\n            raise ValueError("registered_ratio fiscal year must be integer-like")\n        key = (str(firm_value), int(year_value))\n        operand_values: dict[str, float] = {}\n        for name, series in series_by_operand.items():\n            raw_value: object = series.get(raw_key, np.nan)\n            operand_values[name] = float(cast(Any, raw_value))\n        results[key] = evaluate_ratio_formula(formula, operand_values)\n''',
-          )
-          replace_once(
-              "src/features/compute.py",
-              '''def _dependencies(definition: Mapping[str, object]) -> list[str]:\n    raw = definition.get("dependencies")\n    return [str(dep) for dep in raw] if isinstance(raw, list) else []\n''',
-              '''def _dependencies(definition: Mapping[str, object]) -> list[str]:\n    raw: object = definition.get("dependencies")\n    if not isinstance(raw, list):\n        return []\n    return [str(dep) for dep in cast(list[object], raw)]\n''',
-          )
-
-          replace_once(
-              "src/features/panel_source.py",
-              "from dataclasses import dataclass\nfrom pathlib import Path\n",
-              "from dataclasses import dataclass\nfrom pathlib import Path\nfrom typing import cast\n",
-          )
-          replace_once(
-              "src/features/panel_source.py",
-              '''        diagnostics = computation.diagnostics\n        if isinstance(diagnostics, Mapping):\n            for row in diagnostics.get("incomplete_firm_years", []) or []:\n                if isinstance(row, Mapping):\n                    completeness_rows.append({"feature_id": computation.feature_id, **dict(row)})\n''',
-              '''        diagnostics = computation.diagnostics\n        if diagnostics is not None:\n            raw_incomplete: object = diagnostics.get("incomplete_firm_years")\n            if isinstance(raw_incomplete, list):\n                for raw_row in cast(list[object], raw_incomplete):\n                    if not isinstance(raw_row, Mapping):\n                        continue\n                    typed_row = cast(Mapping[object, object], raw_row)\n                    normalized_row: dict[str, object] = {}\n                    for key, value in typed_row.items():\n                        if not isinstance(key, str) or not key:\n                            raise ValueError("component completeness keys must be strings")\n                        normalized_row[key] = value\n                    completeness_rows.append(\n                        {"feature_id": computation.feature_id, **normalized_row}\n                    )\n''',
-          )
-          PY
       - run: uv run pytest --collect-only -q
       - run: uv run ruff check .
-      - name: Apply Ruff formatting
-        run: |
-          uv run ruff format \
-            scripts/p08b_run_batch.py \
-            src/core/config_validation.py \
-            src/evidence/service.py \
-            src/features/compute.py \
-            src/features/panel_source.py \
-            src/identification/service.py \
-            tests/test_chapter3_v24_identification.py
-      - name: Commit generated fixes
-        run: |
-          if git diff --quiet -- \
-            scripts/p08b_run_batch.py \
-            src/core/config_validation.py \
-            src/evidence/service.py \
-            src/features/compute.py \
-            src/features/panel_source.py \
-            src/identification/service.py \
-            tests/test_chapter3_v24_identification.py; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            scripts/p08b_run_batch.py \
-            src/core/config_validation.py \
-            src/evidence/service.py \
-            src/features/compute.py \
-            src/features/panel_source.py \
-            src/identification/service.py \
-            tests/test_chapter3_v24_identification.py
-          git commit -m "fix: satisfy Pyright ratchet for Chapter 3 sync"
-          git push origin HEAD:${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
       - run: uv run ruff format --check .
       - name: Pyright ratchet for pull requests
         if: github.event_name == 'pull_request'
