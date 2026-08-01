@@ -275,9 +275,7 @@ def build_identification_summary(
         raw_restrictions,
         "measurement.identification.restrictions",
     )
-    independently_justified = bool(
-        identification.get("independent_justification_confirmed", False)
-    )
+    independently_justified = bool(identification.get("independent_justification_confirmed", False))
 
     false_positive_upper = _optional_probability(
         restrictions.get("enforcement_false_positive_upper"),
