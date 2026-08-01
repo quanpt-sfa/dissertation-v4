@@ -1,39 +1,40 @@
-name: apply-chapter3-phase2
+name: quality
 
-on: [pull_request]
-
-permissions:
-  contents: write
+on: [push, pull_request]
 
 jobs:
-  apply:
+  p0:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: sync/chapter3-v24-identification
-      - name: Apply patch when complete
-        shell: bash
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
+      - run: uv run pytest --collect-only -q
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - name: Pyright ratchet for pull requests
+        if: github.event_name == 'pull_request'
         run: |
-          set -euo pipefail
-          chunks=(.phase2_diff_00 .phase2_diff_01 .phase2_diff_02)
-          for chunk in "${chunks[@]}"; do
-            if [[ ! -f "$chunk" ]]; then
-              echo "patch incomplete; waiting for remaining chunks"
-              exit 0
-            fi
-          done
-          cat "${chunks[@]}" | base64 --decode | gzip --decompress > /tmp/chapter3-phase2.diff
-          git apply --check --exclude=.github/workflows/quality.yml /tmp/chapter3-phase2.diff
-          git apply --exclude=.github/workflows/quality.yml /tmp/chapter3-phase2.diff
-          rm -f "${chunks[@]}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "no changes"
-            exit 0
-          fi
-          git commit -m "refactor: materialize O-V-D-R-S evidence schema and identification provenance"
-          git push origin HEAD:sync/chapter3-v24-identification
+          uv run python scripts/check_pyright_ratchet.py \
+            --baseline config/quality/pyright_baseline.json \
+            --diff-base "${{ github.event.pull_request.base.sha }}" \
+            --report artifacts/quality/pyright_ratchet_report.json
+      - name: Pyright ratchet for pushes
+        if: github.event_name == 'push'
+        run: |
+          uv run python scripts/check_pyright_ratchet.py \
+            --baseline config/quality/pyright_baseline.json \
+            --report artifacts/quality/pyright_ratchet_report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyright-ratchet-report
+          path: artifacts/quality/pyright_ratchet_report.json
+          if-no-files-found: ignore
+      - run: uv run pytest -q
+      - run: uv run pre-commit run --all-files
