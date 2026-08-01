@@ -5,11 +5,13 @@ and MCSE aggregation.  This adapter replaces only the data-generating measuremen
 process and the partial-identification estimator used by P08B.
 """
 
+# pyright: reportPrivateUsage=false, reportAttributeAccessIssue=false
+
 from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Mapping
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -143,11 +145,17 @@ def _generate_replication_v24(
     anchor_s_observed = anchor_o & anchor_v & anchor_r & mature
     weak_s_observed = weak_o & weak_v & weak_r & mature
     anchor_values = np.asarray(
-        [bool(value) if observed else None for value, observed in zip(anchor_d, anchor_s_observed, strict=True)],
+        [
+            bool(value) if observed else None
+            for value, observed in zip(anchor_d, anchor_s_observed, strict=True)
+        ],
         dtype=object,
     )
     weak_values = np.asarray(
-        [bool(value) if observed else None for value, observed in zip(weak_d, weak_s_observed, strict=True)],
+        [
+            bool(value) if observed else None
+            for value, observed in zip(weak_d, weak_s_observed, strict=True)
+        ],
         dtype=object,
     )
 
@@ -199,7 +207,7 @@ def _generate_replication_v24(
         "latent": latent,
         "features": features,
         "observed_positive": observed_positive,
-        # The legacy fitting engine calls this field verified.  Under v24 it means
+        # The legacy fitting engine calls this field verified. Under v24 it means
         # the feasible binary source label is observed, not that V is inferred from S.
         "verified": label_observed,
         "feasible_target": feasible_target,
