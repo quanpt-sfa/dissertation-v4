@@ -96,7 +96,7 @@ def migrate_evidence_ledger_v6_to_v7(
     source_label_observed = result[OBSERVED_SOURCE_LABEL].notna()
     opportunity = result[OBSERVATION_OPPORTUNITY].astype("boolean")
     recording = result[RECORDING_STATUS].astype("boolean")
-    expected_reasons.loc[source_label_observed] = pd.NA
+    expected_reasons = expected_reasons.mask(source_label_observed)
     expected_reasons.loc[~source_label_observed & opportunity.isna()] = (
         "OBSERVATION_OPPORTUNITY_UNKNOWN"
     )
@@ -178,17 +178,3 @@ def _row_mask(row: pd.Series) -> str:
             ("S", OBSERVED_SOURCE_LABEL),
         )
     )
-
-
-def _row_reason_unknown(row: pd.Series) -> str | None:
-    if not pd.isna(row.get(OBSERVED_SOURCE_LABEL)):
-        return None
-    opportunity = row.get(OBSERVATION_OPPORTUNITY)
-    if pd.isna(opportunity):
-        return "OBSERVATION_OPPORTUNITY_UNKNOWN"
-    if bool(opportunity) is False:
-        return "NO_OBSERVATION_OPPORTUNITY"
-    recording = row.get(RECORDING_STATUS)
-    if not pd.isna(recording) and bool(recording) is False:
-        return "DETERMINATION_NOT_RECORDED"
-    return "SOURCE_LABEL_UNKNOWN"
