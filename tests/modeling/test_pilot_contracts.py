@@ -68,10 +68,16 @@ def test_unusable_features_are_excluded_without_mutating_upstream_registry() -> 
 
 
 def test_outer_only_values_do_not_make_a_feature_trainable() -> None:
-    panel = pd.DataFrame({"year": [2020, 2021], "outer_only": [pd.NA, 1.0]})
+    panel = pd.DataFrame(
+        {
+            "year": [2020, 2021],
+            "good": [1.0, 2.0],
+            "outer_only": [pd.NA, 1.0],
+        }
+    )
     result = prepare_model_feature_contract(
         panel=panel,
-        registry=[_feature("outer_only")],
+        registry=[_feature("good"), _feature("outer_only")],
         year_column="year",
         outer_year=2021,
     )
