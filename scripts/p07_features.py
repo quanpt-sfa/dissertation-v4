@@ -16,6 +16,7 @@ from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.semantic_keys import FIRM_ID, FISCAL_YEAR, PREDICTION_TIME, TARGET_ID
 from features.diagnostics import build_feature_diagnostics
 from features.panel_source import assemble_from_raw
+from features.reporting import build_raw_computation_decision_report
 from features.service import build_feature_panel
 from p01.registry import resolve_source
 from p02.models import EntityResolutionSpec
@@ -128,7 +129,7 @@ def main() -> int:
         "ratio_diagnostic_rows": len(diagnostics.ratios),
         "redundancy_pairs": len(diagnostics.redundancy),
     }
-    decision_report = _decision_report(result.decision_report, summary)
+    decision_report = build_raw_computation_decision_report(result.decision_report, summary)
     loaded.context.write(
         "feature_store_manifest_validated",
         {
@@ -213,59 +214,6 @@ def main() -> int:
         f"P07 status=PASS features={len(result.registry)} operational={result.summary['panel_features']}"
     )
     return 0
-
-
-def _decision_report(base: str, summary: dict[str, object]) -> str:
-    store = cast(dict[str, object], summary["feature_store"])
-    identity = cast(dict[str, object], summary["identifier_mapping"])
-    unsupported_raw = store.get("unsupported_features")
-    if not isinstance(unsupported_raw, list):
-        raise ValueError("P07 feature_store.unsupported_features must be a list")
-    unsupported = [str(value) for value in unsupported_raw]
-    stage_status = _required_text(store, "stage_status")
-    source = _required_text(store, "source")
-    computation_mode = _required_text(store, "computation_mode")
-    feature_count = _required_nonnegative_int(store, "feature_count")
-    computed_pass = _required_nonnegative_int(store, "computed_pass")
-    raw_rows = _required_nonnegative_int(store, "raw_rows")
-    panel_features = _required_nonnegative_int(summary, "panel_features")
-    unresolved_features = _required_nonnegative_int(summary, "unresolved_features")
-    matched_identifiers = _required_nonnegative_int(identity, "matched_identifiers")
-    unmatched_identifiers = _required_nonnegative_int(identity, "unmatched_identifiers")
-    unsupported_text = ", ".join(unsupported) if unsupported else "none"
-    return (
-        base
-        + "\n## Raw feature-computation validation\n\n"
-        + f"- P07 stage status: {stage_status}\n"
-        + f"- Registered source: {source}\n"
-        + f"- Computation mode: {computation_mode}\n"
-        + f"- Registered feature computations: {feature_count}\n"
-        + f"- Computed PASS: {computed_pass}\n"
-        + f"- Unsupported feature computations: {len(unsupported)}\n"
-        + f"- Raw source rows: {raw_rows}\n"
-        + f"- Operational panel features: {panel_features}\n"
-        + f"- Registry unresolved features: {unresolved_features}\n"
-        + f"- Matched identifiers: {matched_identifiers}\n"
-        + f"- Unmatched identifiers: {unmatched_identifiers}\n"
-        + "- Availability basis is a synthetic annual anchor, not an observed publication date.\n"
-        + "\n## Registered unavailable or unresolved feature computations\n\n"
-        + unsupported_text
-        + "\n"
-    )
-
-
-def _required_text(values: dict[str, object], key: str) -> str:
-    value = values.get(key)
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"P07 report contract requires non-empty text field {key}")
-    return value
-
-
-def _required_nonnegative_int(values: dict[str, object], key: str) -> int:
-    value = values.get(key)
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise ValueError(f"P07 report contract requires nonnegative integer field {key}")
-    return value
 
 
 def _target_temporal_role(target_id: object) -> str:
