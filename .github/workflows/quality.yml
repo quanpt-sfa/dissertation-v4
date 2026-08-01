@@ -1,6 +1,6 @@
 name: apply-chapter3-phase2
 
-on: [push]
+on: [pull_request]
 
 permissions:
   contents: write
