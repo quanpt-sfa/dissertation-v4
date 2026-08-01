@@ -251,17 +251,12 @@ def _component_sum(
     index_values = frame.index.to_list()
     incomplete_positions = np.flatnonzero(incomplete.to_numpy(dtype=bool)).tolist()
     for position in incomplete_positions:
-        raw_key: object = index_values[int(position)]
-        if not isinstance(raw_key, tuple) or len(raw_key) != 2:
-            raise ValueError("component_sum requires a two-level firm-year index")
-        key = cast(tuple[object, object], raw_key)
-        firm_value, year_value = key
-        if not isinstance(year_value, (int, np.integer)):
-            raise ValueError("component_sum fiscal year must be integer-like")
+        raw_key: object = cast(object, index_values[int(position)])
+        firm_value, year_value = _normalize_firm_year_key(raw_key, "component_sum")
         incomplete_rows.append(
             {
-                FIRM: str(firm_value),
-                YEAR: int(year_value),
+                FIRM: firm_value,
+                YEAR: year_value,
                 "present_component_count": int(present_matrix[int(position)].sum()),
             }
         )
@@ -310,17 +305,12 @@ def _registered_ratio(
 
     index = _union_index(series_by_operand.values())
     results: dict[tuple[str, int], float] = {}
-    for raw_key in index:
-        if not isinstance(raw_key, tuple) or len(raw_key) != 2:
-            raise ValueError("registered_ratio requires a two-level firm-year index")
-        key_values = cast(tuple[object, object], raw_key)
-        firm_value, year_value = key_values
-        if not isinstance(year_value, (int, np.integer)):
-            raise ValueError("registered_ratio fiscal year must be integer-like")
-        key = (str(firm_value), int(year_value))
+    for untyped_key in index:
+        raw_key: object = cast(object, untyped_key)
+        key = _normalize_firm_year_key(raw_key, "registered_ratio")
         operand_values: dict[str, float] = {}
         for name, series in series_by_operand.items():
-            raw_value: object = series.get(raw_key, np.nan)
+            raw_value: object = series.get(key, np.nan)
             operand_values[name] = float(cast(Any, raw_value))
         results[key] = evaluate_ratio_formula(formula, operand_values)
     return pd.Series(results, dtype="float64").rename_axis([FIRM, YEAR])
@@ -329,6 +319,19 @@ def _registered_ratio(
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
+
+
+def _normalize_firm_year_key(raw_key: object, context: str) -> tuple[str, int]:
+    if not isinstance(raw_key, tuple):
+        raise ValueError(f"{context} requires a two-level firm-year index")
+    key_values = cast(tuple[object, ...], raw_key)
+    if len(key_values) != 2:
+        raise ValueError(f"{context} requires a two-level firm-year index")
+    firm_value = key_values[0]
+    year_value = key_values[1]
+    if isinstance(year_value, bool) or not isinstance(year_value, (int, np.integer)):
+        raise ValueError(f"{context} fiscal year must be integer-like")
+    return str(firm_value), int(cast(Any, year_value))
 
 
 def _dependencies(definition: Mapping[str, object]) -> list[str]:
