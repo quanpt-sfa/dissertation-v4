@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 
 from features.reporting import build_raw_computation_decision_report
@@ -47,8 +49,7 @@ def test_decision_report_accepts_raw_computation_contract() -> None:
 
 def test_decision_report_fails_with_explicit_contract_error() -> None:
     summary = _summary()
-    feature_store = summary["feature_store"]
-    assert isinstance(feature_store, dict)
+    feature_store = cast(dict[str, object], summary["feature_store"])
     feature_store.pop("computed_pass")
 
     with pytest.raises(
