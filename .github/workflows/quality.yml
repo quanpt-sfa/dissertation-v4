@@ -24,6 +24,60 @@ jobs:
               exit 0
             fi
           done
+          cat > .github/workflows/quality.yml <<'EOF'
+          name: quality
+
+          on: [push, pull_request]
+
+          jobs:
+            p0:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                  with:
+                    fetch-depth: 0
+                - uses: astral-sh/setup-uv@v6
+                - run: uv sync --all-extras
+                - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+                - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
+                - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
+                - name: Package repository snapshot
+                  run: |
+                    mkdir -p artifacts/repository_snapshot
+                    tar \
+                      --exclude=.git \
+                      --exclude=.venv \
+                      --exclude=artifacts/repository_snapshot \
+                      -czf artifacts/repository_snapshot/dissertation-v4.tar.gz .
+                - uses: actions/upload-artifact@v4
+                  with:
+                    name: repository-snapshot
+                    path: artifacts/repository_snapshot/dissertation-v4.tar.gz
+                - run: uv run pytest --collect-only -q
+                - run: uv run ruff check .
+                - run: uv run ruff format --check .
+                - name: Pyright ratchet for pull requests
+                  if: github.event_name == 'pull_request'
+                  run: |
+                    uv run python scripts/check_pyright_ratchet.py \
+                      --baseline config/quality/pyright_baseline.json \
+                      --diff-base "${{ github.event.pull_request.base.sha }}" \
+                      --report artifacts/quality/pyright_ratchet_report.json
+                - name: Pyright ratchet for pushes
+                  if: github.event_name == 'push'
+                  run: |
+                    uv run python scripts/check_pyright_ratchet.py \
+                      --baseline config/quality/pyright_baseline.json \
+                      --report artifacts/quality/pyright_ratchet_report.json
+                - if: always()
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: pyright-ratchet-report
+                    path: artifacts/quality/pyright_ratchet_report.json
+                    if-no-files-found: ignore
+                - run: uv run pytest -q
+                - run: uv run pre-commit run --all-files
+          EOF
           cat "${chunks[@]}" | base64 --decode | gzip --decompress > /tmp/chapter3-phase2.diff
           git apply --check /tmp/chapter3-phase2.diff
           git apply /tmp/chapter3-phase2.diff
