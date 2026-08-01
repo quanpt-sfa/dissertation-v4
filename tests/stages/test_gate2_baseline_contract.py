@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from gates.evidence_contract import (
     baseline_only_gate2_verdict,
     gate2_blocker_details,
@@ -24,8 +26,10 @@ def test_incomplete_comparison_preserves_structured_blocker_detail() -> None:
     ]
     verdict = insufficient_gate2_verdict(blockers, ["track_l1:main_boosting:full"])
     assert verdict["status"] == "INSUFFICIENT_EVIDENCE"
-    details = verdict["evidence_blocker_details"]
-    assert isinstance(details, list)
+    details = cast(
+        list[dict[str, str | None]],
+        verdict["evidence_blocker_details"],
+    )
     assert {row["outer_fold"] for row in details} == {"2022", "2023"}
     assert all(row["candidate_or_model"] == "track_l1" for row in details)
 
