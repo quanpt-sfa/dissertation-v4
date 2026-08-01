@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.p07_features import _decision_report
+from features.reporting import build_raw_computation_decision_report
 
 
 def _summary() -> dict[str, object]:
@@ -30,7 +30,10 @@ def _summary() -> dict[str, object]:
 
 
 def test_decision_report_accepts_raw_computation_contract() -> None:
-    report = _decision_report("# P07 feature-governance decision report\n", _summary())
+    report = build_raw_computation_decision_report(
+        "# P07 feature-governance decision report\n",
+        _summary(),
+    )
 
     assert "P07 stage status: PASS" in report
     assert "Registered feature computations: 151" in report
@@ -52,4 +55,4 @@ def test_decision_report_fails_with_explicit_contract_error() -> None:
         ValueError,
         match="P07 report contract requires nonnegative integer field computed_pass",
     ):
-        _decision_report("# P07\n", summary)
+        build_raw_computation_decision_report("# P07\n", summary)
