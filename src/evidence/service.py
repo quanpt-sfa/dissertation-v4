@@ -15,6 +15,8 @@ from core.semantic_keys import (
     DECISION_COUNT,
     DECISION_NUMBERS,
     DECISION_TOTAL_FINE,
+    DETERMINATION_DATE,
+    DETERMINATION_STATUS,
     DOCUMENT_IDS,
     EVENT_CLUSTER_ID,
     EVENT_ID,
@@ -30,12 +32,18 @@ from core.semantic_keys import (
     HAS_SUSPENSION,
     HAS_WARNING,
     LAST_LABEL_KNOWN_DATE,
+    LAYER_OBSERVED_MASK,
+    OBSERVATION_OPPORTUNITY,
+    OBSERVED_SOURCE_LABEL,
     OPPORTUNITY_BASIS,
     OUTCOME,
     OUTCOME_BASIS,
     PERIOD_LINK_CONFIDENCE,
     PERIOD_LINK_SOURCE,
     PREDICTION_TIME,
+    REASON_UNKNOWN,
+    RECORDING_DATE,
+    RECORDING_STATUS,
     SANCTION_YEAR,
     SOURCE_ID,
     SOURCE_OPPORTUNITY,
@@ -45,6 +53,8 @@ from core.semantic_keys import (
     TAXONOMY_CODES,
     TAXONOMY_REASON_CODE,
     TEMPORAL_ROLE,
+    VERIFICATION_DATE,
+    VERIFICATION_STATUS,
 )
 
 
@@ -65,6 +75,14 @@ class EvidenceRecord:
     availability_basis: str = "actual_publish_date"
     source_opportunity: bool | None = None
     opportunity_basis: str = "unknown_no_opportunity_indicator"
+    verification_status: bool | None = None
+    determination_status: bool | None = None
+    recording_status: bool | None = None
+    verification_date: datetime | None = None
+    determination_date: datetime | None = None
+    recording_date: datetime | None = None
+    layer_observed_mask: str | None = None
+    reason_unknown: str | None = None
     evidence_value: float | None = None
     evidence_category: str | None = None
     source_record_refs: str | None = None
@@ -103,7 +121,7 @@ def map_evidence_outcome(
     positive_indicator: bool | None,
     row_included: bool,
 ) -> tuple[bool | None, str]:
-    """Map explicit source semantics without converting false indicators to negatives."""
+    """Map observed proxy evidence without converting absence into a latent negative."""
     if not row_included:
         return None, "excluded_by_row_inclusion"
     if outcome_mode == "direct_outcome":
@@ -124,7 +142,7 @@ def build_evidence_ledger(
     fiscal_year_end_month_day: str,
     lag_tolerance_days: int,
 ) -> EvidenceBuildResult:
-    """Build a source-level ledger without treating absent or immature data as zero."""
+    """Build source evidence while preserving unknown O-V-D-R-S process layers."""
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
     prediction = columns[PREDICTION_TIME]
@@ -154,6 +172,7 @@ def build_evidence_ledger(
     linked_groups: dict[tuple[str, int, str], list[EvidenceRecord]] = {}
     result_records: dict[tuple[str, str], EvidenceRecord] = {}
     for record in ordered_records:
+        _validate_measurement_process(record)
         if not record.row_included:
             availability_rows.append(_availability_row(record, "EXCLUDED_BY_SOURCE_RULE"))
             continue
@@ -441,11 +460,47 @@ def build_evidence_ledger(
             ),
             "duplicate_representative_rule": "identical_signature_then_source_event_id",
             "lag_identity_tolerance_days": lag_tolerance_days,
+            "measurement_process_contract": "O-V-D-R-S",
+            "high_specificity_anchor_assumed": False,
         },
     )
 
 
+def _validate_measurement_process(record: EvidenceRecord) -> None:
+    if record.source_opportunity is False and record.outcome is not None:
+        raise ValueError("O=0 requires the observed source label S to be missing")
+    if record.determination_status is not None and record.verification_status is not True:
+        raise ValueError("D may be observed only when V=1")
+    if record.recording_status is True and record.determination_status is None:
+        raise ValueError("R=1 requires an observed determination D")
+    if record.verification_date is not None and record.verification_status is None:
+        raise ValueError("verification_date requires observed V")
+    if record.determination_date is not None and record.determination_status is None:
+        raise ValueError("determination_date requires observed D")
+    if record.recording_date is not None and record.recording_status is None:
+        raise ValueError("recording_date requires observed R")
+    if all(
+        value is not None
+        for value in (
+            record.verification_status,
+            record.determination_status,
+            record.recording_status,
+        )
+    ):
+        expected = bool(
+            record.verification_status
+            and record.determination_status
+            and record.recording_status
+        )
+        if record.outcome is not None and bool(record.outcome) != expected:
+            raise ValueError("observed S conflicts with the fully observed V-D-R product")
+
+
 def _availability_row(record: EvidenceRecord, status: str) -> dict[str, object]:
+    layer_mask = record.layer_observed_mask or _layer_mask(record)
+    reason_unknown = record.reason_unknown
+    if reason_unknown is None and record.outcome is None:
+        reason_unknown = _default_unknown_reason(record)
     return {
         EVIDENCE_RECORD_ID: record.evidence_record_id or record.event_id,
         EVIDENCE_RECORD_KIND: record.evidence_record_kind,
@@ -459,13 +514,21 @@ def _availability_row(record: EvidenceRecord, status: str) -> dict[str, object]:
         TEMPORAL_ROLE: record.temporal_role,
         AVAILABILITY_BASIS: record.availability_basis,
         SOURCE_OPPORTUNITY: record.source_opportunity,
+        OBSERVATION_OPPORTUNITY: record.source_opportunity,
         OPPORTUNITY_BASIS: record.opportunity_basis,
+        VERIFICATION_STATUS: record.verification_status,
+        DETERMINATION_STATUS: record.determination_status,
+        RECORDING_STATUS: record.recording_status,
+        OBSERVED_SOURCE_LABEL: record.outcome,
+        LAYER_OBSERVED_MASK: layer_mask,
+        REASON_UNKNOWN: reason_unknown,
+        VERIFICATION_DATE: _iso(record.verification_date),
+        DETERMINATION_DATE: _iso(record.determination_date),
+        RECORDING_DATE: _iso(record.recording_date),
         EVIDENCE_VALUE: record.evidence_value,
         EVIDENCE_CATEGORY: record.evidence_category,
         SOURCE_RECORD_REFS: record.source_record_refs,
-        AVAILABILITY_DATE: (
-            record.availability_date.isoformat() if record.availability_date is not None else None
-        ),
+        AVAILABILITY_DATE: _iso(record.availability_date),
         OUTCOME: record.outcome,
         OUTCOME_BASIS: record.outcome_basis,
         PERIOD_LINK_SOURCE: record.period_link_source,
@@ -473,7 +536,32 @@ def _availability_row(record: EvidenceRecord, status: str) -> dict[str, object]:
         "row_included": record.row_included,
         "duplicate_representative_rule": record.duplicate_representative_rule,
         "status": status,
+        "observed_endpoint_zero": record.outcome is False,
+        "observed_endpoint_zero_is_latent_negative": False,
     }
+
+
+def _layer_mask(record: EvidenceRecord) -> str:
+    return "".join(
+        name if value is not None else "-"
+        for name, value in (
+            ("O", record.source_opportunity),
+            ("V", record.verification_status),
+            ("D", record.determination_status),
+            ("R", record.recording_status),
+            ("S", record.outcome),
+        )
+    )
+
+
+def _default_unknown_reason(record: EvidenceRecord) -> str:
+    if record.source_opportunity is False:
+        return "NO_OBSERVATION_OPPORTUNITY"
+    if record.source_opportunity is None:
+        return "OBSERVATION_OPPORTUNITY_UNKNOWN"
+    if record.recording_status is False:
+        return "DETERMINATION_NOT_RECORDED"
+    return "SOURCE_LABEL_UNKNOWN"
 
 
 def _record_signature(record: EvidenceRecord) -> tuple[object, ...]:
@@ -486,7 +574,15 @@ def _record_signature(record: EvidenceRecord) -> tuple[object, ...]:
         record.period_link_confidence,
         record.temporal_role,
         record.availability_basis,
+        record.source_opportunity,
+        record.verification_status,
+        record.determination_status,
+        record.recording_status,
     )
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value is not None else None
 
 
 def _as_datetime(value: Any) -> datetime:
