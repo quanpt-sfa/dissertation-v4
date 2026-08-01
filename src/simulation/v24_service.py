@@ -1,7 +1,7 @@
 """Chapter 3 v24 simulation adapter with an explicit O-V-D-R-S process.
 
 The legacy simulation engine remains responsible for learner fitting, cost metrics,
-and MCSE aggregation.  This adapter replaces only the data-generating measurement
+and MCSE aggregation. This adapter replaces only the data-generating measurement
 process and the partial-identification estimator used by P08B.
 """
 
@@ -185,7 +185,9 @@ def _generate_replication_v24(
     )
     observed_positive = np.asarray([value is True for value in l1_values], dtype=bool)
     label_observed = np.asarray([value is not None for value in l1_values], dtype=bool)
-    feasible_target = observed_positive.astype(int)
+    verified = anchor_v | weak_v
+    determination_positive = (anchor_v & anchor_d) | (weak_v & weak_d)
+    feasible_target = determination_positive.astype(int)
 
     permutation = rng.permutation(n)
     test_fraction = float(scenario.get("test_fraction", 0.30))
@@ -207,24 +209,27 @@ def _generate_replication_v24(
         "latent": latent,
         "features": features,
         "observed_positive": observed_positive,
-        # The legacy fitting engine calls this field verified. Under v24 it means
-        # the feasible binary source label is observed, not that V is inferred from S.
-        "verified": label_observed,
+        "verified": verified,
         "feasible_target": feasible_target,
         "source_rows": source_rows,
         "accuracy": accuracy,
         "train_index": train_index,
         "test_index": test_index,
-        "verification_rate": float(np.mean(anchor_v | weak_v)),
+        "verification_rate": float(verified.mean()),
         "known_label_rate": float(label_observed.mean()),
         "opportunity_rate": float(np.mean(anchor_o | weak_o)),
-        "determination_positive_rate": float(np.mean(anchor_d | weak_d)),
+        "determination_positive_rate": float(determination_positive.mean()),
         "recording_rate": float(np.mean(anchor_r | weak_r)),
         "maturity_rate": float(mature.mean()),
         "latent_probability_mean": float(latent_probability_mean),
         "measurement_process": {
             "anchor": {"O": anchor_o, "V": anchor_v, "D": anchor_d, "R": anchor_r},
             "weak": {"O": weak_o, "V": weak_v, "D": weak_d, "R": weak_r},
+            "observed_source_label": {
+                "anchor": anchor_values,
+                "weak": weak_values,
+                "label_observed": label_observed,
+            },
         },
     }
 
