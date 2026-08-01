@@ -103,9 +103,9 @@ def migrate_evidence_ledger_v6_to_v7(
     expected_reasons.loc[~source_label_observed & opportunity.eq(False)] = (
         "NO_OBSERVATION_OPPORTUNITY"
     )
-    expected_reasons.loc[
-        ~source_label_observed & opportunity.eq(True) & recording.eq(False)
-    ] = "DETERMINATION_NOT_RECORDED"
+    expected_reasons.loc[~source_label_observed & opportunity.eq(True) & recording.eq(False)] = (
+        "DETERMINATION_NOT_RECORDED"
+    )
     if REASON_UNKNOWN in result.columns:
         existing_reason = result[REASON_UNKNOWN].astype("string")
         observed_with_reason = source_label_observed & existing_reason.notna()
