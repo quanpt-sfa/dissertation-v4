@@ -63,12 +63,33 @@ measurement:
   - L3_fixed_pi
   - none
   prior_accuracy_domain:
-    lower_bound_source: high_confirmation_sources
+    lower_bound_source: independently_justified_restrictions_only
     upper_bound_sources:
     - coverage
     - likelihood
     primary_prior: fixed_pi_grid
     hierarchical_prior_role: sensitivity_only
+  identification:
+    default_domain_type: sensitivity_region
+    high_specificity_anchor_assumed: false
+    enforcement_proxy_role: selectively_observed_positive_evidence
+    independent_justification_required: true
+    restrictions:
+      enforcement_false_positive_upper: null
+      enforcement_sensitivity_lower: null
+      adjudication_specificity_lower: null
+      verification_selection_ordering: null
+    reporting:
+      distinguish_identified_set_from_sensitivity_region: true
+      distinguish_scenario_envelope: true
+      prevalence_bound_status_required: true
+      assumption_provenance_required: true
+    robust_model_selection:
+      paired_difference_dominance_primary: true
+      separated_range_dominance_secondary: true
+      model_selection_set_required: true
+      minimax_regret_required: true
+      scenario_fraction_rule_applies_to_identified_set: false
   objectives:
     L2:
     - soft_cross_entropy
