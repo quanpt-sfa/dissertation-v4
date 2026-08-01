@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 from typing import cast
 
@@ -14,8 +15,9 @@ import pandas as pd
 from core.fold_control import require_confirmatory_fold, require_primary_target
 from core.pipeline import load_run, mapping, physical_columns, sequence, stable_hash
 from core.rng import derive_seed
-from core.semantic_keys import MEASUREMENT_ID, OUTER_FOLD
+from core.semantic_keys import FISCAL_YEAR, MEASUREMENT_ID, OUTER_FOLD
 from measurement.service import fold_local_l3_target_frame, measurement_target_frame
+from modeling.pilot_contracts import prepare_model_feature_contract
 from modeling.service import ModelFitResult, fit_anchor_pu_fold, fit_fold_models
 from selection.nested_refit import validate_nested_refit_receipt
 from selection.track_plan import executable_tracks
@@ -57,6 +59,10 @@ def _combine_fits(
         if outer_frames
         else pd.DataFrame(),
     )
+
+
+def _progress(message: str) -> None:
+    print(message, flush=True)
 
 
 def main() -> int:
@@ -113,6 +119,29 @@ def main() -> int:
     if not all(isinstance(value, pd.DataFrame) for value in (panel, inputs, weights)):
         raise ValueError("P11 tabular inputs must be DataFrames")
 
+    columns = physical_columns(loaded.registry)
+    feature_items = [mapping(item, "feature registry item") for item in feature_registry]
+    feature_contract = prepare_model_feature_contract(
+        panel=cast(pd.DataFrame, panel),
+        registry=feature_items,
+        year_column=columns[FISCAL_YEAR],
+        outer_year=int(args.outer_fold),
+    )
+    effective_feature_registry = feature_contract.registry
+    _progress(
+        "P11 preflight "
+        f"fold={args.outer_fold} effective_features={feature_contract.summary['effective_feature_count']} "
+        f"excluded_features={feature_contract.summary['runtime_exclusion_count']}"
+    )
+    if feature_contract.exclusions:
+        _progress(
+            "P11 fail-closed exclusions="
+            + ",".join(
+                f"{item['feature_id']}:{item['reason_code']}"
+                for item in feature_contract.exclusions
+            )
+        )
+
     learners = mapping(loaded.registry.get("learners"), "learners")
     learner_ids = [
         str(value) for value in sequence(learners.get("confirmatory"), "learners.confirmatory")
@@ -141,7 +170,6 @@ def main() -> int:
     reproducibility = mapping(loaded.registry.get("reproducibility"), "reproducibility")
     seed_offsets = mapping(reproducibility.get("seed_offsets"), "reproducibility.seed_offsets")
     candidate_seed_offset = int(seed_offsets["tuning_candidate"])
-    columns = physical_columns(loaded.registry)
     plan_tracks = executable_tracks(selection)
     optional_measurements = [
         str(item[MEASUREMENT_ID]) for item in plan_tracks if item.get("role") != "required_primary"
@@ -157,9 +185,14 @@ def main() -> int:
     if primary_track is None or primary_track.get(MEASUREMENT_ID) != primary:
         raise RuntimeError("P11 sequential plan is missing the required primary track")
 
+    primary_started = time.perf_counter()
+    _progress(
+        f"P11 track_start fold={args.outer_fold} track={primary_track['track_id']} "
+        f"learners={learner_ids}"
+    )
     track_l1 = fit_fold_models(
         feature_panel=cast(pd.DataFrame, panel),
-        feature_registry=[mapping(item, "feature registry item") for item in feature_registry],
+        feature_registry=effective_feature_registry,
         label_inputs=cast(pd.DataFrame, inputs),
         weights=cast(pd.DataFrame, weights),
         outer_year=int(args.outer_fold),
@@ -175,6 +208,10 @@ def main() -> int:
         maximum_valid_configurations=maximum_configurations,
         required_feature_groups=required_feature_groups,
         candidate_seed_offset=candidate_seed_offset,
+    )
+    _progress(
+        f"P11 track_end fold={args.outer_fold} track={primary_track['track_id']} "
+        f"status={track_l1.models['status']} elapsed_seconds={time.perf_counter() - primary_started:.3f}"
     )
     fits = [track_l1]
     track_statuses: dict[str, str] = {
@@ -195,6 +232,10 @@ def main() -> int:
         track_id = str(track["track_id"])
         if not isinstance(minimum_channels, int) or minimum_channels < 1:
             track_statuses[track_id] = "SKIPPED_CONFIGURATION_UNAVAILABLE"
+            _progress(
+                f"P11 track_skip fold={args.outer_fold} track={track_id} "
+                "reason=MINIMUM_OBSERVED_CHANNELS_UNAVAILABLE"
+            )
             continue
         if measurement_id == "L3_fixed_pi":
             target_values = fold_local_l3_target_frame(
@@ -209,9 +250,14 @@ def main() -> int:
                 minimum_observed_channels=minimum_channels,
                 columns=columns,
             )
+        optional_started = time.perf_counter()
+        _progress(
+            f"P11 track_start fold={args.outer_fold} track={track_id} "
+            f"learners={optional_learners}"
+        )
         optional_fit = fit_fold_models(
             feature_panel=cast(pd.DataFrame, panel),
-            feature_registry=[mapping(item, "feature registry item") for item in feature_registry],
+            feature_registry=effective_feature_registry,
             label_inputs=cast(pd.DataFrame, inputs),
             weights=cast(pd.DataFrame, weights),
             outer_year=int(args.outer_fold),
@@ -232,6 +278,11 @@ def main() -> int:
             maximum_valid_configurations=maximum_configurations,
             candidate_seed_offset=candidate_seed_offset,
         )
+        _progress(
+            f"P11 track_end fold={args.outer_fold} track={track_id} "
+            f"status={optional_fit.models['status']} "
+            f"elapsed_seconds={time.perf_counter() - optional_started:.3f}"
+        )
         fits.append(optional_fit)
         track_statuses[track_id] = str(optional_fit.models["status"])
 
@@ -240,27 +291,33 @@ def main() -> int:
         for anchor_source_id in sequence(
             anchor_capability.get("anchor_source_ids"), "anchor source IDs"
         ):
-            pu_results.append(
-                fit_anchor_pu_fold(
-                    feature_panel=cast(pd.DataFrame, panel),
-                    feature_registry=[
-                        mapping(item, "feature registry item") for item in feature_registry
-                    ],
-                    label_inputs=cast(pd.DataFrame, inputs),
-                    weights=cast(pd.DataFrame, weights),
-                    anchor_source_id=str(anchor_source_id),
-                    outer_year=int(args.outer_fold),
-                    settings=settings,
-                    columns=columns,
-                    random_state=derive_seed(
-                        loaded.protocol_hash,
-                        "P11",
-                        coordinates,
-                        f"anchor_pu:{anchor_source_id}",
-                    )
-                    % (2**32 - 1),
-                    evaluation_target_id=primary,
+            pu_started = time.perf_counter()
+            _progress(
+                f"P11 anchor_pu_start fold={args.outer_fold} source={anchor_source_id}"
+            )
+            pu_fit = fit_anchor_pu_fold(
+                feature_panel=cast(pd.DataFrame, panel),
+                feature_registry=effective_feature_registry,
+                label_inputs=cast(pd.DataFrame, inputs),
+                weights=cast(pd.DataFrame, weights),
+                anchor_source_id=str(anchor_source_id),
+                outer_year=int(args.outer_fold),
+                settings=settings,
+                columns=columns,
+                random_state=derive_seed(
+                    loaded.protocol_hash,
+                    "P11",
+                    coordinates,
+                    f"anchor_pu:{anchor_source_id}",
                 )
+                % (2**32 - 1),
+                evaluation_target_id=primary,
+            )
+            pu_results.append(pu_fit)
+            _progress(
+                f"P11 anchor_pu_end fold={args.outer_fold} source={anchor_source_id} "
+                f"status={pu_fit.models['status']} "
+                f"elapsed_seconds={time.perf_counter() - pu_started:.3f}"
             )
     fits.extend(pu_results)
     result = _combine_fits(fits, required_fit=track_l1, track_statuses=track_statuses)
@@ -306,6 +363,9 @@ def main() -> int:
             float(item.get("tuning_runtime_seconds", 0.0)) for item in fitted_model_rows
         ),
         "tuning_budget_maximum": maximum_configurations,
+        "model_feature_contract_summary": feature_contract.summary,
+        "runtime_feature_exclusions": feature_contract.exclusions,
+        "model_matrix_manifest": feature_contract.rows,
         "protocol_hash": loaded.protocol_hash,
         "split_registry_hash": stable_hash(splits),
         "measurement_selection_hash": stable_hash(selection),
@@ -314,6 +374,7 @@ def main() -> int:
         "nested_selection_status": nested_receipt.get("status"),
         "optional_measurement_tracks": optional_measurements,
         "feature_registry_hash": stable_hash(feature_registry),
+        "effective_feature_registry_hash": stable_hash(effective_feature_registry),
         "preprocessing_hash": stable_hash(feature_config.get("preprocessing")),
         "model_settings_hash": stable_hash(settings),
         "weight_diagnostics_hash": stable_hash(weight_diagnostics),
