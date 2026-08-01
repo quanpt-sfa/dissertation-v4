@@ -38,9 +38,19 @@ uv run pre-commit run --all-files
 ## Temporal estimands
 
 The analysis unit is firm fiscal year `(i, t)`. S1 and S2 are annual measurements at
-the annual prediction anchor. S3 predicts a regulatory-event endpoint in calendar
-year `t+1` for firm fiscal year `t`: `R(i,t+1,c)`. S3 target assignment uses sanction
-year (then decision year, then publish year) and maps `sanction_year - 1`; decision
-and publication dates are provenance/sensitivity metadata only. S3 is not a
-post-prediction 12-month outcome, and its maturity requires a complete source year
-`t+1` rather than an anchor-plus-horizon calculation.
+the annual prediction anchor. S3 classifies a regulatory-event endpoint in calendar
+year `t+1` for firm fiscal year `t`, denoted `B_reg(i,t+1,c)`. S3 target assignment
+uses sanction year (then decision year, then publish year) and maps
+`sanction_year - 1`; decision and publication dates are provenance/sensitivity
+metadata only. S3 is not a post-prediction 12-month outcome, and its maturity
+requires a complete source year `t+1` rather than an anchor-plus-horizon calculation.
+
+## Measurement-process contract
+
+Observed evidence is generated through the conceptual sequence
+`Y* -> O -> V -> D -> R -> S`: latent fraud, observation opportunity, verification,
+determination, recording/publication, and the observed source label. Legal or
+administrative provenance is not converted into a high-specificity assumption.
+When intermediate layers are unavailable, the pipeline retains a reduced-form
+source model and reports the result as a sensitivity region unless restrictions have
+independent justification.
