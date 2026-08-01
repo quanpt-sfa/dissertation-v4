@@ -55,7 +55,7 @@ from simulation.replication_contract import (
 from simulation.scenario_contract import (
     validate_scenario_target_identity,
 )
-from simulation.service import run_batch
+from simulation.v24_service import run_batch
 
 _REQUIRED_OUTPUT_COLUMNS = {
     SCENARIO_ID,
@@ -208,7 +208,7 @@ def main() -> int:
     batch[ANALYSIS_ROLE] = str(method_spec[ANALYSIS_ROLE])
     batch[EXECUTION_PROFILE] = str(method_spec[EXECUTION_PROFILE])
     batch[PROTOCOL_STATUS] = str(method_spec[PROTOCOL_STATUS])
-    batch["method_contract_version"] = 7
+    batch["method_contract_version"] = 8
 
     expected_replications = set(replication_range)
     actual_replications = set(batch[REPLICATION_ID].dropna().astype(int))
