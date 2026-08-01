@@ -1,4 +1,4 @@
-"""P13 CLI: domain transfer, hierarchical-pi status, and block ablations."""
+"""P13 CLI: transfer, identification status, source sensitivity, and ablations."""
 
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ import pandas as pd
 
 from core.pipeline import load_run, mapping, outer_fold_ids, physical_columns, sequence
 from core.rng import derive_seed
-from core.semantic_keys import OUTER_FOLD
+from core.semantic_keys import OUTCOME, OUTER_FOLD, TARGET_ID
+from identification.service import build_identification_summary
 from sensitivity.service import (
     ablation_summary,
     censoring_sensitivity_summary,
@@ -131,6 +132,30 @@ def main() -> int:
         },
     )
     source_refits["registered_summary"] = source_summary
+
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    columns = physical_columns(loaded.registry)
+    target_column = columns[TARGET_ID]
+    outcome_column = columns[OUTCOME]
+    primary_target_id = measurement.get("primary_target_id")
+    observed_positive_rate: float | None = None
+    outcome_frame = cast(pd.DataFrame, outcomes)
+    if (
+        isinstance(primary_target_id, str)
+        and target_column in outcome_frame.columns
+        and outcome_column in outcome_frame.columns
+    ):
+        primary_rows = outcome_frame.loc[
+            outcome_frame[target_column].astype(str) == primary_target_id,
+            outcome_column,
+        ].dropna()
+        if len(primary_rows):
+            observed_positive_rate = float(primary_rows.astype(bool).mean())
+
+    source_refits["identification_robustness"] = build_identification_summary(
+        measurement,
+        observed_positive_rate=observed_positive_rate,
+    )
     loaded.context.write("source_sensitivity_outputs", source_refits, {})
     loaded.context.write(
         "censoring_sensitivity_outputs",
@@ -139,7 +164,11 @@ def main() -> int:
     )
     loaded.context.write("hierarchical_pi_sensitivity", hierarchical_pi_status(capability), {})
     loaded.context.write("ablation_results", ablation_summary(evaluations), {})
-    print(f"P13 status=PASS domain_status={domain['status']}")
+    print(
+        "P13 status=PASS "
+        f"domain_status={domain['status']} "
+        f"identification_status={source_refits['identification_robustness']['status']}"
+    )
     return 0
 
 
