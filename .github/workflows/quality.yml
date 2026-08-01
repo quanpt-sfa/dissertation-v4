@@ -16,6 +16,23 @@ jobs:
       - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
       - run: uv run pytest --collect-only -q
       - run: uv run ruff check .
+      - name: Generate Ruff formatter snapshot
+        run: |
+          uv run ruff format \
+            src/core/config_validation.py \
+            src/evidence/service.py \
+            src/identification/service.py \
+            tests/test_chapter3_v24_identification.py
+      - name: Upload Ruff formatter snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: v24-ruff-formatted-sources
+          path: |
+            src/core/config_validation.py
+            src/evidence/service.py
+            src/identification/service.py
+            tests/test_chapter3_v24_identification.py
+          if-no-files-found: error
       - run: uv run ruff format --check .
       - name: Pyright ratchet for pull requests
         if: github.event_name == 'pull_request'
