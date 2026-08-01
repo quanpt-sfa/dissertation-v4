@@ -49,13 +49,13 @@ def prevalence_bounds(
 ) -> PrevalenceBounds:
     """Return conservative prevalence bounds for one observed proxy channel.
 
-    Let ``p = P(S=1)`` and ``alpha = P(S=1 | Y*=0)``.  If only
+    Let ``p = P(S=1)`` and ``alpha = P(S=1 | Y*=0)``. If only
     ``alpha <= alpha_bar`` is maintained, then
 
     ``pi >= max(0, (p-alpha_bar)/(1-alpha_bar))``.
 
     A nontrivial upper bound additionally requires a lower bound on the reduced-form
-    sensitivity ``P(S=1 | Y*=1)``.  Restrictions are classified as an identified-set
+    sensitivity ``P(S=1 | Y*=1)``. Restrictions are classified as an identified-set
     basis only when their independent justification is explicitly supplied.
     """
 
@@ -113,7 +113,7 @@ def paired_difference_dominance(
     """Evaluate uniform dominance using paired differences on common scenarios.
 
     Model ``a`` dominates model ``b`` when the worst paired difference across the
-    common uncertainty domain is strictly above ``tolerance``.  This is the primary
+    common uncertainty domain is strictly above ``tolerance``. This is the primary
     dominance rule in Chapter 3 because both models are evaluated under the same
     admissible parameter configuration.
     """
@@ -209,7 +209,11 @@ def minimax_regret(
     """Compute model-wise maximum regret and the minimax-regret set."""
 
     _validate_surface(metric_surface)
-    scenarios = sorted(set.intersection(*(set(values) for values in metric_surface.values())))
+    common: set[str] | None = None
+    for values in metric_surface.values():
+        current = set(values)
+        common = current if common is None else common & current
+    scenarios = sorted(common or set())
     if not scenarios:
         return {
             "status": "INSUFFICIENT_COMMON_CONFIGURATIONS",
@@ -251,7 +255,7 @@ def build_identification_summary(
 
     The configuration may register sensitivity values, but a restriction is treated
     as independently justified only when ``independent_justification_confirmed`` is
-    true.  This prevents an enforcement source name or legal status from silently
+    true. This prevents an enforcement source name or legal status from silently
     becoming an identifying restriction.
     """
 
