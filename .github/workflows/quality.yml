@@ -13,19 +13,20 @@ jobs:
         with:
           fetch-depth: 0
           ref: sync/chapter3-v24-identification
-      - name: Apply payload when complete
+      - name: Apply patch when complete
         shell: bash
         run: |
           set -euo pipefail
-          chunks=(.phase2_payload_00 .phase2_payload_01 .phase2_payload_02 .phase2_payload_03)
+          chunks=(.phase2_diff_00 .phase2_diff_01 .phase2_diff_02)
           for chunk in "${chunks[@]}"; do
             if [[ ! -f "$chunk" ]]; then
-              echo "payload incomplete; waiting for remaining chunks"
+              echo "patch incomplete; waiting for remaining chunks"
               exit 0
             fi
           done
-          cat "${chunks[@]}" | base64 --decode > /tmp/chapter3-phase2.tar.gz
-          tar -xzf /tmp/chapter3-phase2.tar.gz -C .
+          cat "${chunks[@]}" | base64 --decode | gzip --decompress > /tmp/chapter3-phase2.diff
+          git apply --check /tmp/chapter3-phase2.diff
+          git apply /tmp/chapter3-phase2.diff
           rm -f "${chunks[@]}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
