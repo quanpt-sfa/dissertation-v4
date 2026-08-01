@@ -54,6 +54,7 @@ REPOSITORY_MAINTENANCE_SCRIPTS = {
     "scripts/finalize_s3_l3_production_hardening.py",
     "scripts/repair_s3_l3_hardening_regressions.py",
     "scripts/lock_l3_parameters.py",
+    "scripts/migrate_evidence_ledger_v6_to_v7.py",
 }
 PRODUCTION_DATA_BOUNDARIES = {
     # P07 feature-computation data layer (replaced the pre-computed feature store):

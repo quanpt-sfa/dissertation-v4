@@ -262,20 +262,40 @@ def build_identification_summary(
 ) -> dict[str, object]:
     """Build a fail-closed Chapter 3 identification summary.
 
-    The configuration may register sensitivity values, but a restriction is treated
-    as independently justified only when ``independent_justification_confirmed`` is
-    true. This prevents an enforcement source name or legal status from silently
-    becoming an identifying restriction.
+    Every active restriction is assessed separately. A legacy global confirmation
+    flag is deliberately ignored: a numeric bound may support an identified set
+    only when its registered provenance, target-population transportability, and
+    formal approval all pass the configured gate.
     """
 
-    raw_identification: object = measurement_config.get("identification")
-    identification = _string_object_mapping(raw_identification, "measurement.identification")
-    raw_restrictions: object = identification.get("restrictions")
+    identification = _string_object_mapping(
+        measurement_config.get("identification"),
+        "measurement.identification",
+    )
     restrictions = _string_object_mapping(
-        raw_restrictions,
+        identification.get("restrictions"),
         "measurement.identification.restrictions",
     )
-    independently_justified = bool(identification.get("independent_justification_confirmed", False))
+    restriction_registry = _string_object_mapping(
+        identification.get("restriction_registry"),
+        "measurement.identification.restriction_registry",
+    )
+    basis_registry = _string_object_mapping(
+        identification.get("evidence_basis_registry"),
+        "measurement.identification.evidence_basis_registry",
+    )
+
+    assessments: list[dict[str, object]] = []
+    assessment_by_id: dict[str, dict[str, object]] = {}
+    for restriction_id in sorted(set(restrictions) | set(restriction_registry)):
+        assessment = _assess_restriction(
+            restriction_id,
+            restrictions.get(restriction_id),
+            restriction_registry.get(restriction_id),
+            basis_registry,
+        )
+        assessments.append(assessment)
+        assessment_by_id[restriction_id] = assessment
 
     false_positive_upper = _optional_probability(
         restrictions.get("enforcement_false_positive_upper"),
@@ -284,6 +304,18 @@ def build_identification_summary(
     sensitivity_lower = _optional_probability(
         restrictions.get("enforcement_sensitivity_lower"),
         "enforcement_sensitivity_lower",
+    )
+    implemented_active_ids = [
+        restriction_id
+        for restriction_id, value in (
+            ("enforcement_false_positive_upper", false_positive_upper),
+            ("enforcement_sensitivity_lower", sensitivity_lower),
+        )
+        if value is not None
+    ]
+    independently_justified = bool(implemented_active_ids) and all(
+        assessment_by_id.get(restriction_id, {}).get("eligible_for_identified_set") is True
+        for restriction_id in implemented_active_ids
     )
 
     if observed_positive_rate is None:
@@ -302,16 +334,45 @@ def build_identification_summary(
             restrictions_independently_justified=independently_justified,
         )
 
+    active_ids = [
+        restriction_id
+        for restriction_id, value in restrictions.items()
+        if value is not None
+    ]
+    unsupported_active = sorted(set(active_ids) - set(implemented_active_ids))
+    blocking_reasons = sorted(
+        {
+            str(reason)
+            for row in assessments
+            if row.get("active") is True and row.get("eligible_for_identified_set") is not True
+            for reason in cast(list[object], row.get("blocking_reasons", []))
+        }
+    )
+    if unsupported_active:
+        blocking_reasons.append("active_restriction_not_implemented_in_prevalence_bounds")
+        blocking_reasons = sorted(set(blocking_reasons))
+
     result: dict[str, object] = {
         "status": (
             "IDENTIFIED_SET_AVAILABLE"
-            if bounds.domain_type == IDENTIFIED_SET and bounds.status == "BOUNDED"
+            if bounds.domain_type == IDENTIFIED_SET
+            and bounds.status == "BOUNDED"
+            and not unsupported_active
             else "SENSITIVITY_ONLY"
         ),
         "uncertainty_domain_type": bounds.domain_type,
         "prevalence_bounds": bounds.as_dict(),
         "high_specificity_anchor_assumed": False,
         "independent_justification_confirmed": independently_justified,
+        "legacy_global_justification_flag_ignored": (
+            "independent_justification_confirmed" in identification
+        ),
+        "active_restrictions": sorted(active_ids),
+        "implemented_active_restrictions": implemented_active_ids,
+        "unsupported_active_restrictions": unsupported_active,
+        "restriction_audit": assessments,
+        "identification_basis_source_ids": sorted(basis_registry),
+        "blocking_reasons": blocking_reasons,
         "scenario_fraction_can_replace_identified_set_dominance": False,
     }
 
@@ -335,6 +396,108 @@ def build_identification_summary(
             }
         )
     return result
+
+
+def _assess_restriction(
+    restriction_id: str,
+    value: object,
+    raw_spec: object,
+    basis_registry: Mapping[str, object],
+) -> dict[str, object]:
+    active = value is not None
+    if not isinstance(raw_spec, Mapping):
+        return {
+            "restriction_id": restriction_id,
+            "active": active,
+            "value": value,
+            "registered": False,
+            "eligible_for_identified_set": False,
+            "blocking_reasons": ["restriction_not_registered"],
+            "source_ids": [],
+        }
+
+    spec = _string_object_mapping(raw_spec, f"restriction_registry.{restriction_id}")
+    raw_source_ids = spec.get("source_ids", [])
+    if not isinstance(raw_source_ids, list) or not all(
+        isinstance(item, str) and item for item in raw_source_ids
+    ):
+        raise ValueError(f"restriction={restriction_id}: source_ids must be strings")
+    source_ids = cast(list[str], raw_source_ids)
+    basis_rows = [basis_registry.get(source_id) for source_id in source_ids]
+    source_registry_complete = bool(source_ids) and all(
+        isinstance(item, Mapping) for item in basis_rows
+    )
+    independently_sourced = source_registry_complete and all(
+        _basis_boolean(item, "independent_of_study_outcomes") for item in basis_rows
+    )
+    transportability_established = (
+        spec.get("transportability_status") == "established_for_target_population"
+    )
+    formally_approved = spec.get("approval_status") == "approved_for_identified_set"
+    eligibility_flag = spec.get("eligible_for_identified_set") is True
+    restriction_type = str(spec.get("restriction_type", "unknown"))
+    numeric_bound = restriction_type in {"numeric_upper_bound", "numeric_lower_bound"}
+    numeric_basis_available = (not numeric_bound) or any(
+        _basis_boolean(item, "provides_numeric_bound_for_vietnam") for item in basis_rows
+    )
+    value_valid = (not active) or (not numeric_bound) or isinstance(value, (int, float))
+
+    computed_reasons: list[str] = []
+    if active and not source_registry_complete:
+        computed_reasons.append("independent_source_registry_incomplete")
+    if active and not independently_sourced:
+        computed_reasons.append("independent_source_not_confirmed")
+    if active and not transportability_established:
+        computed_reasons.append("target_population_transportability_not_established")
+    if active and not formally_approved:
+        computed_reasons.append("restriction_not_formally_approved")
+    if active and not eligibility_flag:
+        computed_reasons.append("restriction_not_marked_eligible")
+    if active and not numeric_basis_available:
+        computed_reasons.append("target_population_numeric_bound_unavailable")
+    if active and not value_valid:
+        computed_reasons.append("numeric_restriction_value_invalid")
+
+    raw_blocking = spec.get("blocking_reasons", [])
+    if not isinstance(raw_blocking, list) or not all(isinstance(item, str) for item in raw_blocking):
+        raise ValueError(f"restriction={restriction_id}: blocking_reasons must be strings")
+    eligible = bool(
+        active
+        and source_registry_complete
+        and independently_sourced
+        and transportability_established
+        and formally_approved
+        and eligibility_flag
+        and numeric_basis_available
+        and value_valid
+    )
+    return {
+        "restriction_id": restriction_id,
+        "active": active,
+        "value": value,
+        "registered": True,
+        "restriction_type": restriction_type,
+        "analytical_role": spec.get("analytical_role"),
+        "source_ids": source_ids,
+        "source_registry_complete": source_registry_complete,
+        "independently_sourced": independently_sourced,
+        "target_population_transportability_established": transportability_established,
+        "formally_approved": formally_approved,
+        "numeric_basis_available_for_target_population": numeric_basis_available,
+        "eligible_for_identified_set": eligible,
+        "blocking_reasons": sorted(
+            set(cast(list[str], raw_blocking) + computed_reasons)
+        )
+        if active
+        else [],
+    }
+
+
+def _basis_boolean(value: object, key: str) -> bool:
+    if not isinstance(value, Mapping):
+        return False
+    mapping = cast(Mapping[object, object], value)
+    return mapping.get(key) is True
 
 
 def _validate_surface(metric_surface: Mapping[str, Mapping[str, float]]) -> None:

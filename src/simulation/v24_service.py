@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from core.semantic_keys import OBSERVED_SOURCE_LABEL
 from identification.service import prevalence_bounds
 from labels.service import aggregate_l1, evidence_score_l2
 from simulation import service as legacy
@@ -225,7 +226,7 @@ def _generate_replication_v24(
         "measurement_process": {
             "anchor": {"O": anchor_o, "V": anchor_v, "D": anchor_d, "R": anchor_r},
             "weak": {"O": weak_o, "V": weak_v, "D": weak_d, "R": weak_r},
-            "observed_source_label": {
+            OBSERVED_SOURCE_LABEL: {
                 "anchor": anchor_values,
                 "weak": weak_values,
                 "label_observed": label_observed,

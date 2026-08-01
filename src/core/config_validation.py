@@ -11,7 +11,13 @@ from .errors import (
     MethodologicalInvariantError,
     UnknownReferenceError,
 )
-from .semantic_keys import CHANNEL_ID, PREDICTION_TIME
+from .semantic_keys import (
+    CHANNEL_ID,
+    OBSERVATION_OPPORTUNITY,
+    OBSERVED_SOURCE_LABEL,
+    PREDICTION_TIME,
+    VERIFICATION_STATUS,
+)
 
 StringMap = dict[str, Any]
 
@@ -210,9 +216,12 @@ def validate_methodology(
     known = _mapping(registry, "known_cases")
     simulation = _mapping(registry, "simulation")
     s3_taxonomy = _mapping(registry, "s3_taxonomy")
+    source_catalog = _mapping(registry, "source_catalog")
     reproducibility = _mapping(registry, "reproducibility")
     _validate_p02_configuration(sources, entity_resolution)
     _validate_s3_configuration(s3_taxonomy)
+    _validate_source_catalog_vocabulary(source_catalog)
+    _validate_identification_configuration(measurement)
 
     horizons = _entry(
         study.get("horizons_months"),
@@ -298,8 +307,11 @@ def validate_methodology(
             "D02 sensitivity horizon must be 24 months",
         ),
         (
-            anchor.get("false_positive_rate_grid") == [0.0, 0.01, 0.03, 0.05],
-            "D04 anchor grid differs",
+            anchor.get("false_positive_rate_grid") == [0.0, 0.01, 0.03, 0.05]
+            and anchor.get("high_confirmation_required") is False
+            and anchor.get("high_specificity_assumed") is False
+            and anchor.get("legacy_anchor_vocabulary_role") == "compatibility_only",
+            "D04 positive-evidence sensitivity grid or terminology contract differs",
         ),
         (
             _candidate_target_sources_valid(measurement.get("candidate_targets"))
@@ -568,6 +580,154 @@ def _validate_s3_configuration(configuration: dict[str, Any]) -> None:
     if completeness.get("incomplete_years") != [2026]:
         raise MethodologicalInvariantError("S3 source year 2026 must remain incomplete")
 
+
+
+
+def _validate_identification_configuration(measurement: dict[str, Any]) -> None:
+    identification = _entry(
+        measurement.get("identification"),
+        "measurement.identification",
+    )
+    if identification.get("default_domain_type") != "sensitivity_region":
+        raise MethodologicalInvariantError("identification must default to sensitivity_region")
+    if identification.get("high_specificity_anchor_assumed") is not False:
+        raise MethodologicalInvariantError("high-specificity anchor assumption is forbidden")
+    if identification.get("legacy_global_justification_flag_role") != "ignored_fail_closed":
+        raise MethodologicalInvariantError("legacy global justification flag must be ignored")
+
+    gate = _entry(
+        identification.get("identified_set_gate"),
+        "measurement.identification.identified_set_gate",
+    )
+    required_gate_flags = {
+        "require_registered_restriction",
+        "require_independent_source",
+        "require_target_population_transportability",
+        "require_formal_approval",
+        "require_numeric_value_for_numeric_bound",
+    }
+    if any(gate.get(flag) is not True for flag in required_gate_flags):
+        raise MethodologicalInvariantError("identified-set gate must fail closed on every criterion")
+
+    basis = _entry(
+        identification.get("evidence_basis_registry"),
+        "measurement.identification.evidence_basis_registry",
+    )
+    required_basis = {
+        "kedia_rajgopal_2011",
+        "kubic_2021",
+        "dyck_morse_zingales_2024",
+        "hahn_murray_manolopoulou_2016",
+    }
+    if not required_basis.issubset(basis):
+        raise MethodologicalInvariantError("independent identification literature registry incomplete")
+    for source_id, raw_source in basis.items():
+        source = _entry(raw_source, f"identification evidence basis={source_id}")
+        if source.get("independent_of_study_outcomes") is not True:
+            raise MethodologicalInvariantError(
+                f"identification evidence basis={source_id}: independence must be explicit"
+            )
+        if not isinstance(source.get("citation_key"), str) or not source.get("citation_key"):
+            raise MethodologicalInvariantError(
+                f"identification evidence basis={source_id}: citation key required"
+            )
+        if not isinstance(source.get("provides_numeric_bound_for_vietnam"), bool):
+            raise MethodologicalInvariantError(
+                f"identification evidence basis={source_id}: numeric-bound scope flag required"
+            )
+
+    restrictions = _entry(
+        identification.get("restrictions"),
+        "measurement.identification.restrictions",
+    )
+    restriction_registry = _entry(
+        identification.get("restriction_registry"),
+        "measurement.identification.restriction_registry",
+    )
+    if set(restrictions) != set(restriction_registry):
+        raise MethodologicalInvariantError("every active/sensitivity restriction must be registered")
+    for restriction_id, raw_spec in restriction_registry.items():
+        spec = _entry(raw_spec, f"identification restriction={restriction_id}")
+        source_ids = _string_list(
+            spec.get("source_ids"),
+            f"identification restriction={restriction_id}.source_ids",
+        )
+        if not source_ids or any(source_id not in basis for source_id in source_ids):
+            raise MethodologicalInvariantError(
+                f"identification restriction={restriction_id}: registered independent sources required"
+            )
+        eligible = spec.get("eligible_for_identified_set")
+        if not isinstance(eligible, bool):
+            raise MethodologicalInvariantError(
+                f"identification restriction={restriction_id}: eligibility flag required"
+            )
+        if eligible:
+            if spec.get("transportability_status") != "established_for_target_population":
+                raise MethodologicalInvariantError(
+                    f"identification restriction={restriction_id}: transportability not established"
+                )
+            if spec.get("approval_status") != "approved_for_identified_set":
+                raise MethodologicalInvariantError(
+                    f"identification restriction={restriction_id}: formal approval required"
+                )
+            restriction_type = spec.get("restriction_type")
+            if restriction_type in {"numeric_upper_bound", "numeric_lower_bound"}:
+                if restrictions.get(restriction_id) is None:
+                    raise MethodologicalInvariantError(
+                        f"identification restriction={restriction_id}: numeric value required"
+                    )
+                if not any(
+                    _entry(basis[source_id], f"identification evidence basis={source_id}").get(
+                        "provides_numeric_bound_for_vietnam"
+                    )
+                    is True
+                    for source_id in source_ids
+                ):
+                    raise MethodologicalInvariantError(
+                        f"identification restriction={restriction_id}: no target-population bound"
+                    )
+        elif restrictions.get(restriction_id) is not None:
+            # Active but ineligible restrictions are permitted only as sensitivity analysis.
+            if spec.get("analytical_role") != "sensitivity_only":
+                raise MethodologicalInvariantError(
+                    f"identification restriction={restriction_id}: ineligible active value must be sensitivity_only"
+                )
+
+
+def _validate_source_catalog_vocabulary(source_catalog: dict[str, Any]) -> None:
+    profiles = _entry(source_catalog.get("profiles"), "source_catalog.profiles")
+    sanction = _entry(profiles.get("sanction_evidence"), "source_catalog.sanction_evidence")
+    if sanction.get(VERIFICATION_STATUS) != "selectively_observed_enforcement_proxy":
+        raise MethodologicalInvariantError("sanction evidence must use selective-observation vocabulary")
+    if sanction.get("high_specificity_assumed") is not False:
+        raise MethodologicalInvariantError("sanction evidence cannot assume high specificity")
+    mapping = _entry(
+        sanction.get("evidence_mapping"),
+        "source_catalog.sanction_evidence.evidence_mapping",
+    )
+    if mapping.get("absence_policy") != "observed_endpoint_zero_when_complete_source_year":
+        raise MethodologicalInvariantError("S3 absence policy must use observed-endpoint-zero semantics")
+    if mapping.get("zero_label_interpretation") != (
+        "observed_source_endpoint_zero_not_latent_negative"
+    ):
+        raise MethodologicalInvariantError("S3 zero-label interpretation must remain explicit")
+    process = _entry(mapping.get("measurement_process"), "S3 measurement_process")
+    expected = {
+        OBSERVATION_OPPORTUNITY,
+        "verification",
+        "determination",
+        "recording",
+        OBSERVED_SOURCE_LABEL,
+        "high_specificity_assumed",
+    }
+    if set(process) != expected or process.get("high_specificity_assumed") is not False:
+        raise MethodologicalInvariantError("S3 O-V-D-R-S process registry differs")
+
+    known_cases = _entry(profiles.get("known_cases"), "source_catalog.known_cases")
+    if known_cases.get(VERIFICATION_STATUS) != "externally_reviewed_positive_case":
+        raise MethodologicalInvariantError("known cases must be external positive evidence")
+    if known_cases.get("high_specificity_assumed") is not False:
+        raise MethodologicalInvariantError("known cases cannot upgrade source specificity")
 
 def _validate_p02_configuration(
     data_sources: dict[str, Any],

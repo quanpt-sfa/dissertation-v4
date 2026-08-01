@@ -399,6 +399,10 @@ def build_s3_evidence(
                         if complete
                         else "incomplete_source_year"
                     ),
+                    verification_status=True if result is True else None,
+                    determination_status=True if result is True else None,
+                    recording_status=True if result is True else None,
+                    reason_unknown=outcome_reason if result is None else None,
                     evidence_category=endpoint,
                     source_record_refs=cast(str, metadata[DOCUMENT_IDS]),
                     outcome_basis=(

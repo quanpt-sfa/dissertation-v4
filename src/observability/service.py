@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from core.semantic_keys import CHANNEL_ID, ELIGIBLE, MATURE
+from core.semantic_keys import CHANNEL_ID, ELIGIBLE, MATURE, VERIFICATION_STATUS
 
 
 def build_observability_registry(
@@ -28,7 +28,7 @@ def build_observability_registry(
         channel_id = metadata.get(CHANNEL_ID)
         if not isinstance(channel_id, str):
             raise ValueError(f"source={source_id}: channel_id required")
-        raw_status = str(metadata.get("verification_status", "unknown"))
+        raw_status = str(metadata.get(VERIFICATION_STATUS, "unknown"))
         verification = _verification_classification(raw_status)
         evidence_mapping = metadata.get("evidence_mapping")
         opportunity_semantic = (

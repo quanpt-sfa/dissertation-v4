@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
 import pytest
+import yaml
 
 from evidence.service import EvidenceRecord, _validate_measurement_process
 from identification.service import (
@@ -68,6 +70,7 @@ def test_identification_summary_never_promotes_an_unjustified_anchor() -> None:
         {
             "identification": {
                 "high_specificity_anchor_assumed": False,
+                "independent_justification_confirmed": True,
                 "restrictions": {
                     "enforcement_false_positive_upper": 0.03,
                     "enforcement_sensitivity_lower": 0.50,
@@ -78,7 +81,68 @@ def test_identification_summary_never_promotes_an_unjustified_anchor() -> None:
     )
     assert summary["status"] == "SENSITIVITY_ONLY"
     assert summary["high_specificity_anchor_assumed"] is False
+    assert summary["legacy_global_justification_flag_ignored"] is True
+    assert summary["independent_justification_confirmed"] is False
     assert summary["scenario_fraction_can_replace_identified_set_dominance"] is False
+
+
+def test_identification_summary_requires_per_restriction_provenance() -> None:
+    source = {
+        "citation_key": "external_bound",
+        "independent_of_study_outcomes": True,
+        "provides_numeric_bound_for_vietnam": True,
+    }
+    restriction = {
+        "restriction_type": "numeric_upper_bound",
+        "analytical_role": "identified_set",
+        "source_ids": ["external_bound"],
+        "transportability_status": "established_for_target_population",
+        "approval_status": "approved_for_identified_set",
+        "eligible_for_identified_set": True,
+        "blocking_reasons": [],
+    }
+    sensitivity_restriction = dict(restriction)
+    sensitivity_restriction["restriction_type"] = "numeric_lower_bound"
+    summary = build_identification_summary(
+        {
+            "identification": {
+                "evidence_basis_registry": {"external_bound": source},
+                "restriction_registry": {
+                    "enforcement_false_positive_upper": restriction,
+                    "enforcement_sensitivity_lower": sensitivity_restriction,
+                },
+                "restrictions": {
+                    "enforcement_false_positive_upper": 0.02,
+                    "enforcement_sensitivity_lower": 0.50,
+                },
+            }
+        },
+        observed_positive_rate=0.10,
+    )
+    assert summary["status"] == "IDENTIFIED_SET_AVAILABLE"
+    assert summary["uncertainty_domain_type"] == "identified_set"
+    assert summary["independent_justification_confirmed"] is True
+
+
+def test_registered_project_literature_does_not_create_vietnam_bounds() -> None:
+    root = Path(__file__).resolve().parents[1]
+    raw = yaml.safe_load((root / "config" / "methodology" / "measurement.yaml").read_text())
+    measurement = cast(dict[str, Any], raw["measurement"])
+    summary = build_identification_summary(measurement, observed_positive_rate=0.08)
+    assert summary["status"] == "SENSITIVITY_ONLY"
+    assert summary["prevalence_bounds"] == {
+        "lower": 0.0,
+        "upper": 1.0,
+        "uncertainty_domain_type": "sensitivity_region",
+        "restrictions_used": [],
+        "status": "UNINFORMATIVE_WITHOUT_RESTRICTIONS",
+    }
+    assert set(summary["identification_basis_source_ids"]) >= {
+        "kedia_rajgopal_2011",
+        "kubic_2021",
+        "dyck_morse_zingales_2024",
+        "hahn_murray_manolopoulou_2016",
+    }
 
 
 def test_legacy_high_confirmation_metadata_is_not_observed_verification() -> None:

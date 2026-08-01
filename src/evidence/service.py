@@ -299,6 +299,11 @@ def build_evidence_ledger(
         evidence_record_id = record.evidence_record_id or record.event_id
         if evidence_record_id is None:
             raise ValueError("evidence record ID is required")
+        observation_opportunity = _observation_opportunity(record)
+        layer_mask = record.layer_observed_mask or _layer_mask(record)
+        reason_unknown = record.reason_unknown
+        if reason_unknown is None and record.outcome is None:
+            reason_unknown = _default_unknown_reason(record)
         ledger_rows.append(
             {
                 columns[FIRM_ID]: record.firm_id,
@@ -312,8 +317,19 @@ def build_evidence_ledger(
                 columns[EVENT_CLUSTER_ID]: record.event_cluster_id,
                 columns[TEMPORAL_ROLE]: record.temporal_role,
                 columns[AVAILABILITY_BASIS]: record.availability_basis,
-                columns[SOURCE_OPPORTUNITY]: record.source_opportunity,
+                # Legacy aliases remain physical during the v6 -> v7 transition.
+                columns[SOURCE_OPPORTUNITY]: observation_opportunity,
+                columns[OBSERVATION_OPPORTUNITY]: observation_opportunity,
                 columns[OPPORTUNITY_BASIS]: record.opportunity_basis,
+                columns[VERIFICATION_STATUS]: record.verification_status,
+                columns[DETERMINATION_STATUS]: record.determination_status,
+                columns[RECORDING_STATUS]: record.recording_status,
+                columns[OBSERVED_SOURCE_LABEL]: record.outcome,
+                columns[VERIFICATION_DATE]: record.verification_date,
+                columns[DETERMINATION_DATE]: record.determination_date,
+                columns[RECORDING_DATE]: record.recording_date,
+                columns[LAYER_OBSERVED_MASK]: layer_mask,
+                columns[REASON_UNKNOWN]: reason_unknown,
                 columns[EVIDENCE_VALUE]: record.evidence_value,
                 columns[EVIDENCE_CATEGORY]: record.evidence_category,
                 columns[SOURCE_RECORD_REFS]: record.source_record_refs,
@@ -359,7 +375,17 @@ def build_evidence_ledger(
             columns[TEMPORAL_ROLE],
             columns[AVAILABILITY_BASIS],
             columns[SOURCE_OPPORTUNITY],
+            columns[OBSERVATION_OPPORTUNITY],
             columns[OPPORTUNITY_BASIS],
+            columns[VERIFICATION_STATUS],
+            columns[DETERMINATION_STATUS],
+            columns[RECORDING_STATUS],
+            columns[OBSERVED_SOURCE_LABEL],
+            columns[VERIFICATION_DATE],
+            columns[DETERMINATION_DATE],
+            columns[RECORDING_DATE],
+            columns[LAYER_OBSERVED_MASK],
+            columns[REASON_UNKNOWN],
             columns[EVIDENCE_VALUE],
             columns[EVIDENCE_CATEGORY],
             columns[SOURCE_RECORD_REFS],
@@ -385,24 +411,46 @@ def build_evidence_ledger(
         ],
     )
     if not ledger.empty:
-        ledger[columns[FIRM_ID]] = ledger[columns[FIRM_ID]].astype("string")
+        for name in (
+            FIRM_ID,
+            SOURCE_ID,
+            SOURCE_PROFILE_ID,
+            CHANNEL_ID,
+            EVIDENCE_RECORD_ID,
+            EVIDENCE_RECORD_KIND,
+            EVENT_ID,
+            EVENT_CLUSTER_ID,
+            TEMPORAL_ROLE,
+            AVAILABILITY_BASIS,
+            OPPORTUNITY_BASIS,
+            LAYER_OBSERVED_MASK,
+            REASON_UNKNOWN,
+            EVIDENCE_CATEGORY,
+            SOURCE_RECORD_REFS,
+            PERIOD_LINK_SOURCE,
+            PERIOD_LINK_CONFIDENCE,
+            OUTCOME_BASIS,
+        ):
+            ledger[columns[name]] = ledger[columns[name]].astype("string")
         ledger[columns[FISCAL_YEAR]] = ledger[columns[FISCAL_YEAR]].astype("int16")
-        ledger[columns[SOURCE_ID]] = ledger[columns[SOURCE_ID]].astype("string")
-        ledger[columns[SOURCE_PROFILE_ID]] = ledger[columns[SOURCE_PROFILE_ID]].astype("string")
-        ledger[columns[CHANNEL_ID]] = ledger[columns[CHANNEL_ID]].astype("string")
-        ledger[columns[EVIDENCE_RECORD_ID]] = ledger[columns[EVIDENCE_RECORD_ID]].astype("string")
-        ledger[columns[EVIDENCE_RECORD_KIND]] = ledger[columns[EVIDENCE_RECORD_KIND]].astype(
-            "string"
-        )
-        ledger[columns[EVENT_ID]] = ledger[columns[EVENT_ID]].astype("string")
-        ledger[columns[EVENT_CLUSTER_ID]] = ledger[columns[EVENT_CLUSTER_ID]].astype("string")
-        ledger[columns[TEMPORAL_ROLE]] = ledger[columns[TEMPORAL_ROLE]].astype("string")
-        ledger[columns[AVAILABILITY_BASIS]] = ledger[columns[AVAILABILITY_BASIS]].astype("string")
-        ledger[columns[SOURCE_OPPORTUNITY]] = ledger[columns[SOURCE_OPPORTUNITY]].astype("boolean")
-        ledger[columns[OPPORTUNITY_BASIS]] = ledger[columns[OPPORTUNITY_BASIS]].astype("string")
+        for name in (
+            SOURCE_OPPORTUNITY,
+            OBSERVATION_OPPORTUNITY,
+            VERIFICATION_STATUS,
+            DETERMINATION_STATUS,
+            RECORDING_STATUS,
+            OBSERVED_SOURCE_LABEL,
+            OUTCOME,
+        ):
+            ledger[columns[name]] = ledger[columns[name]].astype("boolean")
+        for name in (
+            VERIFICATION_DATE,
+            DETERMINATION_DATE,
+            RECORDING_DATE,
+            AVAILABILITY_DATE,
+        ):
+            ledger[columns[name]] = pd.to_datetime(ledger[columns[name]]).astype("datetime64[ns]")
         ledger[columns[EVIDENCE_VALUE]] = ledger[columns[EVIDENCE_VALUE]].astype("float64")
-        ledger[columns[EVIDENCE_CATEGORY]] = ledger[columns[EVIDENCE_CATEGORY]].astype("string")
-        ledger[columns[SOURCE_RECORD_REFS]] = ledger[columns[SOURCE_RECORD_REFS]].astype("string")
         sanction_year_column = columns.get(SANCTION_YEAR, SANCTION_YEAR)
         target_year_column = columns.get(TARGET_FISCAL_YEAR, TARGET_FISCAL_YEAR)
         decision_count_column = columns.get(DECISION_COUNT, DECISION_COUNT)
@@ -425,15 +473,12 @@ def build_evidence_ledger(
         taxonomy_reason_column = columns.get(TAXONOMY_REASON_CODE, TAXONOMY_REASON_CODE)
         ledger[taxonomy_codes_column] = ledger[taxonomy_codes_column].astype("string")
         ledger[taxonomy_reason_column] = ledger[taxonomy_reason_column].astype("string")
-        ledger[columns[PERIOD_LINK_SOURCE]] = ledger[columns[PERIOD_LINK_SOURCE]].astype("string")
-        ledger[columns[PERIOD_LINK_CONFIDENCE]] = ledger[columns[PERIOD_LINK_CONFIDENCE]].astype(
-            "string"
-        )
-        ledger[columns[OUTCOME_BASIS]] = ledger[columns[OUTCOME_BASIS]].astype("string")
-        ledger[columns[AVAILABILITY_DATE]] = pd.to_datetime(
-            ledger[columns[AVAILABILITY_DATE]]
-        ).astype("datetime64[ns]")
-        ledger[columns[OUTCOME]] = ledger[columns[OUTCOME]].astype("boolean")
+        if not ledger[columns[SOURCE_OPPORTUNITY]].equals(
+            ledger[columns[OBSERVATION_OPPORTUNITY]]
+        ):
+            raise ValueError("legacy source_opportunity must equal canonical O")
+        if not ledger[columns[OUTCOME]].equals(ledger[columns[OBSERVED_SOURCE_LABEL]]):
+            raise ValueError("legacy outcome must equal canonical S")
     return EvidenceBuildResult(
         ledger=ledger,
         availability_registry=availability_rows,
@@ -469,6 +514,11 @@ def build_evidence_ledger(
 def _validate_measurement_process(record: EvidenceRecord) -> None:
     if record.source_opportunity is False and record.outcome is not None:
         raise ValueError("O=0 requires the observed source label S to be missing")
+    if record.reason_unknown is not None and record.outcome is not None:
+        raise ValueError("reason_unknown is permitted only when S is missing")
+    expected_mask = _layer_mask(record)
+    if record.layer_observed_mask is not None and record.layer_observed_mask != expected_mask:
+        raise ValueError("layer_observed_mask conflicts with the O-V-D-R-S fields")
     if record.determination_status is not None and record.verification_status is not True:
         raise ValueError("D may be observed only when V=1")
     if record.recording_status is True and record.determination_status is None:
@@ -495,6 +545,7 @@ def _validate_measurement_process(record: EvidenceRecord) -> None:
 
 
 def _availability_row(record: EvidenceRecord, status: str) -> dict[str, object]:
+    observation_opportunity = _observation_opportunity(record)
     layer_mask = record.layer_observed_mask or _layer_mask(record)
     reason_unknown = record.reason_unknown
     if reason_unknown is None and record.outcome is None:
@@ -511,8 +562,8 @@ def _availability_row(record: EvidenceRecord, status: str) -> dict[str, object]:
         CHANNEL_ID: record.channel_id,
         TEMPORAL_ROLE: record.temporal_role,
         AVAILABILITY_BASIS: record.availability_basis,
-        SOURCE_OPPORTUNITY: record.source_opportunity,
-        OBSERVATION_OPPORTUNITY: record.source_opportunity,
+        SOURCE_OPPORTUNITY: observation_opportunity,
+        OBSERVATION_OPPORTUNITY: observation_opportunity,
         OPPORTUNITY_BASIS: record.opportunity_basis,
         VERIFICATION_STATUS: record.verification_status,
         DETERMINATION_STATUS: record.determination_status,
@@ -539,11 +590,20 @@ def _availability_row(record: EvidenceRecord, status: str) -> dict[str, object]:
     }
 
 
+def _observation_opportunity(record: EvidenceRecord) -> bool | None:
+    # An observed source label logically establishes that the source-specific
+    # observation opportunity occurred, even when legacy records did not
+    # materialise O separately. This is not an inference about latent fraud.
+    if record.outcome is not None and record.source_opportunity is None:
+        return True
+    return record.source_opportunity
+
+
 def _layer_mask(record: EvidenceRecord) -> str:
     return "".join(
         name if value is not None else "-"
         for name, value in (
-            ("O", record.source_opportunity),
+            ("O", _observation_opportunity(record)),
             ("V", record.verification_status),
             ("D", record.determination_status),
             ("R", record.recording_status),
@@ -553,9 +613,10 @@ def _layer_mask(record: EvidenceRecord) -> str:
 
 
 def _default_unknown_reason(record: EvidenceRecord) -> str:
-    if record.source_opportunity is False:
+    opportunity = _observation_opportunity(record)
+    if opportunity is False:
         return "NO_OBSERVATION_OPPORTUNITY"
-    if record.source_opportunity is None:
+    if opportunity is None:
         return "OBSERVATION_OPPORTUNITY_UNKNOWN"
     if record.recording_status is False:
         return "DETERMINATION_NOT_RECORDED"
@@ -572,7 +633,7 @@ def _record_signature(record: EvidenceRecord) -> tuple[object, ...]:
         record.period_link_confidence,
         record.temporal_role,
         record.availability_basis,
-        record.source_opportunity,
+        _observation_opportunity(record),
         record.verification_status,
         record.determination_status,
         record.recording_status,

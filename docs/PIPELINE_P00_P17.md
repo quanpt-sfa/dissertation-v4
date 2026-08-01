@@ -25,6 +25,8 @@ nguồn kiểm tra cuối cùng.
 - Mọi artifact chính thức đi qua `RunContext` và `ArtifactStore`.
 - Physical column được giải từ registry; stage chỉ dùng logical semantic keys.
 - Thiếu nguồn không phải bằng chứng zero.
+- Mỗi source-result lưu vật lý quá trình `O → V → D → R → S`; lớp chưa quan sát giữ null, không suy diễn từ provenance.
+- `S=0` là observed source-endpoint zero, không phải latent non-fraud và không tự chứng minh V/D/R.
 - Follow-up chưa trưởng thành không phải outcome âm.
 - Content predictors không được vào label model.
 - Hierarchical-π chỉ là sensitivity, không được vào Gate 1 selection.
@@ -228,20 +230,38 @@ Reads: `firm_year_panel`, `raw_audit` và source spec đã khóa.
 
 Writes:
 
-- `evidence_ledger.parquet`;
+- `evidence_ledger.parquet` schema v7, gồm các cột vật lý `observation_opportunity`, `verification_status`, `determination_status`, `recording_status`, `observed_source_label`, ngày theo tầng, mask và lý do unknown;
 - `sanction_decision_ledger.parquet`;
 - `availability_registry.json`;
 - `lag_decomposition.json`.
 
 Hàng rào:
 
-- S3 source year complete và không có quyết định endpoint mới tạo explicit `False`;
-- S3 source year incomplete, ngoài universe hoặc taxonomy không đủ vẫn là unknown;
+- S3 source year complete và không có quyết định endpoint tạo observed endpoint zero (`S=0`), nhưng V/D/R vẫn unknown nếu không có hồ sơ xác minh;
+- S3 source year incomplete, ngoài universe hoặc taxonomy không đủ vẫn là unknown và phải có `reason_unknown`;
+- chỉ public positive S3 endpoint cho phép materialize `V=D=R=S=1`; migration không được suy ngược V/D/R từ `S=0`;
 - cùng `document_id` cho nhiều firm giữ nhiều firm mappings nhưng decision count vẫn theo
   unique `document_id`;
 - event không link được ghi `UNLINKED_FIRM_YEAR`, không ép vào endpoint;
 - lag identity phải đúng trong tolerance từ `evidence.yaml`;
 - delisting/merger không tự động là negative.
+
+
+### Migration evidence ledger v6 → v7
+
+Run cũ dùng schema v6 được nâng cấp bằng lệnh fail-closed:
+
+```powershell
+uv run python scripts/migrate_evidence_ledger_v6_to_v7.py `
+  --config config/pipeline.yaml `
+  --input <evidence_ledger_v6.parquet> `
+  --output <evidence_ledger_v7.parquet> `
+  --audit-output <migration_audit.json>
+```
+
+Migration giữ `source_opportunity` và `outcome` làm alias tương thích, không bịa ngày
+V/D/R và không coi observed endpoint zero là xác nhận không gian lận. Artifact v7 phải
+qua schema registry trước khi được ghi.
 
 ## 9. P04 — Risk set, maturity, prospective và censoring
 
@@ -506,7 +526,7 @@ Mục tiêu:
 - chạy search space đã khóa với tối đa 50 valid configurations, ghi runtime và
   valid/evaluated counts; thiếu search space của learner confirmatory thì dừng;
 - luôn fit Track A trên L1; fit Track B thật trên L2/L3 được P10 chọn;
-- fit bagging Anchor-PU chỉ từ positive của source neo đã đăng ký;
+- fit bagging PU chỉ từ positive của kênh bằng chứng dương đã đăng ký; tên method legacy có thể giữ chữ anchor nhưng không hàm ý specificity cao;
 - tạo observability-only, content-only và full comparisons;
 - fit imputation/scaling/model trong temporal development folds;
 - tạo development OOF predictions;
@@ -575,6 +595,13 @@ Hàng rào:
 - P10/P11 không được ghi lại sau outer open.
 
 ## 18. P13 — Sensitivity và transfer
+
+P13 phân biệt `identified_set`, `sensitivity_region` và `scenario_envelope`.
+Tài liệu bên ngoài chỉ là căn cứ độc lập cho sự cần thiết của partial
+identification; một bound chỉ được nâng thành identified set khi restriction đã
+đăng ký, có giá trị số cho quần thể mục tiêu, có đánh giá khả chuyển và được phê
+duyệt. Các nghiên cứu đã đăng ký hiện chưa cung cấp bound số được xác nhận cho
+firm-year niêm yết Việt Nam, nên mặc định vẫn là sensitivity-only.
 
 Script: `scripts/p13_sensitivity.py`.
 

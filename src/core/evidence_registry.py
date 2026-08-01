@@ -5,7 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, cast
 
-from core.semantic_keys import CHANNEL_ID, DOCUMENT_ID, SOURCE_ID, TEMPORAL_ROLE
+from core.semantic_keys import (
+    CHANNEL_ID,
+    DOCUMENT_ID,
+    SOURCE_ID,
+    TEMPORAL_ROLE,
+    VERIFICATION_STATUS,
+)
 
 
 @dataclass(frozen=True)
@@ -54,7 +60,7 @@ def logical_evidence_sources(registry: dict[str, object]) -> dict[str, LogicalEv
         channel_id = _string(source.get(CHANNEL_ID), f"source={physical_source_id}.channel_id")
         profile_id = _string(source.get("profile_id"), f"source={physical_source_id}.profile_id")
         verification = _string(
-            source.get("verification_status"), f"source={physical_source_id}.verification_status"
+            source.get(VERIFICATION_STATUS), f"source={physical_source_id}.verification_status"
         )
         opportunity_raw = evidence.get("opportunity_semantic")
         opportunity = str(opportunity_raw) if isinstance(opportunity_raw, str) else None

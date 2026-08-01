@@ -227,7 +227,7 @@ schemas:
     compatibility_policy: strict
   evidence_ledger_frame:
     contract_type: dataframe
-    version: 6
+    version: 7
     columns:
     - column: firm_id
       dtype: string
@@ -265,9 +265,39 @@ schemas:
     - column: source_opportunity
       dtype: boolean
       nullable: true
+    - column: observation_opportunity
+      dtype: boolean
+      nullable: true
     - column: opportunity_basis
       dtype: string
       nullable: false
+    - column: verification_status
+      dtype: boolean
+      nullable: true
+    - column: determination_status
+      dtype: boolean
+      nullable: true
+    - column: recording_status
+      dtype: boolean
+      nullable: true
+    - column: observed_source_label
+      dtype: boolean
+      nullable: true
+    - column: verification_date
+      dtype: datetime64[ns]
+      nullable: true
+    - column: determination_date
+      dtype: datetime64[ns]
+      nullable: true
+    - column: recording_date
+      dtype: datetime64[ns]
+      nullable: true
+    - column: layer_observed_mask
+      dtype: string
+      nullable: false
+    - column: reason_unknown
+      dtype: string
+      nullable: true
     - column: evidence_value
       dtype: float64
       nullable: true

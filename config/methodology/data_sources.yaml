@@ -16,11 +16,14 @@ data_sources:
     recording_process_observed_by_default: false
     legacy_high_confirmation_metadata_role: provenance_only
   anchor:
+    preferred_term: positive_evidence_channel
     eligible_source_types:
     - official
     - judicial
     high_confirmation_required: false
+    high_specificity_assumed: false
     clean_positive_assumption_role: sensitivity_only
+    legacy_anchor_vocabulary_role: compatibility_only
     false_positive_rate_grid:
     - 0.0
     - 0.01

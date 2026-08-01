@@ -114,11 +114,51 @@ columns:
   source_opportunity:
     physical_name: source_opportunity
     dtype: bool
-    semantic_role: source_opportunity_indicator
+    semantic_role: legacy_observation_opportunity_alias
+  observation_opportunity:
+    physical_name: observation_opportunity
+    dtype: bool
+    semantic_role: measurement_observation_opportunity
   opportunity_basis:
     physical_name: opportunity_basis
     dtype: string
     semantic_role: source_opportunity_provenance
+  verification_status:
+    physical_name: verification_status
+    dtype: bool
+    semantic_role: selective_verification_indicator
+  determination_status:
+    physical_name: determination_status
+    dtype: bool
+    semantic_role: source_specific_determination_indicator
+  recording_status:
+    physical_name: recording_status
+    dtype: bool
+    semantic_role: public_recording_indicator
+  observed_source_label:
+    physical_name: observed_source_label
+    dtype: bool
+    semantic_role: source_specific_observed_label
+  verification_date:
+    physical_name: verification_date
+    dtype: datetime64[ns]
+    semantic_role: verification_observation_date
+  determination_date:
+    physical_name: determination_date
+    dtype: datetime64[ns]
+    semantic_role: determination_observation_date
+  recording_date:
+    physical_name: recording_date
+    dtype: datetime64[ns]
+    semantic_role: recording_observation_date
+  layer_observed_mask:
+    physical_name: layer_observed_mask
+    dtype: string
+    semantic_role: ovdrs_layer_observation_mask
+  reason_unknown:
+    physical_name: reason_unknown
+    dtype: string
+    semantic_role: missing_source_label_reason
   evidence_value:
     physical_name: evidence_value
     dtype: float64

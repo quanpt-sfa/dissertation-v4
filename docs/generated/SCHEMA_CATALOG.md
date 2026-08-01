@@ -40,7 +40,7 @@ Version: 1
 
 ## evidence_ledger_frame
 
-Version: 6
+Version: 7
 
 ## feature_availability_audit_frame
 

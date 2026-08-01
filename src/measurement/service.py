@@ -195,7 +195,7 @@ def build_measurement_inputs(
             value = event[outcome]
             parsed = None if pd.isna(cast(Any, value)) else bool(value)
             if parsed is False and negative_policy[source_id] is not True:
-                raise ValueError(f"source={source_id}: explicit negative is not allowed")
+                raise ValueError(f"source={source_id}: observed endpoint zero is not allowed")
             source_events[source_id].append((parsed, lag_days))
             raw_opportunity = event.get(opportunity)
             source_opportunity_values[source_id].append(
@@ -426,9 +426,14 @@ def build_measurement_inputs(
         },
         anchor_capability={
             "status": "AVAILABLE" if anchor_ids else unavailable_status,
+            "positive_evidence_source_ids": anchor_ids,
             "anchor_source_ids": anchor_ids,
-            "reason_code": None if anchor_ids else "ANCHOR_UNAVAILABLE",
+            "legacy_anchor_source_ids_role": "compatibility_only",
+            "reason_code": (
+                None if anchor_ids else "POSITIVE_EVIDENCE_CHANNEL_UNAVAILABLE"
+            ),
             "clean_positive_assumption": False,
+            "high_specificity_assumption": False,
         },
         target_maturity=target_maturity_frame,
     )

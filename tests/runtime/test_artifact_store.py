@@ -129,10 +129,22 @@ def test_nullable_evidence_outcome_matches_dataframe_contract(tmp_path: Path) ->
             "availability_basis": pd.Series(
                 ["actual_publish_date", "actual_publish_date"], dtype="string"
             ),
-            "source_opportunity": pd.Series([pd.NA, pd.NA], dtype="boolean"),
+            "source_opportunity": pd.Series([True, pd.NA], dtype="boolean"),
+            "observation_opportunity": pd.Series([True, pd.NA], dtype="boolean"),
             "opportunity_basis": pd.Series(
-                ["unknown_no_opportunity_indicator", "unknown_no_opportunity_indicator"],
+                ["observed_public_endpoint", "unknown_no_opportunity_indicator"],
                 dtype="string",
+            ),
+            "verification_status": pd.Series([True, pd.NA], dtype="boolean"),
+            "determination_status": pd.Series([True, pd.NA], dtype="boolean"),
+            "recording_status": pd.Series([True, pd.NA], dtype="boolean"),
+            "observed_source_label": pd.Series([True, pd.NA], dtype="boolean"),
+            "verification_date": pd.Series([pd.NaT, pd.NaT], dtype="datetime64[ns]"),
+            "determination_date": pd.Series([pd.NaT, pd.NaT], dtype="datetime64[ns]"),
+            "recording_date": pd.Series([pd.NaT, pd.NaT], dtype="datetime64[ns]"),
+            "layer_observed_mask": pd.Series(["OVDRS", "-----"], dtype="string"),
+            "reason_unknown": pd.Series(
+                [pd.NA, "OBSERVATION_OPPORTUNITY_UNKNOWN"], dtype="string"
             ),
             "evidence_value": pd.Series([float("nan"), float("nan")], dtype="float64"),
             "evidence_category": pd.Series([pd.NA, pd.NA], dtype="string"),

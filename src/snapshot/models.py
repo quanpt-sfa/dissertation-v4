@@ -12,7 +12,7 @@ SourceFormat = Literal["csv", "tsv", "parquet", "json", "jsonl", "xlsx"]
 AvailabilityDateRule = Literal["physical_column", "fiscal_year_plus_one_month_day"]
 RowAggregation = Literal["one_row_per_firm_year", "firm_year_presence"]
 EvidenceOutcomeMode = Literal["direct_outcome", "positive_indicator"]
-EvidenceAbsencePolicy = Literal["unknown", "explicit_false_when_complete_source_year"]
+EvidenceAbsencePolicy = Literal["unknown", "observed_endpoint_zero_when_complete_source_year"]
 EvidenceProcessor = Literal[
     "delayed_event",
     "audit_adjustment",
@@ -213,7 +213,7 @@ class EvidenceProfile:
         if false_indicator_policy != "unknown":
             raise ValueError(f"{context}.false_indicator_policy must be unknown")
         absence_policy = raw.get("absence_policy")
-        if absence_policy not in {"unknown", "explicit_false_when_complete_source_year"}:
+        if absence_policy not in {"unknown", "observed_endpoint_zero_when_complete_source_year"}:
             raise ValueError(f"{context}.absence_policy: unsupported {absence_policy}")
         opportunity = raw.get("opportunity_semantic")
         if opportunity is not None:
@@ -275,9 +275,10 @@ class EvidenceProfile:
                 raise ValueError(
                     f"{context}: complete sanction source years must allow endpoint false"
                 )
-            if absence_policy != "explicit_false_when_complete_source_year":
+            if absence_policy != "observed_endpoint_zero_when_complete_source_year":
                 raise ValueError(
-                    f"{context}: sanction absence is false only after source-year completeness"
+                    f"{context}: sanction absence is an observed endpoint zero only after "
+                    "source-year completeness"
                 )
             required_pairs = {
                 "target_year_rule": "sanction_year_minus_one",
@@ -369,7 +370,7 @@ class EvidenceProfile:
             row_inclusion_semantic=row_inclusion,
             positive_semantic=positive_semantic,
             false_indicator_policy="unknown",
-            absence_policy="unknown",
+            absence_policy=cast(EvidenceAbsencePolicy, absence_policy),
             opportunity_semantic=opportunity,
             duplicate_representative_rule=duplicate_rule,
             logical_sources=tuple(logical_sources),

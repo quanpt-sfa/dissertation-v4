@@ -198,7 +198,7 @@ def _evidence_sources(
 ) -> tuple[dict[str, str], list[str], dict[str, str], dict[str, str], dict[str, bool]]:
     sources = logical_evidence_sources(registry)
     result: dict[str, str] = {}
-    anchors: list[str] = []
+    positive_evidence_sources: list[str] = []
     profiles: dict[str, str] = {}
     temporal_roles: dict[str, str] = {}
     negative_policy: dict[str, bool] = {}
@@ -207,11 +207,11 @@ def _evidence_sources(
         profiles[source_id] = source.profile_id
         temporal_roles[source_id] = source.temporal_role
         negative_policy[source_id] = source.explicit_negative_allowed
-        if source.verification_status == "high_confirmation":
-            anchors.append(source_id)
+        if source.verification_status == "selectively_observed_enforcement_proxy":
+            positive_evidence_sources.append(source_id)
     if not result:
         raise ValueError("P05 requires registered evidence sources")
-    return result, anchors, profiles, temporal_roles, negative_policy
+    return result, positive_evidence_sources, profiles, temporal_roles, negative_policy
 
 
 def _execute_l3_pilot(

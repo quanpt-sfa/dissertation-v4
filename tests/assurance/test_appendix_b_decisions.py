@@ -49,7 +49,7 @@ def test_T003_source_set(registry: dict[str, Any]) -> None:
 
 
 def test_T004_anchor_source(registry: dict[str, Any]) -> None:
-    canonical(registry, "D04", "Nguồn neo")
+    canonical(registry, "D04", "Kênh bằng chứng thực thi")
     assert get(registry, "data_sources.anchor.false_positive_rate_grid") == [0.0, 0.01, 0.03, 0.05]
 
 
@@ -85,7 +85,7 @@ def test_T005_primary_outcome(registry: dict[str, Any]) -> None:
 
 
 def test_T006_prior_accuracy(registry: dict[str, Any]) -> None:
-    canonical(registry, "D06", "Miền prior/accuracy")
+    canonical(registry, "D06", "Miền hạn chế nhận dạng")
     assert get(registry, "measurement.prior_accuracy_domain.primary_prior") == "fixed_pi_grid"
     assert (
         get(registry, "measurement.prior_accuracy_domain.hierarchical_prior_role")

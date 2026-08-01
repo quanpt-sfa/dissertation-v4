@@ -74,6 +74,100 @@ measurement:
     high_specificity_anchor_assumed: false
     enforcement_proxy_role: selectively_observed_positive_evidence
     independent_justification_required: true
+    legacy_global_justification_flag_role: ignored_fail_closed
+    identified_set_gate:
+      require_registered_restriction: true
+      require_independent_source: true
+      require_target_population_transportability: true
+      require_formal_approval: true
+      require_numeric_value_for_numeric_bound: true
+    evidence_basis_registry:
+      kedia_rajgopal_2011:
+        citation_key: kedia2011sec
+        contribution: enforcement_selection_depends_on_regulatory_resources_and_proximity
+        source_type: peer_reviewed_accounting_research
+        independent_of_study_outcomes: true
+        source_scope: us_sec_enforcement
+        provides_numeric_bound_for_vietnam: false
+      kubic_2021:
+        citation_key: kubic2021examiners
+        contribution: regulatory_review_does_not_observe_all_errors
+        source_type: peer_reviewed_accounting_research
+        independent_of_study_outcomes: true
+        source_scope: us_sec_filing_review
+        provides_numeric_bound_for_vietnam: false
+      dyck_morse_zingales_2024:
+        citation_key: dyck2024how
+        contribution: detected_corporate_fraud_is_a_selected_subset_of_latent_occurrence
+        source_type: peer_reviewed_accounting_research
+        independent_of_study_outcomes: true
+        source_scope: us_public_firms
+        correction_checked: true
+        provides_numeric_bound_for_vietnam: false
+      hahn_murray_manolopoulou_2016:
+        citation_key: hahn2016bayesian
+        contribution: accounting_misconduct_prevalence_can_require_partial_identification
+        source_type: peer_reviewed_statistical_accounting_method
+        independent_of_study_outcomes: true
+        source_scope: methodological
+        provides_numeric_bound_for_vietnam: false
+    restriction_registry:
+      enforcement_false_positive_upper:
+        parameter: P(S=1|Y*=0)
+        restriction_type: numeric_upper_bound
+        analytical_role: sensitivity_only
+        source_ids:
+        - kedia_rajgopal_2011
+        - kubic_2021
+        - dyck_morse_zingales_2024
+        target_population: vietnam_listed_firm_year
+        transportability_status: not_established
+        approval_status: not_approved
+        eligible_for_identified_set: false
+        blocking_reasons:
+        - no_external_numeric_bound_for_target_population
+        - transportability_to_vietnam_not_established
+      enforcement_sensitivity_lower:
+        parameter: P(S=1|Y*=1)
+        restriction_type: numeric_lower_bound
+        analytical_role: sensitivity_only
+        source_ids:
+        - kubic_2021
+        - dyck_morse_zingales_2024
+        target_population: vietnam_listed_firm_year
+        transportability_status: not_established
+        approval_status: not_approved
+        eligible_for_identified_set: false
+        blocking_reasons:
+        - no_external_numeric_bound_for_target_population
+        - transportability_to_vietnam_not_established
+      adjudication_specificity_lower:
+        parameter: P(D=0|Y*=0,V=1)
+        restriction_type: numeric_lower_bound
+        analytical_role: sensitivity_only
+        source_ids:
+        - kedia_rajgopal_2011
+        - kubic_2021
+        target_population: vietnam_listed_firm_year
+        transportability_status: not_established
+        approval_status: not_approved
+        eligible_for_identified_set: false
+        blocking_reasons:
+        - adjudication_error_rate_not_observed
+        - transportability_to_vietnam_not_established
+      verification_selection_ordering:
+        parameter: P(V=1|Y*=1)>=P(V=1|Y*=0)
+        restriction_type: shape_restriction
+        analytical_role: sensitivity_only
+        source_ids:
+        - kedia_rajgopal_2011
+        - dyck_morse_zingales_2024
+        target_population: vietnam_listed_firm_year
+        transportability_status: not_established
+        approval_status: not_approved
+        eligible_for_identified_set: false
+        blocking_reasons:
+        - direction_is_plausible_but_not_identified_in_target_population
     restrictions:
       enforcement_false_positive_upper: null
       enforcement_sensitivity_lower: null

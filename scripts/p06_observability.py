@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from core.evidence_registry import logical_evidence_sources
 from core.pipeline import load_run, mapping
-from core.semantic_keys import CHANNEL_ID, TEMPORAL_ROLE
+from core.semantic_keys import CHANNEL_ID, TEMPORAL_ROLE, VERIFICATION_STATUS
 from observability.service import build_observability_registry
 
 
@@ -36,7 +36,7 @@ def main() -> int:
     metadata = {
         source_id: {
             CHANNEL_ID: value.channel_id,
-            "verification_status": value.verification_status,
+            VERIFICATION_STATUS: value.verification_status,
             TEMPORAL_ROLE: value.temporal_role,
             "availability_rule": value.availability_rule,
             "explicit_negative_allowed": value.explicit_negative_allowed,

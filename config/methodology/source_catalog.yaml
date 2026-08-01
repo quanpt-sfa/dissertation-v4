@@ -104,7 +104,9 @@ source_catalog:
       source_agency: enforcement_decision_ledger
       original_unit: enforcement-event
       role: evidence
-      verification_status: high_confirmation
+      verification_status: selectively_observed_enforcement_proxy
+      measurement_process_role: public_positive_evidence_with_selective_verification
+      high_specificity_assumed: false
       coverage_dimensions:
       - sanction_year
       - construct_family
@@ -166,10 +168,20 @@ source_catalog:
         - decision_date
         affected_fiscal_year_role: sensitivity_provenance_only
         explicit_negative_allowed: true
+        observed_endpoint_zero_allowed: true
+        legacy_explicit_negative_term_deprecated: true
         row_inclusion_semantic: row_inclusion
         positive_semantic: hard_positive
-        absence_policy: explicit_false_when_complete_source_year
+        absence_policy: observed_endpoint_zero_when_complete_source_year
+        zero_label_interpretation: observed_source_endpoint_zero_not_latent_negative
         opportunity_semantic: derived_source_year_completeness
+        measurement_process:
+          observation_opportunity: derived_source_year_completeness
+          verification: observed_true_only_for_public_positive_endpoint
+          determination: endpoint_specific_public_determination
+          recording: public_decision_recorded
+          observed_source_label: endpoint_incidence_in_complete_source_year
+          high_specificity_assumed: false
         duplicate_representative_rule: identical_signature_then_document_id_firm
         taxonomy_registry: s3_taxonomy
         logical_sources:
@@ -543,7 +555,9 @@ source_catalog:
       source_agency: independent_case_review
       original_unit: case-firm-year
       role: known_case
-      verification_status: high_confirmation
+      verification_status: externally_reviewed_positive_case
+      measurement_process_role: external_falsification_positive_evidence
+      high_specificity_assumed: false
       coverage_dimensions:
       - year
       data_risks:

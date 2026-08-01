@@ -19,9 +19,9 @@ appendix_b:
     lock_status: Khóa sau evidence audit
     chapter_reference: Appendix B, Table B.1, D03
   D04:
-    canonical_title: Nguồn neo
-    main_specification: Nguồn chính thức hoặc tư pháp có độ xác nhận cao theo tiêu chí.
-    sensitivity_or_rule: 1 − SpA ∈ {0, 0.01, 0.03, 0.05}.
+    canonical_title: Kênh bằng chứng thực thi
+    main_specification: Nguồn thực thi chính thức được xem là proxy bằng chứng dương quan sát có chọn lọc; không mặc định độ đặc hiệu cao.
+    sensitivity_or_rule: Các bound về false-positive và sensitivity chỉ tạo sensitivity region, trừ khi restriction có căn cứ độc lập và phù hợp phạm vi nghiên cứu.
     lock_status: Khóa trước L3
     chapter_reference: Appendix B, Table B.1, D04
   D05:
@@ -31,9 +31,9 @@ appendix_b:
     lock_status: Đã chốt
     chapter_reference: Appendix B, Table B.1, D05
   D06:
-    canonical_title: Miền prior/accuracy
-    main_specification: Lower bound từ nguồn xác nhận cao; upper bound từ coverage và likelihood.
-    sensitivity_or_rule: Fixed-π grid chính; hierarchical prior là độ nhạy.
+    canonical_title: Miền hạn chế nhận dạng
+    main_specification: Chỉ restriction đã đăng ký, có nguồn độc lập, đánh giá khả chuyển và phê duyệt mới được dùng để tạo identified set.
+    sensitivity_or_rule: Fixed-π, Se/Sp grid và hierarchical prior chưa đủ căn cứ chỉ là sensitivity region hoặc scenario envelope.
     lock_status: Khóa trước L3
     chapter_reference: Appendix B, Table B.1, D06
   D07:
@@ -44,8 +44,8 @@ appendix_b:
     chapter_reference: Appendix B, Table B.1, D07
   D08:
     canonical_title: Learner roster
-    main_specification: Elastic-net logistic, random forest, một boosting chính; nhánh Anchor-PU.
-    sensitivity_or_rule: Noisy-positive PU và mô hình khác là độ nhạy.
+    main_specification: Elastic-net logistic, random forest, một boosting chính; nhánh PU theo kênh bằng chứng dương.
+    sensitivity_or_rule: Method ID legacy có thể giữ chữ anchor để tương thích; không diễn giải nguồn dương là clean/high-specificity anchor.
     lock_status: Đã chốt
     chapter_reference: Appendix B, Table B.1, D08
   D09:
@@ -100,8 +100,8 @@ appendix_b:
     chapter_reference: Appendix B, Table B.1, D16
   D17:
     canonical_title: Mô hình L3
-    main_specification: Fixed-π latent class, source-specific Se/Sp, channel random effect, MCMC.
-    sensitivity_or_rule: Hierarchical prior và pairwise dependence là độ nhạy.
+    main_specification: Fixed-π latent class, source-specific Se/Sp, channel random effect và MCMC; Se/Sp không được xem là đã nhận dạng nếu thiếu căn cứ độc lập.
+    sensitivity_or_rule: Hierarchical prior, pairwise dependence và mọi prior accuracy chưa được xác nhận là độ nhạy.
     lock_status: Khóa sau pilot
     chapter_reference: Appendix B, Table B.1, D17
   D18:
@@ -167,8 +167,8 @@ appendix_b:
     chapter_reference: Appendix B, Table B.1, D27
   D28:
     canonical_title: Tập dương PU
-    main_specification: Anchor-PU chỉ dùng nguồn neo.
-    sensitivity_or_rule: Noisy-positive PU là độ nhạy; L1 không gọi là PU sạch.
+    main_specification: PU chỉ dùng tập dương từ kênh bằng chứng đã đăng ký; S=0 vẫn là unlabeled/observed endpoint zero, không phải latent negative.
+    sensitivity_or_rule: Không gọi tập dương là clean anchor; noisy-positive PU và sai số hai phía là độ nhạy.
     lock_status: Đã chốt
     chapter_reference: Appendix B, Table B.1, D28
   D29:
@@ -239,20 +239,20 @@ appendix_b:
     chapter_reference: Appendix B, Table B.1, D39
   D40:
     canonical_title: Cơ chế sinh dữ liệu
-    main_specification: Sinh Y*, V/O, nguồn Sj, phụ thuộc kênh, độ trễ và dịch chuyển.
+    main_specification: Sinh Y*, rồi tách O, V, D, R và S theo từng nguồn; đồng thời sinh phụ thuộc kênh, độ trễ và dịch chuyển.
     sensitivity_or_rule: Đặc tả đúng/sai của L3 đều được kiểm tra.
     lock_status: Khóa trước chạy
     chapter_reference: Appendix B, Table B.1, D40
   D41:
     canonical_title: Không gian kịch bản
-    main_specification: Prevalence, Se/Sp, dependence, verification, delay, shift, cỡ mẫu và signal structure.
+    main_specification: Prevalence, sai số nguồn, O/V/D/R, phụ thuộc, delay, shift, cỡ mẫu và signal structure.
     sensitivity_or_rule: Kịch bản cơ sở cộng stress blocks; không chạy tích Descartes toàn phần.
     lock_status: Khóa trước chạy
     chapter_reference: Appendix B, Table B.1, D41
   D42:
     canonical_title: Phương pháp mô phỏng
-    main_specification: L0–L3, logistic, boosting, observability/content/full và Anchor-PU; oracle chỉ làm chuẩn trên.
-    sensitivity_or_rule: Noisy-positive PU và đặc tả sai là sensitivity.
+    main_specification: L0–L3, logistic, boosting, observability/content/full và PU theo kênh bằng chứng dương; oracle chỉ làm chuẩn trên.
+    sensitivity_or_rule: Noisy-positive PU, sai số hai phía và đặc tả sai là sensitivity.
     lock_status: Đã chốt
     chapter_reference: Appendix B, Table B.1, D42
   D43:
