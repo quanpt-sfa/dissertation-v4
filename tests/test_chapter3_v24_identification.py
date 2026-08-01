@@ -137,7 +137,8 @@ def test_registered_project_literature_does_not_create_vietnam_bounds() -> None:
         "restrictions_used": [],
         "status": "UNINFORMATIVE_WITHOUT_RESTRICTIONS",
     }
-    assert set(summary["identification_basis_source_ids"]) >= {
+    basis_source_ids = cast(list[str], summary["identification_basis_source_ids"])
+    assert set(basis_source_ids) >= {
         "kedia_rajgopal_2011",
         "kubic_2021",
         "dyck_morse_zingales_2024",
