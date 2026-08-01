@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 import pytest
 
@@ -106,10 +108,12 @@ def test_legacy_high_confirmation_metadata_is_not_observed_verification() -> Non
             }
         },
     )
-    source = registry["sources"]["S3_CONTENT"]
+    sources = cast(dict[str, dict[str, Any]], registry["sources"])
+    source = sources["S3_CONTENT"]
+    terminology = cast(dict[str, Any], registry["terminology_contract"])
     assert source["verification_classification"] == "unknown"
     assert source["legacy_high_confirmation_is_not_verification"] is True
-    assert registry["terminology_contract"]["high_confirmation_is_observed_verification"] is False
+    assert terminology["high_confirmation_is_observed_verification"] is False
 
 
 def test_measurement_process_rejects_o_zero_with_observed_s() -> None:
@@ -153,8 +157,7 @@ def test_simulation_generates_distinct_ovdr_layers() -> None:
         "simulation_feature_count": 12,
     }
     generated = _generate_replication_v24(scenario, np.random.default_rng(20260801))
-    process = generated["measurement_process"]
-    assert isinstance(process, dict)
+    process = cast(dict[str, dict[str, np.ndarray]], generated["measurement_process"])
     for source in ("anchor", "weak"):
         layers = process[source]
         assert set(layers) == {"O", "V", "D", "R"}
