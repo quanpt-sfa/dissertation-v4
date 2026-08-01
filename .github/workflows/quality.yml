@@ -1,155 +1,40 @@
-name: fix-phase2-pyright
+name: quality
 
-on: [push]
-
-permissions:
-  contents: write
+on: [push, pull_request]
 
 jobs:
-  fix:
+  p0:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: sync/chapter3-v24-identification
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --all-extras
-      - name: Apply typed patches
-        shell: bash
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
+      - run: uv run pytest --collect-only -q
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - name: Pyright ratchet for pull requests
+        if: github.event_name == 'pull_request'
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          def replace_once(path: str, old: str, new: str) -> None:
-              target = Path(path)
-              text = target.read_text(encoding="utf-8")
-              if new in text:
-                  return
-              if old not in text:
-                  raise RuntimeError(f"expected patch context missing in {path}")
-              target.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-          replace_once(
-              "src/evidence/migration.py",
-              '''    expected_reasons = result.apply(_row_reason_unknown, axis=1).astype("string")
-    if REASON_UNKNOWN in result.columns:
-        existing_reason = result[REASON_UNKNOWN].astype("string")
-        observed_with_reason = result[OBSERVED_SOURCE_LABEL].notna() & existing_reason.notna()
-        if bool(observed_with_reason.any()):
-            raise ValueError("reason_unknown cannot be populated when S is observed")
-        expected_reasons = existing_reason.fillna(expected_reasons)
-    result[REASON_UNKNOWN] = expected_reasons
-''',
-              '''    expected_reasons = pd.Series(
-        "SOURCE_LABEL_UNKNOWN",
-        index=result.index,
-        dtype="string",
-    )
-    source_label_observed = result[OBSERVED_SOURCE_LABEL].notna()
-    opportunity = result[OBSERVATION_OPPORTUNITY].astype("boolean")
-    recording = result[RECORDING_STATUS].astype("boolean")
-    expected_reasons.loc[source_label_observed] = pd.NA
-    expected_reasons.loc[~source_label_observed & opportunity.isna()] = (
-        "OBSERVATION_OPPORTUNITY_UNKNOWN"
-    )
-    expected_reasons.loc[~source_label_observed & opportunity.eq(False)] = (
-        "NO_OBSERVATION_OPPORTUNITY"
-    )
-    expected_reasons.loc[
-        ~source_label_observed & opportunity.eq(True) & recording.eq(False)
-    ] = "DETERMINATION_NOT_RECORDED"
-    if REASON_UNKNOWN in result.columns:
-        existing_reason = result[REASON_UNKNOWN].astype("string")
-        observed_with_reason = source_label_observed & existing_reason.notna()
-        if bool(observed_with_reason.any()):
-            raise ValueError("reason_unknown cannot be populated when S is observed")
-        expected_reasons = existing_reason.fillna(expected_reasons)
-    result[REASON_UNKNOWN] = expected_reasons
-''',
-          )
-
-          replace_once(
-              "src/identification/service.py",
-              '''    spec = _string_object_mapping(raw_spec, f"restriction_registry.{restriction_id}")
-    raw_source_ids = spec.get("source_ids", [])
-    if not isinstance(raw_source_ids, list) or not all(
-        isinstance(item, str) and item for item in raw_source_ids
-    ):
-        raise ValueError(f"restriction={restriction_id}: source_ids must be strings")
-    source_ids = cast(list[str], raw_source_ids)
-''',
-              '''    spec = _string_object_mapping(
-        cast(object, raw_spec),
-        f"restriction_registry.{restriction_id}",
-    )
-    raw_source_ids: object = spec.get("source_ids", [])
-    if not isinstance(raw_source_ids, list):
-        raise ValueError(f"restriction={restriction_id}: source_ids must be strings")
-    source_items = cast(list[object], raw_source_ids)
-    if not all(isinstance(item, str) and item for item in source_items):
-        raise ValueError(f"restriction={restriction_id}: source_ids must be strings")
-    source_ids = [item for item in source_items if isinstance(item, str)]
-''',
-          )
-          replace_once(
-              "src/identification/service.py",
-              '''    raw_blocking = spec.get("blocking_reasons", [])
-    if not isinstance(raw_blocking, list) or not all(
-        isinstance(item, str) for item in raw_blocking
-    ):
-        raise ValueError(f"restriction={restriction_id}: blocking_reasons must be strings")
-''',
-              '''    raw_blocking: object = spec.get("blocking_reasons", [])
-    if not isinstance(raw_blocking, list):
-        raise ValueError(f"restriction={restriction_id}: blocking_reasons must be strings")
-    blocking_items = cast(list[object], raw_blocking)
-    if not all(isinstance(item, str) for item in blocking_items):
-        raise ValueError(f"restriction={restriction_id}: blocking_reasons must be strings")
-    registered_blocking = [item for item in blocking_items if isinstance(item, str)]
-''',
-          )
-          replace_once(
-              "src/identification/service.py",
-              '''        "blocking_reasons": sorted(set(cast(list[str], raw_blocking) + computed_reasons))
-        if active
-        else [],
-''',
-              '''        "blocking_reasons": sorted(set(registered_blocking + computed_reasons))
-        if active
-        else [],
-''',
-          )
-
-          replace_once(
-              "tests/test_chapter3_v24_identification.py",
-              '''    assert set(summary["identification_basis_source_ids"]) >= {
-''',
-              '''    basis_source_ids = cast(list[str], summary["identification_basis_source_ids"])
-    assert set(basis_source_ids) >= {
-''',
-          )
-          PY
-          uv run ruff check --fix \
-            src/evidence/migration.py \
-            src/identification/service.py \
-            tests/test_chapter3_v24_identification.py
-          uv run ruff format \
-            src/evidence/migration.py \
-            src/identification/service.py \
-            tests/test_chapter3_v24_identification.py
-      - name: Commit typed patches
+          uv run python scripts/check_pyright_ratchet.py \
+            --baseline config/quality/pyright_baseline.json \
+            --diff-base "${{ github.event.pull_request.base.sha }}" \
+            --report artifacts/quality/pyright_ratchet_report.json
+      - name: Pyright ratchet for pushes
+        if: github.event_name == 'push'
         run: |
-          files=(
-            src/evidence/migration.py
-            src/identification/service.py
-            tests/test_chapter3_v24_identification.py
-          )
-          if git diff --quiet -- "${files[@]}"; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${files[@]}"
-          git commit -m "fix: satisfy Pyright for identification provenance and ledger migration"
-          git push origin HEAD:sync/chapter3-v24-identification
+          uv run python scripts/check_pyright_ratchet.py \
+            --baseline config/quality/pyright_baseline.json \
+            --report artifacts/quality/pyright_ratchet_report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyright-ratchet-report
+          path: artifacts/quality/pyright_ratchet_report.json
+          if-no-files-found: ignore
+      - run: uv run pytest -q
+      - run: uv run pre-commit run --all-files
