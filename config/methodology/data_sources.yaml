@@ -8,11 +8,19 @@ data_sources:
     firm_year_link_reliability_required: true
   source_set_changes_create_new_estimand: true
   leave_one_channel_out_required: true
+  enforcement_proxy:
+    role: selectively_observed_positive_evidence
+    high_specificity_assumed: false
+    adjudication_specificity_identified: false
+    verification_selection_observed_by_default: false
+    recording_process_observed_by_default: false
+    legacy_high_confirmation_metadata_role: provenance_only
   anchor:
     eligible_source_types:
     - official
     - judicial
-    high_confirmation_required: true
+    high_confirmation_required: false
+    clean_positive_assumption_role: sensitivity_only
     false_positive_rate_grid:
     - 0.0
     - 0.01
