@@ -20,8 +20,6 @@ for _name in (
 ):
     os.environ.setdefault(_name, "1")
 
-import pandas as pd
-
 from core.pipeline import load_run, mapping, sequence
 from core.rng import generator
 from core.semantic_keys import (
@@ -179,7 +177,7 @@ def main() -> int:
             diagnostics=diagnostics,
         )
 
-    if not isinstance(batch, pd.DataFrame) or batch.empty:
+    if batch.empty:
         raise ValueError("P08B batch runner must return a nonempty DataFrame")
     missing_columns = sorted(_REQUIRED_OUTPUT_COLUMNS - set(batch.columns))
     if missing_columns:
