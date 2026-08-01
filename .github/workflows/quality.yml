@@ -28,7 +28,6 @@ jobs:
             src/identification/service.py \
             tests/test_chapter3_v24_identification.py
       - name: Commit formatter output
-        if: github.event_name == 'push'
         run: |
           if git diff --quiet -- \
             src/core/config_validation.py \
@@ -45,7 +44,7 @@ jobs:
             src/identification/service.py \
             tests/test_chapter3_v24_identification.py
           git commit -m "style: apply Ruff formatting"
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin HEAD:${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
       - run: uv run ruff format --check .
       - name: Pyright ratchet for pull requests
         if: github.event_name == 'pull_request'
