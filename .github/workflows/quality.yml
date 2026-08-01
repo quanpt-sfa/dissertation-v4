@@ -1,6 +1,6 @@
 name: fix-phase2-pyright
 
-on: [pull_request]
+on: [push]
 
 permissions:
   contents: write
