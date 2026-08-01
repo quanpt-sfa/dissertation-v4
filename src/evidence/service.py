@@ -488,9 +488,7 @@ def _validate_measurement_process(record: EvidenceRecord) -> None:
         )
     ):
         expected = bool(
-            record.verification_status
-            and record.determination_status
-            and record.recording_status
+            record.verification_status and record.determination_status and record.recording_status
         )
         if record.outcome is not None and bool(record.outcome) != expected:
             raise ValueError("observed S conflicts with the fully observed V-D-R product")

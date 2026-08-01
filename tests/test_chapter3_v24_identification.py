@@ -54,9 +54,7 @@ def test_robust_model_selection_uses_paired_differences() -> None:
     }
     dominance = paired_difference_dominance(surface)
     a_over_b = next(
-        row
-        for row in dominance
-        if row["model_a"] == "model_a" and row["model_b"] == "model_b"
+        row for row in dominance if row["model_a"] == "model_a" and row["model_b"] == "model_b"
     )
     assert a_over_b["dominates"] is True
     assert model_selection_set(surface) == ["model_a", "model_c"]
@@ -102,9 +100,7 @@ def test_legacy_high_confirmation_metadata_is_not_observed_verification() -> Non
             "S3_CONTENT": {
                 "channel_id": "S3",
                 "verification_status": "high_confirmation",
-                "evidence_mapping": {
-                    "opportunity_semantic": "derived_source_year_completeness"
-                },
+                "evidence_mapping": {"opportunity_semantic": "derived_source_year_completeness"},
             }
         },
     )

@@ -267,7 +267,9 @@ def validate_methodology(
     revision_contract = _entry(
         feature_panel.get("revision_contract"), "features.feature_panel.revision_contract"
     )
-    preprocessing = _entry(feature_panel.get("preprocessing"), "features.feature_panel.preprocessing")
+    preprocessing = _entry(
+        feature_panel.get("preprocessing"), "features.feature_panel.preprocessing"
+    )
     l3_operational = _entry(l3_model.get("operational"), "measurement.l3_model.operational")
     execution_tracks = _entry(measurement.get("execution_tracks"), "measurement.execution_tracks")
     source_registry = _entry(sources.get("source_registry"), "data_sources.source_registry")

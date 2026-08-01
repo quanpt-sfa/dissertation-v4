@@ -90,9 +90,7 @@ def prevalence_bounds(
         )
 
     domain_type = (
-        IDENTIFIED_SET
-        if used and restrictions_independently_justified
-        else SENSITIVITY_REGION
+        IDENTIFIED_SET if used and restrictions_independently_justified else SENSITIVITY_REGION
     )
     status = "BOUNDED" if used else "UNINFORMATIVE_WITHOUT_RESTRICTIONS"
     return PrevalenceBounds(
@@ -193,11 +191,7 @@ def model_selection_set(
         higher_is_better=higher_is_better,
         tolerance=tolerance,
     )
-    dominated = {
-        str(row["model_b"])
-        for row in dominance
-        if row["dominates"] is True
-    }
+    dominated = {str(row["model_b"]) for row in dominance if row["dominates"] is True}
     return sorted(set(metric_surface) - dominated)
 
 
@@ -260,14 +254,10 @@ def build_identification_summary(
     """
 
     raw_identification = measurement_config.get("identification")
-    identification = (
-        dict(raw_identification) if isinstance(raw_identification, Mapping) else {}
-    )
+    identification = dict(raw_identification) if isinstance(raw_identification, Mapping) else {}
     raw_restrictions = identification.get("restrictions")
     restrictions = dict(raw_restrictions) if isinstance(raw_restrictions, Mapping) else {}
-    independently_justified = bool(
-        identification.get("independent_justification_confirmed", False)
-    )
+    independently_justified = bool(identification.get("independent_justification_confirmed", False))
 
     false_positive_upper = _optional_probability(
         restrictions.get("enforcement_false_positive_upper"),
