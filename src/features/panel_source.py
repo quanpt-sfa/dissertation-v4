@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
@@ -95,10 +96,21 @@ def assemble_from_raw(
             }
         )
         diagnostics = computation.diagnostics
-        if isinstance(diagnostics, Mapping):
-            for row in diagnostics.get("incomplete_firm_years", []) or []:
-                if isinstance(row, Mapping):
-                    completeness_rows.append({"feature_id": computation.feature_id, **dict(row)})
+        if diagnostics is not None:
+            raw_incomplete: object = diagnostics.get("incomplete_firm_years")
+            if isinstance(raw_incomplete, list):
+                for raw_row in cast(list[object], raw_incomplete):
+                    if not isinstance(raw_row, Mapping):
+                        continue
+                    typed_row = cast(Mapping[object, object], raw_row)
+                    normalized_row: dict[str, object] = {}
+                    for key, value in typed_row.items():
+                        if not isinstance(key, str) or not key:
+                            raise ValueError("component completeness keys must be strings")
+                        normalized_row[key] = value
+                    completeness_rows.append(
+                        {"feature_id": computation.feature_id, **normalized_row}
+                    )
 
     status_frame = pd.DataFrame(status_rows)
     pass_count = int((status_frame["status"] == "PASS").sum()) if not status_frame.empty else 0

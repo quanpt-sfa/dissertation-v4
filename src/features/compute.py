@@ -26,6 +26,7 @@ import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -176,10 +177,21 @@ def evaluate_ratio_formula(formula: str, operand_values: Mapping[str, float]) ->
 
 
 def _lineage(definition: Mapping[str, object]) -> list[Mapping[str, object]]:
-    raw = definition.get("lineage")
+    raw: object = definition.get("lineage")
     if not isinstance(raw, list):
         return []
-    return [item for item in raw if isinstance(item, Mapping)]
+    result: list[Mapping[str, object]] = []
+    for raw_item in cast(list[object], raw):
+        if not isinstance(raw_item, Mapping):
+            continue
+        item_mapping = cast(Mapping[object, object], raw_item)
+        normalized: dict[str, object] = {}
+        for key, value in item_mapping.items():
+            if not isinstance(key, str) or not key:
+                raise ValueError("lineage keys must be nonempty strings")
+            normalized[key] = value
+        result.append(normalized)
+    return result
 
 
 def _transformation_step(definition: Mapping[str, object]) -> str | None:
@@ -234,14 +246,25 @@ def _component_sum(
     any_present = present.any(axis=1)
     incomplete = any_present & ~all_present
     values = frame.sum(axis=1).where(all_present).astype("float64")
-    incomplete_rows = [
-        {
-            FIRM: str(key[0]),
-            YEAR: int(key[1]),
-            "present_component_count": int(present.loc[key].sum()),
-        }
-        for key in frame.index[incomplete]
-    ]
+    incomplete_rows: list[dict[str, object]] = []
+    present_matrix = present.to_numpy(dtype=bool)
+    index_values = frame.index.to_list()
+    incomplete_positions = np.flatnonzero(incomplete.to_numpy(dtype=bool)).tolist()
+    for position in incomplete_positions:
+        raw_key: object = index_values[int(position)]
+        if not isinstance(raw_key, tuple) or len(raw_key) != 2:
+            raise ValueError("component_sum requires a two-level firm-year index")
+        key = cast(tuple[object, object], raw_key)
+        firm_value, year_value = key
+        if not isinstance(year_value, (int, np.integer)):
+            raise ValueError("component_sum fiscal year must be integer-like")
+        incomplete_rows.append(
+            {
+                FIRM: str(firm_value),
+                YEAR: int(year_value),
+                "present_component_count": int(present_matrix[int(position)].sum()),
+            }
+        )
     diagnostics: dict[str, object] = {
         "component_item_ids": item_ids,
         "required_component_count": len(item_ids),
@@ -287,10 +310,18 @@ def _registered_ratio(
 
     index = _union_index(series_by_operand.values())
     results: dict[tuple[str, int], float] = {}
-    for key in index:
-        operand_values = {
-            name: float(series.get(key, np.nan)) for name, series in series_by_operand.items()
-        }
+    for raw_key in index:
+        if not isinstance(raw_key, tuple) or len(raw_key) != 2:
+            raise ValueError("registered_ratio requires a two-level firm-year index")
+        key_values = cast(tuple[object, object], raw_key)
+        firm_value, year_value = key_values
+        if not isinstance(year_value, (int, np.integer)):
+            raise ValueError("registered_ratio fiscal year must be integer-like")
+        key = (str(firm_value), int(year_value))
+        operand_values: dict[str, float] = {}
+        for name, series in series_by_operand.items():
+            raw_value: object = series.get(raw_key, np.nan)
+            operand_values[name] = float(cast(Any, raw_value))
         results[key] = evaluate_ratio_formula(formula, operand_values)
     return pd.Series(results, dtype="float64").rename_axis([FIRM, YEAR])
 
@@ -301,8 +332,10 @@ def _registered_ratio(
 
 
 def _dependencies(definition: Mapping[str, object]) -> list[str]:
-    raw = definition.get("dependencies")
-    return [str(dep) for dep in raw] if isinstance(raw, list) else []
+    raw: object = definition.get("dependencies")
+    if not isinstance(raw, list):
+        return []
+    return [str(dep) for dep in cast(list[object], raw)]
 
 
 def _audit_status(definition: Mapping[str, object]) -> str | None:
