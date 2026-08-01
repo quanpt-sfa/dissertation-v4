@@ -11,7 +11,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from core.pipeline import load_run, mapping, sequence
 from core.semantic_keys import OUTER_FOLD
-from gates.evidence_contract import insufficient_gate2_verdict, prepare_gate2_inputs
+from gates.evidence_contract import (
+    baseline_only_gate2_verdict,
+    insufficient_gate2_verdict,
+    prepare_gate2_inputs,
+)
 from gates.service import gate2_verdict
 
 
@@ -23,6 +27,20 @@ def main() -> int:
     loaded = load_run(
         registry_path=args.registry, run_id=args.run_id, step_id="P14", state="SENSITIVITY"
     )
+    evaluation_config = mapping(loaded.registry.get("evaluation"), "evaluation")
+    gate_config = mapping(evaluation_config.get("gate2"), "evaluation.gate2")
+    execution_mode = str(gate_config.get("execution_mode", "comparative"))
+    if execution_mode not in {"comparative", "baseline_only"}:
+        raise ValueError(
+            "evaluation.gate2.execution_mode must be comparative or baseline_only"
+        )
+    if execution_mode == "baseline_only":
+        result = baseline_only_gate2_verdict()
+        result["protocol_hash"] = loaded.protocol_hash
+        loaded.context.write("gate2_verdict", result, {})
+        print(f"P14 status={result['status']} verdict={result['verdict']}")
+        return 0
+
     folds = mapping(loaded.registry.get("folds"), "folds")
     confirmatory = [
         str(value)
@@ -49,8 +67,6 @@ def main() -> int:
     loaded.context.read("source_sensitivity_outputs", {})
     loaded.context.read("censoring_sensitivity_outputs", {})
     loaded.context.read("ablation_results", {})
-    evaluation_config = mapping(loaded.registry.get("evaluation"), "evaluation")
-    gate_config = mapping(evaluation_config.get("gate2"), "evaluation.gate2")
     prepared = prepare_gate2_inputs(
         evaluations=evaluations,
         bootstraps=bootstraps,
@@ -72,6 +88,7 @@ def main() -> int:
         )
         result["locked_candidate_ids"] = candidate_ids
         result["evidence_blockers"] = []
+        result["evidence_blocker_details"] = []
     result["protocol_hash"] = loaded.protocol_hash
     loaded.context.write("gate2_verdict", result, {})
     print(f"P14 status={result['status']} verdict={result['verdict']}")
