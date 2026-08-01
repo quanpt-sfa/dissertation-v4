@@ -152,10 +152,11 @@ def main() -> int:
         if len(primary_rows):
             observed_positive_rate = float(primary_rows.astype(bool).mean())
 
-    source_refits["identification_robustness"] = build_identification_summary(
+    identification_summary = build_identification_summary(
         measurement,
         observed_positive_rate=observed_positive_rate,
     )
+    source_refits["identification_robustness"] = identification_summary
     loaded.context.write("source_sensitivity_outputs", source_refits, {})
     loaded.context.write(
         "censoring_sensitivity_outputs",
@@ -167,7 +168,7 @@ def main() -> int:
     print(
         "P13 status=PASS "
         f"domain_status={domain['status']} "
-        f"identification_status={source_refits['identification_robustness']['status']}"
+        f"identification_status={identification_summary['status']}"
     )
     return 0
 
