@@ -36,9 +36,7 @@ def _panel() -> pd.DataFrame:
         {
             FIRM_ID: pd.Series(["F1"], dtype="string"),
             FISCAL_YEAR: pd.Series([2021], dtype="int16"),
-            PREDICTION_TIME: pd.Series(
-                [pd.Timestamp("2022-03-31")], dtype="datetime64[ns]"
-            ),
+            PREDICTION_TIME: pd.Series([pd.Timestamp("2022-03-31")], dtype="datetime64[ns]"),
         }
     )
 

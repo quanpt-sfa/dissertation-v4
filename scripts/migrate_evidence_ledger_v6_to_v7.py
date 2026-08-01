@@ -55,10 +55,7 @@ def main() -> int:
             json.dumps(migration.audit, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-    print(
-        "evidence-ledger migration status=PASS "
-        f"rows={len(migration.frame)} output={args.output}"
-    )
+    print(f"evidence-ledger migration status=PASS rows={len(migration.frame)} output={args.output}")
     return 0
 
 

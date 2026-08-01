@@ -581,8 +581,6 @@ def _validate_s3_configuration(configuration: dict[str, Any]) -> None:
         raise MethodologicalInvariantError("S3 source year 2026 must remain incomplete")
 
 
-
-
 def _validate_identification_configuration(measurement: dict[str, Any]) -> None:
     identification = _entry(
         measurement.get("identification"),
@@ -607,7 +605,9 @@ def _validate_identification_configuration(measurement: dict[str, Any]) -> None:
         "require_numeric_value_for_numeric_bound",
     }
     if any(gate.get(flag) is not True for flag in required_gate_flags):
-        raise MethodologicalInvariantError("identified-set gate must fail closed on every criterion")
+        raise MethodologicalInvariantError(
+            "identified-set gate must fail closed on every criterion"
+        )
 
     basis = _entry(
         identification.get("evidence_basis_registry"),
@@ -620,7 +620,9 @@ def _validate_identification_configuration(measurement: dict[str, Any]) -> None:
         "hahn_murray_manolopoulou_2016",
     }
     if not required_basis.issubset(basis):
-        raise MethodologicalInvariantError("independent identification literature registry incomplete")
+        raise MethodologicalInvariantError(
+            "independent identification literature registry incomplete"
+        )
     for source_id, raw_source in basis.items():
         source = _entry(raw_source, f"identification evidence basis={source_id}")
         if source.get("independent_of_study_outcomes") is not True:
@@ -645,7 +647,9 @@ def _validate_identification_configuration(measurement: dict[str, Any]) -> None:
         "measurement.identification.restriction_registry",
     )
     if set(restrictions) != set(restriction_registry):
-        raise MethodologicalInvariantError("every active/sensitivity restriction must be registered")
+        raise MethodologicalInvariantError(
+            "every active/sensitivity restriction must be registered"
+        )
     for restriction_id, raw_spec in restriction_registry.items():
         spec = _entry(raw_spec, f"identification restriction={restriction_id}")
         source_ids = _string_list(
@@ -698,7 +702,9 @@ def _validate_source_catalog_vocabulary(source_catalog: dict[str, Any]) -> None:
     profiles = _entry(source_catalog.get("profiles"), "source_catalog.profiles")
     sanction = _entry(profiles.get("sanction_evidence"), "source_catalog.sanction_evidence")
     if sanction.get(VERIFICATION_STATUS) != "selectively_observed_enforcement_proxy":
-        raise MethodologicalInvariantError("sanction evidence must use selective-observation vocabulary")
+        raise MethodologicalInvariantError(
+            "sanction evidence must use selective-observation vocabulary"
+        )
     if sanction.get("high_specificity_assumed") is not False:
         raise MethodologicalInvariantError("sanction evidence cannot assume high specificity")
     mapping = _entry(
@@ -706,7 +712,9 @@ def _validate_source_catalog_vocabulary(source_catalog: dict[str, Any]) -> None:
         "source_catalog.sanction_evidence.evidence_mapping",
     )
     if mapping.get("absence_policy") != "observed_endpoint_zero_when_complete_source_year":
-        raise MethodologicalInvariantError("S3 absence policy must use observed-endpoint-zero semantics")
+        raise MethodologicalInvariantError(
+            "S3 absence policy must use observed-endpoint-zero semantics"
+        )
     if mapping.get("zero_label_interpretation") != (
         "observed_source_endpoint_zero_not_latent_negative"
     ):
@@ -728,6 +736,7 @@ def _validate_source_catalog_vocabulary(source_catalog: dict[str, Any]) -> None:
         raise MethodologicalInvariantError("known cases must be external positive evidence")
     if known_cases.get("high_specificity_assumed") is not False:
         raise MethodologicalInvariantError("known cases cannot upgrade source specificity")
+
 
 def _validate_p02_configuration(
     data_sources: dict[str, Any],

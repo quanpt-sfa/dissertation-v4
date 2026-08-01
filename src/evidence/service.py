@@ -473,9 +473,7 @@ def build_evidence_ledger(
         taxonomy_reason_column = columns.get(TAXONOMY_REASON_CODE, TAXONOMY_REASON_CODE)
         ledger[taxonomy_codes_column] = ledger[taxonomy_codes_column].astype("string")
         ledger[taxonomy_reason_column] = ledger[taxonomy_reason_column].astype("string")
-        if not ledger[columns[SOURCE_OPPORTUNITY]].equals(
-            ledger[columns[OBSERVATION_OPPORTUNITY]]
-        ):
+        if not ledger[columns[SOURCE_OPPORTUNITY]].equals(ledger[columns[OBSERVATION_OPPORTUNITY]]):
             raise ValueError("legacy source_opportunity must equal canonical O")
         if not ledger[columns[OUTCOME]].equals(ledger[columns[OBSERVED_SOURCE_LABEL]]):
             raise ValueError("legacy outcome must equal canonical S")

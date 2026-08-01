@@ -429,9 +429,7 @@ def build_measurement_inputs(
             "positive_evidence_source_ids": anchor_ids,
             "anchor_source_ids": anchor_ids,
             "legacy_anchor_source_ids_role": "compatibility_only",
-            "reason_code": (
-                None if anchor_ids else "POSITIVE_EVIDENCE_CHANNEL_UNAVAILABLE"
-            ),
+            "reason_code": (None if anchor_ids else "POSITIVE_EVIDENCE_CHANNEL_UNAVAILABLE"),
             "clean_positive_assumption": False,
             "high_specificity_assumption": False,
         },

@@ -335,9 +335,7 @@ def build_identification_summary(
         )
 
     active_ids = [
-        restriction_id
-        for restriction_id, value in restrictions.items()
-        if value is not None
+        restriction_id for restriction_id, value in restrictions.items() if value is not None
     ]
     unsupported_active = sorted(set(active_ids) - set(implemented_active_ids))
     blocking_reasons = sorted(
@@ -459,7 +457,9 @@ def _assess_restriction(
         computed_reasons.append("numeric_restriction_value_invalid")
 
     raw_blocking = spec.get("blocking_reasons", [])
-    if not isinstance(raw_blocking, list) or not all(isinstance(item, str) for item in raw_blocking):
+    if not isinstance(raw_blocking, list) or not all(
+        isinstance(item, str) for item in raw_blocking
+    ):
         raise ValueError(f"restriction={restriction_id}: blocking_reasons must be strings")
     eligible = bool(
         active
@@ -485,9 +485,7 @@ def _assess_restriction(
         "formally_approved": formally_approved,
         "numeric_basis_available_for_target_population": numeric_basis_available,
         "eligible_for_identified_set": eligible,
-        "blocking_reasons": sorted(
-            set(cast(list[str], raw_blocking) + computed_reasons)
-        )
+        "blocking_reasons": sorted(set(cast(list[str], raw_blocking) + computed_reasons))
         if active
         else [],
     }
