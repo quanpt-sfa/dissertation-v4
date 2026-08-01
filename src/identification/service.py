@@ -335,7 +335,9 @@ def build_identification_summary(
         )
 
     active_ids = [
-        restriction_id for restriction_id, value in restrictions.items() if value is not None
+        restriction_id
+        for restriction_id, value in restrictions.items()
+        if value is not None
     ]
     unsupported_active = sorted(set(active_ids) - set(implemented_active_ids))
     blocking_reasons = sorted(
@@ -414,13 +416,17 @@ def _assess_restriction(
             "source_ids": [],
         }
 
-    spec = _string_object_mapping(raw_spec, f"restriction_registry.{restriction_id}")
-    raw_source_ids = spec.get("source_ids", [])
-    if not isinstance(raw_source_ids, list) or not all(
-        isinstance(item, str) and item for item in raw_source_ids
-    ):
+    spec = _string_object_mapping(
+        cast(object, raw_spec),
+        f"restriction_registry.{restriction_id}",
+    )
+    raw_source_ids: object = spec.get("source_ids", [])
+    if not isinstance(raw_source_ids, list):
         raise ValueError(f"restriction={restriction_id}: source_ids must be strings")
-    source_ids = cast(list[str], raw_source_ids)
+    source_items = cast(list[object], raw_source_ids)
+    if not all(isinstance(item, str) and item for item in source_items):
+        raise ValueError(f"restriction={restriction_id}: source_ids must be strings")
+    source_ids = [item for item in source_items if isinstance(item, str)]
     basis_rows = [basis_registry.get(source_id) for source_id in source_ids]
     source_registry_complete = bool(source_ids) and all(
         isinstance(item, Mapping) for item in basis_rows
@@ -456,11 +462,13 @@ def _assess_restriction(
     if active and not value_valid:
         computed_reasons.append("numeric_restriction_value_invalid")
 
-    raw_blocking = spec.get("blocking_reasons", [])
-    if not isinstance(raw_blocking, list) or not all(
-        isinstance(item, str) for item in raw_blocking
-    ):
+    raw_blocking: object = spec.get("blocking_reasons", [])
+    if not isinstance(raw_blocking, list):
         raise ValueError(f"restriction={restriction_id}: blocking_reasons must be strings")
+    blocking_items = cast(list[object], raw_blocking)
+    if not all(isinstance(item, str) for item in blocking_items):
+        raise ValueError(f"restriction={restriction_id}: blocking_reasons must be strings")
+    registered_blocking = [item for item in blocking_items if isinstance(item, str)]
     eligible = bool(
         active
         and source_registry_complete
@@ -485,7 +493,7 @@ def _assess_restriction(
         "formally_approved": formally_approved,
         "numeric_basis_available_for_target_population": numeric_basis_available,
         "eligible_for_identified_set": eligible,
-        "blocking_reasons": sorted(set(cast(list[str], raw_blocking) + computed_reasons))
+        "blocking_reasons": sorted(set(registered_blocking + computed_reasons))
         if active
         else [],
     }
