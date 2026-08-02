@@ -27,14 +27,8 @@ def _registry() -> dict[str, object]:
 
 
 def _s2_source() -> LogicalEvidenceSource:
-    raw = cast(
-        dict[str, Any],
-        yaml.safe_load(
-            (ROOT / "config" / "methodology" / "source_catalog.yaml").read_text(
-                encoding="utf-8"
-            )
-        ),
-    )
+    catalog_path = ROOT / "config" / "methodology" / "source_catalog.yaml"
+    raw = cast(dict[str, Any], yaml.safe_load(catalog_path.read_text(encoding="utf-8")))
     catalog = cast(dict[str, Any], raw["source_catalog"])
     profiles = cast(dict[str, Any], catalog["profiles"])
     profile = cast(dict[str, Any], profiles["audit_annual_long"])
