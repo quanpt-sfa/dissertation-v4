@@ -1,10 +1,8 @@
-"""Assemble the P07 firm-year feature panel by computing features from raw sources.
+"""Assemble the P07 firm-year feature panel from a registered physical source.
 
-This is the drop-in replacement for the removed feature-store loader: it computes
-every registered feature from the raw ``financial_statement_core_long`` source
-(via :mod:`features.raw_loader` and :mod:`features.compute`) and joins the results
-to the P02 firm-year spine, returning the same panel/audit contract the P07 stage
-expects.
+Production uses one final firm-year Parquet containing the approved feature
+columns. The historical long-format computation path remains available only as
+a compatibility path for unit tests and archived protocols.
 """
 
 from __future__ import annotations
@@ -23,7 +21,7 @@ from p02.models import EntityResolutionSpec
 
 @dataclass(frozen=True)
 class FeatureSourceResult:
-    """Computed panel plus the ingestion-boundary audits P07 publishes."""
+    """Feature panel plus the ingestion-boundary audits P07 publishes."""
 
     panel: pd.DataFrame
     validation_report: dict[str, object]
@@ -47,26 +45,225 @@ def assemble_from_raw(
     year_column: str,
     prediction_time_column: str,
 ) -> FeatureSourceResult:
-    """Compute features from raw and join to the firm-year spine."""
-    required_base = {firm_column, year_column, prediction_time_column}
-    if not required_base.issubset(base_panel.columns):
-        raise ValueError(
-            f"P02 panel missing feature join columns: {sorted(required_base - set(base_panel.columns))}"
-        )
+    """Dispatch to the final wide input or the archived long-format path."""
 
+    if raw_source_path.suffix.casefold() == ".parquet":
+        return _assemble_from_final(
+            base_panel=base_panel,
+            feature_definitions=feature_definitions,
+            intended_definitions=intended_definitions,
+            raw_source_path=raw_source_path,
+            firm_column=firm_column,
+            year_column=year_column,
+            prediction_time_column=prediction_time_column,
+        )
+    return _assemble_from_legacy_long(
+        base_panel=base_panel,
+        feature_definitions=feature_definitions,
+        intended_definitions=intended_definitions,
+        entity_spec=entity_spec,
+        raw_source_path=raw_source_path,
+        reader=reader,
+        firm_column=firm_column,
+        year_column=year_column,
+        prediction_time_column=prediction_time_column,
+    )
+
+
+def _spine(
+    base_panel: pd.DataFrame,
+    *,
+    firm_column: str,
+    year_column: str,
+    prediction_time_column: str,
+) -> pd.DataFrame:
+    required = {firm_column, year_column, prediction_time_column}
+    if not required.issubset(base_panel.columns):
+        raise ValueError(
+            f"P02 panel missing feature join columns: {sorted(required - set(base_panel.columns))}"
+        )
     spine = base_panel.loc[:, [firm_column, year_column, prediction_time_column]].copy()
     spine[firm_column] = spine[firm_column].astype("string")
     spine[year_column] = pd.to_numeric(spine[year_column], errors="raise").astype("int16")
+    spine[prediction_time_column] = pd.to_datetime(
+        spine[prediction_time_column], errors="raise"
+    ).astype("datetime64[ns]")
     if spine.duplicated([firm_column, year_column]).any():
         raise ValueError("P02 panel has duplicate firm-year keys")
-    spine = spine.sort_values([firm_column, year_column], kind="stable").reset_index(drop=True)
+    return spine.sort_values([firm_column, year_column], kind="stable").reset_index(drop=True)
+
+
+def _assemble_from_final(
+    *,
+    base_panel: pd.DataFrame,
+    feature_definitions: Sequence[Mapping[str, object]],
+    intended_definitions: Sequence[Mapping[str, object]],
+    raw_source_path: Path,
+    firm_column: str,
+    year_column: str,
+    prediction_time_column: str,
+) -> FeatureSourceResult:
+    """Bind approved physical feature columns from the final firm-year Parquet."""
+
+    spine = _spine(
+        base_panel,
+        firm_column=firm_column,
+        year_column=year_column,
+        prediction_time_column=prediction_time_column,
+    )
+    final_frame = pd.read_parquet(raw_source_path)
+    required = {firm_column, year_column, prediction_time_column}
+    if not required.issubset(final_frame.columns):
+        raise ValueError(
+            "final firm-year input is missing canonical panel columns: "
+            f"{sorted(required - set(final_frame.columns))}"
+        )
+    final_frame = final_frame.copy()
+    final_frame[firm_column] = final_frame[firm_column].astype("string")
+    final_frame[year_column] = pd.to_numeric(
+        final_frame[year_column], errors="raise"
+    ).astype("int16")
+    final_frame[prediction_time_column] = pd.to_datetime(
+        final_frame[prediction_time_column], errors="raise"
+    ).astype("datetime64[ns]")
+    if final_frame.duplicated([firm_column, year_column]).any():
+        raise ValueError("final firm-year input has duplicate firm-year keys")
+
+    key_check = spine.loc[:, [firm_column, year_column]].merge(
+        final_frame.loc[:, [firm_column, year_column]],
+        on=[firm_column, year_column],
+        how="outer",
+        indicator=True,
+        validate="one_to_one",
+    )
+    if not key_check["_merge"].eq("both").all():
+        counts = key_check["_merge"].value_counts().to_dict()
+        raise ValueError(f"final input and P02 spine firm-year keys differ: {counts}")
+
+    time_check = spine.merge(
+        final_frame.loc[:, [firm_column, year_column, prediction_time_column]],
+        on=[firm_column, year_column],
+        how="left",
+        validate="one_to_one",
+        suffixes=("_panel", "_final"),
+    )
+    panel_time = f"{prediction_time_column}_panel"
+    final_time = f"{prediction_time_column}_final"
+    if not time_check[panel_time].equals(time_check[final_time]):
+        raise ValueError("final input prediction_time differs from the P02 locked panel anchor")
+
+    definitions = [dict(item) for item in (*feature_definitions, *intended_definitions)]
+    status_rows: list[dict[str, object]] = []
+    coverage_rows: list[dict[str, object]] = []
+    selected_columns: list[str] = []
+    for definition in definitions:
+        feature_id = str(definition.get("feature_id", ""))
+        physical = definition.get("physical_column")
+        present = isinstance(physical, str) and bool(physical) and physical in final_frame.columns
+        status = "PASS" if present else "UNSUPPORTED"
+        reason = "FINAL_INPUT_COLUMN_PRESENT" if present else "FINAL_INPUT_COLUMN_MISSING"
+        non_null = int(final_frame[cast(str, physical)].notna().sum()) if present else 0
+        status_rows.append(
+            {
+                "feature_id": feature_id,
+                "status": status,
+                "reason_code": reason,
+                "non_null_firm_years": non_null,
+            }
+        )
+        coverage_rows.append(
+            {
+                "feature_id": feature_id,
+                "firm_year_count": len(spine),
+                "non_null_count": non_null,
+                "coverage_fraction": (non_null / len(spine)) if len(spine) else 0.0,
+                "status": status,
+            }
+        )
+        if present and cast(str, physical) not in selected_columns:
+            selected_columns.append(cast(str, physical))
+
+    final_values = final_frame.loc[:, [firm_column, year_column, *selected_columns]].copy()
+    panel = spine.merge(
+        final_values,
+        on=[firm_column, year_column],
+        how="left",
+        validate="one_to_one",
+    )
+    status_frame = pd.DataFrame(status_rows)
+    pass_count = int((status_frame["status"] == "PASS").sum()) if not status_frame.empty else 0
+    unsupported = (
+        status_frame.loc[status_frame["status"] == "UNSUPPORTED", "feature_id"].tolist()
+        if not status_frame.empty
+        else []
+    )
+    validation_report: dict[str, object] = {
+        "source": "final_firm_year_s1",
+        "computation_mode": "final_firm_year_physical_columns",
+        "feature_count": len(definitions),
+        "computed_pass": pass_count,
+        "unsupported_features": unsupported,
+        "raw_rows": int(len(final_frame)),
+        "component_sum_incomplete_dropped": [],
+    }
+    firm_ids = sorted(str(value) for value in final_frame[firm_column].dropna().unique())
+    panel_firms = set(spine[firm_column].dropna().astype(str))
+    status_audit = status_frame.loc[:, ["feature_id", "status", "reason_code"]].copy()
+    return FeatureSourceResult(
+        panel=panel,
+        validation_report=validation_report,
+        file_audit=build_file_audit(
+            status_frame=status_frame,
+            raw_source_path=raw_source_path,
+            raw_rows=len(final_frame),
+            usable_rows=len(panel),
+            source_id="final_firm_year_s1",
+        ),
+        identifier_audit=build_identifier_audit(
+            firm_ids=firm_ids,
+            panel_firms=panel_firms,
+            firm_column=firm_column,
+        ),
+        availability_violations=pd.DataFrame(
+            columns=[
+                "feature_id",
+                firm_column,
+                year_column,
+                "available_date",
+                prediction_time_column,
+            ]
+        ),
+        research_decision_audit=status_audit,
+        coverage_audit=pd.DataFrame(coverage_rows),
+        component_completeness=pd.DataFrame(),
+    )
+
+
+def _assemble_from_legacy_long(
+    *,
+    base_panel: pd.DataFrame,
+    feature_definitions: Sequence[Mapping[str, object]],
+    intended_definitions: Sequence[Mapping[str, object]],
+    entity_spec: EntityResolutionSpec,
+    raw_source_path: Path,
+    reader: Mapping[str, object] | None,
+    firm_column: str,
+    year_column: str,
+    prediction_time_column: str,
+) -> FeatureSourceResult:
+    """Archived long-format feature computation retained for compatibility."""
+
+    spine = _spine(
+        base_panel,
+        firm_column=firm_column,
+        year_column=year_column,
+        prediction_time_column=prediction_time_column,
+    )
     key_index = pd.MultiIndex.from_frame(
         spine[[firm_column, year_column]].rename(columns={firm_column: FIRM, year_column: YEAR})
     )
-
     raw_frame = read_financial_statement_long(raw_source_path, reader)
     long_values = build_long_values(raw_frame, entity_spec=entity_spec)
-
     definitions = [dict(item) for item in (*feature_definitions, *intended_definitions)]
     computations = compute_feature_values(definitions, long_values)
 
@@ -128,35 +325,34 @@ def assemble_from_raw(
         "raw_rows": int(len(long_values)),
         "component_sum_incomplete_dropped": completeness_rows,
     }
-
     firm_ids = sorted(str(value) for value in long_values[FIRM].dropna().unique())
     panel_firms = set(spine[firm_column].dropna().astype(str))
-    identifier_audit = build_identifier_audit(
-        firm_ids=firm_ids,
-        panel_firms=panel_firms,
-        firm_column=firm_column,
-    )
-    file_audit = build_file_audit(
-        status_frame=status_frame,
-        raw_source_path=raw_source_path,
-        raw_rows=len(raw_frame),
-        usable_rows=len(long_values),
-    )
-
-    # Annual-anchor availability holds by construction (value for year t is available
-    # at the shared anchor a_t = prediction_time), so no availability violations.
-    availability_violations = pd.DataFrame(
-        columns=["feature_id", firm_column, year_column, "available_date", prediction_time_column]
-    )
-    research_decision_audit = status_frame.loc[:, ["feature_id", "status", "reason_code"]].copy()
-
     return FeatureSourceResult(
         panel=panel,
         validation_report=validation_report,
-        file_audit=file_audit,
-        identifier_audit=identifier_audit,
-        availability_violations=availability_violations,
-        research_decision_audit=research_decision_audit,
+        file_audit=build_file_audit(
+            status_frame=status_frame,
+            raw_source_path=raw_source_path,
+            raw_rows=len(raw_frame),
+            usable_rows=len(long_values),
+        ),
+        identifier_audit=build_identifier_audit(
+            firm_ids=firm_ids,
+            panel_firms=panel_firms,
+            firm_column=firm_column,
+        ),
+        availability_violations=pd.DataFrame(
+            columns=[
+                "feature_id",
+                firm_column,
+                year_column,
+                "available_date",
+                prediction_time_column,
+            ]
+        ),
+        research_decision_audit=status_frame.loc[
+            :, ["feature_id", "status", "reason_code"]
+        ].copy(),
         coverage_audit=pd.DataFrame(coverage_rows),
         component_completeness=pd.DataFrame(completeness_rows),
     )
@@ -168,14 +364,10 @@ def build_file_audit(
     raw_source_path: Path,
     raw_rows: int,
     usable_rows: int,
+    source_id: str = "financial_statement_core_long",
 ) -> pd.DataFrame:
-    """Return one source-binding audit row per registered feature.
+    """Return one source-binding audit row per registered feature."""
 
-    The historical artifact contract is keyed by ``feature_id``. Under the
-    unified raw-computation path every registered feature is backed by the same
-    immutable long-format source, so the source metadata is repeated per
-    feature rather than replacing the feature key with a source-level row.
-    """
     required = {"feature_id", "status", "reason_code"}
     if not required.issubset(status_frame.columns):
         raise ValueError(
@@ -185,7 +377,7 @@ def build_file_audit(
     audit = status_frame.loc[:, ["feature_id", "status", "reason_code"]].copy()
     if audit["feature_id"].duplicated().any():
         raise ValueError("P07 file audit requires unique feature_id rows")
-    audit.insert(1, "source_id", "financial_statement_core_long")
+    audit.insert(1, "source_id", source_id)
     audit.insert(2, "relative_path", raw_source_path.name)
     audit.insert(3, "raw_rows", int(raw_rows))
     audit.insert(4, "usable_rows", int(usable_rows))
@@ -198,12 +390,8 @@ def build_identifier_audit(
     panel_firms: set[str],
     firm_column: str,
 ) -> pd.DataFrame:
-    """Return identifier audit with the canonical firm key first.
+    """Return identifier audit with the canonical firm key first."""
 
-    ``feature_store_identifier_audit_frame`` requires the physical canonical
-    firm key as its ordered leading column. Compatibility aliases remain in
-    the frame because downstream P07 summaries still report source identifiers.
-    """
     values = list(firm_ids)
     return pd.DataFrame(
         {
