@@ -16,6 +16,7 @@ from core.evidence_registry import LogicalEvidenceSource, logical_evidence_sourc
 from core.pipeline import load_run, mapping, physical_columns
 from core.semantic_keys import FIRM_ID, FISCAL_YEAR, PREDICTION_TIME, SOURCE_ID
 from evidence.annual import build_audit_adjustment_records, build_audit_opinion_records
+from evidence.artifact_adapter import bind_sanction_decision_ledger_columns
 from evidence.final_firm_year import (
     build_wide_adjustment_rows,
     build_wide_opinion_rows,
@@ -117,6 +118,10 @@ def main() -> int:
         logical_sources=s3_logical,
         panel_anchors=panel_anchors,
     )
+    sanction_decision_ledger = bind_sanction_decision_ledger_columns(
+        s3_build.decision_ledger,
+        firm_column=columns[FIRM_ID],
+    )
 
     evidence = mapping(loaded.registry.get("evidence"), "evidence")
     tolerance = evidence.get("lag_identity_tolerance_days")
@@ -133,7 +138,7 @@ def main() -> int:
         return 0
 
     loaded.context.write("evidence_ledger", result.ledger, {})
-    loaded.context.write("sanction_decision_ledger", s3_build.decision_ledger, {})
+    loaded.context.write("sanction_decision_ledger", sanction_decision_ledger, {})
     loaded.context.write("availability_registry", result.availability_registry, {})
     loaded.context.write("lag_decomposition", result.lag_decomposition, {})
     loaded.context.write(
