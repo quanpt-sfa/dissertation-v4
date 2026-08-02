@@ -183,19 +183,19 @@ def _normalize_provenance_fragment(value: object) -> object | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
     if isinstance(value, dict):
-        result: dict[str, object] = {}
+        normalized_dict: dict[str, object] = {}
         for key, child in cast(dict[object, object], value).items():
             normalized = _normalize_provenance_fragment(child)
             if normalized is not None:
-                result[str(key)] = normalized
-        return result or None
+                normalized_dict[str(key)] = normalized
+        return normalized_dict or None
     if isinstance(value, (list, tuple)):
-        result = [
+        normalized_list: list[object] = [
             normalized
             for child in cast(list[object] | tuple[object, ...], value)
             if (normalized := _normalize_provenance_fragment(child)) is not None
         ]
-        return result or None
+        return normalized_list or None
     if isinstance(value, str):
         text = value.strip()
         if text.casefold() in _INVALID_DOCUMENT_ID_TOKENS:
