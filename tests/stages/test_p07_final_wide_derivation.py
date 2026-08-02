@@ -68,19 +68,13 @@ def test_final_wide_input_derives_prepost_and_lagged_ratio_features(
         ),
         _definition(
             "audit_adj_net_revenue_relative",
-            formula=(
-                "(fs_aud_net_revenue - fs_unaud_net_revenue) / "
-                "abs(fs_aud_net_revenue)"
-            ),
+            formula=("(fs_aud_net_revenue - fs_unaud_net_revenue) / abs(fs_aud_net_revenue)"),
             dependencies=["fs_aud_net_revenue", "fs_unaud_net_revenue"],
             step="prepost_difference",
         ),
         _definition(
             "ratio_sales_growth",
-            formula=(
-                "(net_revenue_t - net_revenue_t_minus_1) / "
-                "abs(net_revenue_t_minus_1)"
-            ),
+            formula=("(net_revenue_t - net_revenue_t_minus_1) / abs(net_revenue_t_minus_1)"),
             dependencies=["fs_aud_net_revenue[t]", "fs_aud_net_revenue[t-1]"],
             step="registered_ratio",
         ),
