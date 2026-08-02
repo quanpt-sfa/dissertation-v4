@@ -131,28 +131,18 @@ def assemble_from_raw(
 
     firm_ids = sorted(str(value) for value in long_values[FIRM].dropna().unique())
     panel_firms = set(spine[firm_column].dropna().astype(str))
-    identifier_audit = pd.DataFrame(
-        {
-            "feature_store_firm_id": pd.Series(firm_ids, dtype="string"),
-            "canonical_firm_id": pd.Series(firm_ids, dtype="string"),
-            "mapping_status": pd.Series(
-                ["MATCHED" if firm in panel_firms else "UNMATCHED" for firm in firm_ids],
-                dtype="string",
-            ),
-            "ambiguity_flag": pd.Series([False] * len(firm_ids), dtype="bool"),
-        }
+    identifier_audit = _build_identifier_audit(
+        firm_ids=firm_ids,
+        panel_firms=panel_firms,
+        firm_column=firm_column,
+    )
+    file_audit = _build_file_audit(
+        status_frame=status_frame,
+        raw_source_path=raw_source_path,
+        raw_rows=len(raw_frame),
+        usable_rows=len(long_values),
     )
 
-    file_audit = pd.DataFrame(
-        [
-            {
-                "source_id": "financial_statement_core_long",
-                "relative_path": raw_source_path.name,
-                "raw_rows": int(len(raw_frame)),
-                "usable_rows": int(len(long_values)),
-            }
-        ]
-    )
     # Annual-anchor availability holds by construction (value for year t is available
     # at the shared anchor a_t = prediction_time), so no availability violations.
     availability_violations = pd.DataFrame(
@@ -169,4 +159,61 @@ def assemble_from_raw(
         research_decision_audit=research_decision_audit,
         coverage_audit=pd.DataFrame(coverage_rows),
         component_completeness=pd.DataFrame(completeness_rows),
+    )
+
+
+def _build_file_audit(
+    *,
+    status_frame: pd.DataFrame,
+    raw_source_path: Path,
+    raw_rows: int,
+    usable_rows: int,
+) -> pd.DataFrame:
+    """Return one source-binding audit row per registered feature.
+
+    The historical artifact contract is keyed by ``feature_id``.  Under the
+    unified raw-computation path every registered feature is backed by the same
+    immutable long-format source, so the source metadata is repeated per
+    feature rather than replacing the feature key with a source-level row.
+    """
+    required = {"feature_id", "status", "reason_code"}
+    if not required.issubset(status_frame.columns):
+        raise ValueError(
+            "P07 status frame missing file-audit columns: "
+            f"{sorted(required - set(status_frame.columns))}"
+        )
+    audit = status_frame.loc[:, ["feature_id", "status", "reason_code"]].copy()
+    if audit["feature_id"].duplicated().any():
+        raise ValueError("P07 file audit requires unique feature_id rows")
+    audit.insert(1, "source_id", "financial_statement_core_long")
+    audit.insert(2, "relative_path", raw_source_path.name)
+    audit.insert(3, "raw_rows", int(raw_rows))
+    audit.insert(4, "usable_rows", int(usable_rows))
+    return audit
+
+
+def _build_identifier_audit(
+    *,
+    firm_ids: Sequence[str],
+    panel_firms: set[str],
+    firm_column: str,
+) -> pd.DataFrame:
+    """Return identifier audit with the canonical firm key first.
+
+    ``feature_store_identifier_audit_frame`` requires the physical canonical
+    firm key as its ordered leading column.  Compatibility aliases remain in
+    the frame because downstream P07 summaries still report source identifiers.
+    """
+    values = list(firm_ids)
+    return pd.DataFrame(
+        {
+            firm_column: pd.Series(values, dtype="string"),
+            "feature_store_firm_id": pd.Series(values, dtype="string"),
+            "canonical_firm_id": pd.Series(values, dtype="string"),
+            "mapping_status": pd.Series(
+                ["MATCHED" if firm in panel_firms else "UNMATCHED" for firm in values],
+                dtype="string",
+            ),
+            "ambiguity_flag": pd.Series([False] * len(values), dtype="bool"),
+        }
     )
