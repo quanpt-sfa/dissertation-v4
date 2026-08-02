@@ -179,7 +179,10 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
 def _parse_year(value: object) -> int:
     if value is None or isinstance(value, bool):
         raise ValueError("known-case fiscal_year is required")
-    numeric = float(value)
+    text = str(value).strip()
+    if not text:
+        raise ValueError("known-case fiscal_year is required")
+    numeric = float(text)
     if not numeric.is_integer():
         raise ValueError("known-case fiscal_year must be an integer")
     year = int(numeric)
