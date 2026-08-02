@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import cast
 
@@ -44,6 +45,17 @@ _DECISION_LEDGER_TAIL = [
 ]
 _AMBIGUOUS_TARGET_YEAR_REASON = "MULTIPLE_TARGET_FISCAL_YEARS_IN_FINAL_PROVENANCE"
 _AMBIGUOUS_TARGET_YEAR_CONFIDENCE = "unresolved_multiple_target_years"
+_INVALID_DOCUMENT_ID_TOKENS = {
+    "",
+    "[]",
+    "{}",
+    "null",
+    "none",
+    "nan",
+    "na",
+    "n/a",
+    "<na>",
+}
 
 
 def bind_sanction_decision_ledger_columns(
@@ -85,7 +97,119 @@ def bind_sanction_decision_ledger_columns(
             "sanction decision ledger columns differ from the production contract: "
             f"missing={missing}, extras={extras}"
         )
-    return _enforce_document_firm_grain(result.loc[:, ordered], firm_column)
+    bound = result.loc[:, ordered]
+    repaired = _repair_placeholder_document_ids(bound, firm_column)
+    return _enforce_document_firm_grain(repaired, firm_column)
+
+
+def _repair_placeholder_document_ids(frame: pd.DataFrame, firm_column: str) -> pd.DataFrame:
+    """Replace serialized empty document keys with stable provenance-derived keys.
+
+    The final firm-year builder may receive nested JSON where an empty document-id
+    array is serialized as the literal string ``"[]"``. Treating that placeholder
+    as an actual decision identifier makes all years for a firm collide at the
+    locked ``document_id × firm`` grain. A placeholder is therefore replaced only
+    when non-empty source provenance can deterministically identify the embedded
+    record. Missing provenance remains a hard error rather than an invented key.
+    """
+
+    if frame.empty:
+        return frame.copy()
+
+    result = frame.copy()
+    document_text = result[DOCUMENT_ID].astype("string").str.strip()
+    invalid = document_text.isna() | document_text.str.casefold().isin(
+        _INVALID_DOCUMENT_ID_TOKENS
+    )
+    if not invalid.any():
+        return result
+
+    for index in result.index[invalid]:
+        refs = _normalized_source_refs(result.at[index, SOURCE_RECORD_REFS])
+        if not refs:
+            firm_id = result.at[index, firm_column]
+            target_year = result.at[index, TARGET_FISCAL_YEAR]
+            raise ValueError(
+                "sanction decision ledger contains an empty-container document identifier "
+                "without non-empty provenance from which to derive a stable key: "
+                f"firm={firm_id}, target_fiscal_year={target_year}"
+            )
+        canonical_refs = json.dumps(
+            refs,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        digest = hashlib.sha256(canonical_refs.encode("utf-8")).hexdigest()[:16]
+        result.at[index, DOCUMENT_ID] = f"embedded-provenance-{digest}"
+
+    return result
+
+
+def _normalized_source_refs(value: object) -> list[str]:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return []
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("S3 ledger source_record_refs must contain a JSON string array")
+    try:
+        decoded: object = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError("S3 ledger source_record_refs must contain valid JSON") from exc
+    if not isinstance(decoded, list):
+        raise ValueError("S3 ledger source_record_refs must contain a JSON string array")
+
+    normalized: set[str] = set()
+    for item in cast(list[object], decoded):
+        fragment = _normalize_provenance_fragment(item)
+        if fragment is None:
+            continue
+        if isinstance(fragment, (dict, list)):
+            normalized.add(
+                json.dumps(
+                    fragment,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            )
+        else:
+            text = str(fragment).strip()
+            if text:
+                normalized.add(text)
+    return sorted(normalized)
+
+
+def _normalize_provenance_fragment(value: object) -> object | None:
+    """Decode nested JSON and remove null-like or empty-container fragments."""
+
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, dict):
+        result: dict[str, object] = {}
+        for key, child in cast(dict[object, object], value).items():
+            normalized = _normalize_provenance_fragment(child)
+            if normalized is not None:
+                result[str(key)] = normalized
+        return result or None
+    if isinstance(value, (list, tuple)):
+        result = [
+            normalized
+            for child in cast(list[object] | tuple[object, ...], value)
+            if (normalized := _normalize_provenance_fragment(child)) is not None
+        ]
+        return result or None
+    if isinstance(value, str):
+        text = value.strip()
+        if text.casefold() in _INVALID_DOCUMENT_ID_TOKENS:
+            return None
+        if text.startswith(("[", "{")):
+            try:
+                decoded: object = json.loads(text)
+            except json.JSONDecodeError:
+                return text
+            return _normalize_provenance_fragment(decoded)
+        return text
+    return value
 
 
 def _enforce_document_firm_grain(frame: pd.DataFrame, firm_column: str) -> pd.DataFrame:
