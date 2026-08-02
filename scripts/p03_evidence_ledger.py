@@ -116,6 +116,11 @@ def _sanction_rows(
     return result
 
 
+# Imported directly by one archived parser regression test. Keeping an explicit
+# module-level reference makes the compatibility surface visible to static analysis.
+SANCTION_ROWS_COMPAT = _sanction_rows
+
+
 def _required(value: object, field: str) -> object:
     if value is None or (isinstance(value, str) and not value.strip()):
         raise ValueError(f"evidence row missing {field}")
