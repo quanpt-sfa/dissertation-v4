@@ -143,6 +143,37 @@ def _require_clean_tree(root: Path) -> None:
         raise RuntimeError("operational pipeline requires a clean committed Git tree")
 
 
+def _fold_execution_sets(registry: dict[str, object]) -> tuple[list[str], list[str]]:
+    """Separate P09 diagnostic folds from confirmatory P10-P12 execution folds."""
+    raw_folds = registry.get("folds")
+    if not isinstance(raw_folds, dict):
+        raise ValueError("locked fold registry is unavailable")
+    folds = cast(dict[str, object], raw_folds)
+    initial = folds.get("initial_outer_year")
+    raw_nested = folds.get("fully_nested_outer_years")
+    if initial is None or isinstance(initial, bool):
+        raise ValueError("folds.initial_outer_year must be locked")
+    if not isinstance(raw_nested, list):
+        raise ValueError("folds.fully_nested_outer_years must be a list")
+
+    initial_fold = str(initial)
+    nested_folds = [str(value) for value in cast(list[object], raw_nested)]
+    p09_folds = [initial_fold, *nested_folds]
+    if len(p09_folds) != len(set(p09_folds)):
+        raise ValueError("initial and fully nested outer folds must be unique")
+
+    initial_in_confirmatory = folds.get("initial_in_confirmatory_pool")
+    if initial_in_confirmatory is True:
+        confirmatory_folds = list(p09_folds)
+    elif initial_in_confirmatory is False:
+        confirmatory_folds = list(nested_folds)
+    else:
+        raise ValueError("folds.initial_in_confirmatory_pool must be boolean")
+    if not confirmatory_folds:
+        raise ValueError("at least one confirmatory outer fold is required")
+    return p09_folds, confirmatory_folds
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", required=True)
@@ -353,16 +384,9 @@ def main() -> int:
     if args.through == "P08":
         return 0
 
-    folds = cast(dict[str, object], registry["folds"])
-    raw_nested = folds.get("fully_nested_outer_years")
-    if not isinstance(raw_nested, list):
-        raise ValueError("folds.fully_nested_outer_years must be a list")
-    outer_folds = [
-        str(folds["initial_outer_year"]),
-        *[str(value) for value in cast(list[object], raw_nested)],
-    ]
+    p09_folds, confirmatory_folds = _fold_execution_sets(registry)
     p09_artifacts = _step_outputs(registry, "P09", {})
-    for fold_id in outer_folds:
+    for fold_id in p09_folds:
         p09_artifacts.extend(
             [
                 ("fold_aware_weights", {"fold_id": fold_id}),
@@ -389,7 +413,7 @@ def main() -> int:
         return 0
 
     p10_units: list[tuple[list[str], list[tuple[str, dict[str, str]]]]] = []
-    for fold_id in outer_folds:
+    for fold_id in confirmatory_folds:
         fold_coordinates = {"outer_fold": fold_id}
         p10_units.append(
             (
@@ -418,7 +442,7 @@ def main() -> int:
     if args.through == "P10":
         return 0
     p11_units: list[tuple[list[str], list[tuple[str, dict[str, str]]]]] = []
-    for fold_id in outer_folds:
+    for fold_id in confirmatory_folds:
         fold_coordinates = {"outer_fold": fold_id}
         p11_units.append(
             (
@@ -447,7 +471,7 @@ def main() -> int:
     if args.through == "P11":
         return 0
     p12_units: list[tuple[list[str], list[tuple[str, dict[str, str]]]]] = []
-    for fold_id in outer_folds:
+    for fold_id in confirmatory_folds:
         fold_coordinates = {"outer_fold": fold_id}
         p12_units.append(
             (
