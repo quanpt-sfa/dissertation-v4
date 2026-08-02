@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 
 from core.semantic_keys import (
@@ -39,6 +41,8 @@ _DECISION_LEDGER_TAIL = [
     TAXONOMY_CODES,
     TAXONOMY_REASON_CODE,
 ]
+_AMBIGUOUS_TARGET_YEAR_REASON = "MULTIPLE_TARGET_FISCAL_YEARS_IN_FINAL_PROVENANCE"
+_AMBIGUOUS_TARGET_YEAR_CONFIDENCE = "unresolved_multiple_target_years"
 
 
 def bind_sanction_decision_ledger_columns(
@@ -46,14 +50,17 @@ def bind_sanction_decision_ledger_columns(
     *,
     firm_column: str,
 ) -> pd.DataFrame:
-    """Bind the internal firm key to the compiled physical ledger contract.
+    """Bind the wide S3 ledger to the compiled physical artifact contract.
 
-    The wide S3 builder uses the logical firm key internally. Production
-    artifacts use the physical firm column compiled from the registry. This
-    adapter performs only that deterministic rename and exact-order check.
+    The wide builder works with the logical firm key and initially emits one row
+    per document, firm, and preaggregated target year. The production decision
+    ledger is deliberately coarser: one row per document and firm. This adapter
+    therefore binds the physical firm key, aggregates repeated endpoint
+    provenance, and represents conflicting target years as an unresolved mapping
+    instead of inventing a new document identity or weakening the schema.
     """
 
-    if not isinstance(firm_column, str) or not firm_column:
+    if not firm_column:
         raise ValueError("sanction decision ledger requires a physical firm column")
 
     result = frame.copy()
@@ -77,4 +84,102 @@ def bind_sanction_decision_ledger_columns(
             "sanction decision ledger columns differ from the production contract: "
             f"missing={missing}, extras={extras}"
         )
-    return result.loc[:, ordered]
+    return _enforce_document_firm_grain(result.loc[:, ordered], firm_column)
+
+
+def _enforce_document_firm_grain(frame: pd.DataFrame, firm_column: str) -> pd.DataFrame:
+    """Collapse repeated wide-provenance rows to the locked document-firm grain."""
+
+    if frame.empty or not frame.duplicated([DOCUMENT_ID, firm_column], keep=False).any():
+        return frame.copy()
+
+    output: list[pd.DataFrame] = []
+    scalar_fields = [
+        PRIMARY_VIOLATION_L1,
+        PRIMARY_VIOLATION_L2,
+        CONSTRUCT_FAMILY,
+        NORMALIZED_VIOLATION_CODE,
+        LEGACY_EVENT_ID,
+        PERIOD_LINK_SOURCE,
+    ]
+    for key, group in frame.groupby([DOCUMENT_ID, firm_column], sort=False, dropna=False):
+        if len(group) == 1:
+            output.append(group.iloc[[0]].copy())
+            continue
+
+        selected = group.iloc[[0]].copy()
+        for column in scalar_fields:
+            values = _nonempty_strings(group[column])
+            if len(values) > 1:
+                raise ValueError(
+                    "sanction decision ledger has conflicting scalar provenance for "
+                    f"document-firm={key}, column={column}, values={values}"
+                )
+            if values:
+                selected.loc[:, column] = values[0]
+
+        years = sorted(
+            {
+                int(value)
+                for value in pd.to_numeric(group[TARGET_FISCAL_YEAR], errors="coerce")
+                .dropna()
+                .tolist()
+            }
+        )
+        selected.loc[:, TARGET_FISCAL_YEAR] = years[0] if len(years) == 1 else pd.NA
+        selected.loc[:, CONSTRUCT_TARGET] = _merge_json_string_arrays(group[CONSTRUCT_TARGET])
+        selected.loc[:, SOURCE_RECORD_REFS] = _merge_json_string_arrays(
+            group[SOURCE_RECORD_REFS]
+        )
+        selected.loc[:, TAXONOMY_CODES] = _merge_json_string_arrays(group[TAXONOMY_CODES])
+        selected.loc[:, HARD_POSITIVE] = bool(group[HARD_POSITIVE].fillna(False).any())
+        selected.loc[:, ROW_INCLUSION] = bool(group[ROW_INCLUSION].fillna(False).any())
+
+        if len(years) > 1:
+            selected.loc[:, PERIOD_LINK_CONFIDENCE] = _AMBIGUOUS_TARGET_YEAR_CONFIDENCE
+            selected.loc[:, TAXONOMY_REASON_CODE] = _AMBIGUOUS_TARGET_YEAR_REASON
+        else:
+            confidence = _nonempty_strings(group[PERIOD_LINK_CONFIDENCE])
+            reasons = _nonempty_strings(group[TAXONOMY_REASON_CODE])
+            if len(confidence) > 1:
+                raise ValueError(
+                    "sanction decision ledger has conflicting period-link confidence for "
+                    f"document-firm={key}, values={confidence}"
+                )
+            if len(reasons) > 1:
+                raise ValueError(
+                    "sanction decision ledger has conflicting taxonomy reasons for "
+                    f"document-firm={key}, values={reasons}"
+                )
+            if confidence:
+                selected.loc[:, PERIOD_LINK_CONFIDENCE] = confidence[0]
+            if reasons:
+                selected.loc[:, TAXONOMY_REASON_CODE] = reasons[0]
+
+        output.append(selected)
+
+    result = pd.concat(output, ignore_index=True).loc[:, frame.columns]
+    for column in frame.columns:
+        try:
+            result[column] = result[column].astype(frame[column].dtype)
+        except (TypeError, ValueError):
+            pass
+    if result.duplicated([DOCUMENT_ID, firm_column]).any():
+        raise ValueError("sanction decision ledger document-firm grain remains non-unique")
+    return result
+
+
+def _merge_json_string_arrays(values: pd.Series) -> str:
+    merged: set[str] = set()
+    for value in values.dropna().tolist():
+        if not isinstance(value, str) or not value:
+            continue
+        decoded: object = json.loads(value)
+        if not isinstance(decoded, list) or not all(isinstance(item, str) for item in decoded):
+            raise ValueError("S3 ledger aggregate fields must contain JSON string arrays")
+        merged.update(decoded)
+    return json.dumps(sorted(merged), ensure_ascii=False, separators=(",", ":"))
+
+
+def _nonempty_strings(values: pd.Series) -> list[str]:
+    return sorted({str(value) for value in values.dropna().tolist() if str(value)})
