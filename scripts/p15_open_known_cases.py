@@ -1,4 +1,4 @@
-"""P15 CLI: open and validate the snapshot-locked known-case ledger."""
+"""P15 CLI: open known cases embedded in the final firm-year input."""
 
 from __future__ import annotations
 
@@ -103,11 +103,11 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
     if not matches:
         return []
     if len(matches) != 1:
-        raise ValueError("exactly one snapshot-locked known-case source is allowed")
+        raise ValueError("exactly one snapshot-locked known-case semantic view is allowed")
     source_id, source = matches[0]
     spec, path = resolve_source(registry, source_id)
     if hash_file(path) != spec.locked_sha256:
-        raise ValueError("known-case file does not match its P00 snapshot hash")
+        raise ValueError("final firm-year file does not match its P00 snapshot hash")
     semantics = mapping(source.get("resolved_semantics"), "known-case resolved semantics")
     required = {
         "case_id",
@@ -121,18 +121,27 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
         "external_validation_include_flag",
     }
     if not required.issubset(semantics):
-        raise ValueError("known-case semantics are incomplete")
+        raise ValueError("embedded known-case semantics are incomplete")
     entity = EntityResolutionSpec.from_mapping(registry.get("entity_resolution"))
     columns = physical_columns(registry)
     rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int]] = set()
     for row in iter_rows(path, spec):
-        raw_firm = str(row[str(semantics[FIRM_ID])])
+        raw_case_id = row.get(str(semantics["case_id"]))
+        if raw_case_id is None or not str(raw_case_id).strip():
+            continue
+        raw_firm_value = row.get(str(semantics[FIRM_ID]))
+        if raw_firm_value is None or not str(raw_firm_value).strip():
+            raise ValueError("known-case row requires firm_id")
+        raw_firm = str(raw_firm_value)
         normalized = normalize_entity_field(raw_firm, entity)
         canonical, _ = resolve_entity_link(source_id, raw_firm, normalized, entity)
-        case_construct = str(row[str(semantics["case_construct"])]).strip()
-        case_role = str(row[str(semantics["case_role"])]).strip()
+        case_id = str(raw_case_id).strip()
+        fiscal_year = _parse_year(row.get(str(semantics[FISCAL_YEAR])))
+        case_construct = str(row.get(str(semantics["case_construct"]), "")).strip()
+        case_role = str(row.get(str(semantics["case_role"]), "")).strip()
         flags = {
-            name: _parse_bool(row[str(semantics[name])], name)
+            name: _parse_bool(row.get(str(semantics[name])), name)
             for name in (
                 "training_include_flag",
                 "calibration_include_flag",
@@ -153,14 +162,30 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
             raise ValueError(
                 "known case inclusion flags violate the sealed external-validation role"
             )
+        key = (case_id, canonical, fiscal_year)
+        if key in seen:
+            raise ValueError(f"duplicate embedded known-case row={key}")
+        seen.add(key)
         rows.append(
             {
-                "case_id": str(row[str(semantics["case_id"])]),
+                "case_id": case_id,
                 columns[FIRM_ID]: canonical,
-                columns[FISCAL_YEAR]: int(str(row[str(semantics[FISCAL_YEAR])])),
+                columns[FISCAL_YEAR]: fiscal_year,
             }
         )
     return rows
+
+
+def _parse_year(value: object) -> int:
+    if value is None or isinstance(value, bool):
+        raise ValueError("known-case fiscal_year is required")
+    numeric = float(value)
+    if not numeric.is_integer():
+        raise ValueError("known-case fiscal_year must be an integer")
+    year = int(numeric)
+    if not 1900 <= year <= 2200:
+        raise ValueError("known-case fiscal_year is outside the supported range")
+    return year
 
 
 def _parse_bool(value: object, field: str) -> bool:
