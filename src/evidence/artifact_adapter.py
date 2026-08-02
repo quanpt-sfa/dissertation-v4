@@ -118,9 +118,7 @@ def _repair_placeholder_document_ids(frame: pd.DataFrame, firm_column: str) -> p
 
     result = frame.copy()
     document_text = result[DOCUMENT_ID].astype("string").str.strip()
-    invalid = document_text.isna() | document_text.str.casefold().isin(
-        _INVALID_DOCUMENT_ID_TOKENS
-    )
+    invalid = document_text.isna() | document_text.str.casefold().isin(_INVALID_DOCUMENT_ID_TOKENS)
     if not invalid.any():
         return result
 
