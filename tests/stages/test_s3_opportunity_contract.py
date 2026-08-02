@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from evidence.final_firm_year import _effective_opportunity
+from evidence.final_firm_year import _effective_opportunity  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.mark.parametrize(
