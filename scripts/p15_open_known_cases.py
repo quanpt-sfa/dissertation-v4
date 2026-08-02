@@ -77,8 +77,7 @@ def main() -> int:
         cases=cases,
         predictions=pd.concat(predictions, ignore_index=True),
         expected_case_ids=[
-            str(value)
-            for value in sequence(known.get("content_ids"), "known_cases.content_ids")
+            str(value) for value in sequence(known.get("content_ids"), "known_cases.content_ids")
         ],
         minimum_cases=int(veto["minimum_cases"]),
         below_median_cases=int(veto["below_median_cases"]),
@@ -127,8 +126,7 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
     }
     if not required.issubset(semantics):
         raise ValueError(
-            "embedded known-case semantics are incomplete: "
-            f"{sorted(required - set(semantics))}"
+            f"embedded known-case semantics are incomplete: {sorted(required - set(semantics))}"
         )
     entity = EntityResolutionSpec.from_mapping(registry.get("entity_resolution"))
     columns = physical_columns(registry)
