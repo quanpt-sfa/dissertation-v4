@@ -18,9 +18,7 @@ def _contracts() -> ContractRegistry:
     columns_raw = yaml.safe_load(
         (ROOT / "config/foundation/columns.yaml").read_text(encoding="utf-8")
     )
-    schemas_raw = yaml.safe_load(
-        (ROOT / "config/schemas/core.yaml").read_text(encoding="utf-8")
-    )
+    schemas_raw = yaml.safe_load((ROOT / "config/schemas/core.yaml").read_text(encoding="utf-8"))
     artifacts_raw = yaml.safe_load(
         (ROOT / "config/foundation/artifacts.yaml").read_text(encoding="utf-8")
     )
@@ -33,9 +31,7 @@ def _contracts() -> ContractRegistry:
     )
 
 
-def test_unified_file_audit_matches_feature_keyed_artifact_contract(
-    tmp_path: Path,
-) -> None:
+def test_unified_file_audit_matches_feature_keyed_artifact_contract(tmp_path: Path) -> None:
     status_frame = pd.DataFrame(
         [
             {"feature_id": "feature_a", "status": "PASS", "reason_code": "computed"},
