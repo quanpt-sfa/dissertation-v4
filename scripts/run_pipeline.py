@@ -77,23 +77,6 @@ def _run(command: list[str], *, cwd: Path, env: dict[str, str]) -> None:
     subprocess.run(command, cwd=cwd, env=env, check=True)
 
 
-def _run_capture(command: list[str], *, cwd: Path, env: dict[str, str]) -> str:
-    print("+", " ".join(command), flush=True)
-    result = subprocess.run(
-        command,
-        cwd=cwd,
-        env=env,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    if result.stdout:
-        print(result.stdout, end="", flush=True)
-    if result.stderr:
-        print(result.stderr, end="", file=sys.stderr, flush=True)
-    return result.stdout
-
-
 def _run_units_parallel(
     units: list[tuple[list[str], list[tuple[str, dict[str, str]]]]],
     *,
