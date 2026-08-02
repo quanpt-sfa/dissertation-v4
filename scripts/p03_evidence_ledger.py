@@ -12,7 +12,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_PROJECT_ROOT))
+sys.path.insert(0, str(_PROJECT_ROOT / "src"))
 
 from core.semantic_keys import (
     AFFECTED_FISCAL_YEAR,
