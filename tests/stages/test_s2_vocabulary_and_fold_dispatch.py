@@ -2,19 +2,33 @@
 
 from __future__ import annotations
 
+import importlib.util
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from types import ModuleType
+from typing import cast
 
 from core.evidence_registry import logical_evidence_sources
 from core.registry_compiler import compile_registry
 from evidence.annual import OpinionRow, build_audit_opinion_records
-from scripts.run_pipeline import _fold_execution_sets
 
 ROOT = Path(__file__).resolve().parents[2]
+FoldExecutionSets = Callable[[dict[str, object]], tuple[list[str], list[str]]]
 
 
 def _registry() -> dict[str, object]:
     return compile_registry(ROOT / "config" / "pipeline.yaml").registry
+
+
+def _load_runner() -> ModuleType:
+    path = ROOT / "scripts" / "run_pipeline.py"
+    spec = importlib.util.spec_from_file_location("production_run_pipeline", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load production runner from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _opinion_row(raw: str) -> OpinionRow:
@@ -61,7 +75,8 @@ def test_unknown_opinion_is_not_coerced_to_clean() -> None:
 
 
 def test_runner_keeps_initial_fold_for_p09_but_not_confirmatory_stages() -> None:
-    p09_folds, confirmatory_folds = _fold_execution_sets(_registry())
+    fold_execution_sets = cast(FoldExecutionSets, getattr(_load_runner(), "_fold_execution_sets"))
+    p09_folds, confirmatory_folds = fold_execution_sets(_registry())
 
     assert p09_folds == ["2020", "2021", "2022", "2023", "2024"]
     assert confirmatory_folds == ["2021", "2022", "2023", "2024"]
