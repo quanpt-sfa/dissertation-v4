@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -140,7 +140,7 @@ def main() -> int:
         "annual_evidence_audit",
         {
             "input_mode": "single_final_firm_year_parquet",
-            "physical_files_read": 1,
+            "physical_input_file_count": 1,
             "sources": [s1_build.audit, s2_build.audit],
             "s1_pair_failures": s1_build.failures,
             "s2_normalization_exceptions": s2_build.failures,
@@ -172,7 +172,7 @@ def _physical_source(registry: dict[str, Any], processor: str) -> tuple[str, dic
             source.get("evidence_mapping"), f"source={source_id}.evidence_mapping"
         )
         if evidence_mapping.get("processor") == processor:
-            matches.append((str(source_id), cast(dict[str, Any], source)))
+            matches.append((str(source_id), source))
     if len(matches) != 1:
         raise ValueError(f"processor={processor}: exactly one physical source required")
     return matches[0]
@@ -183,14 +183,43 @@ def _panel_anchors(panel: pd.DataFrame, columns: dict[str, str]) -> dict[tuple[s
     year = columns[FISCAL_YEAR]
     prediction = columns[PREDICTION_TIME]
     anchors: dict[tuple[str, int], datetime] = {}
-    for row in cast(
-        list[dict[str, object]], panel.loc[:, [firm, year, prediction]].to_dict("records")
-    ):
-        key = (str(row[firm]), int(row[year]))
+    records = cast(
+        list[dict[str, object]],
+        panel.loc[:, [firm, year, prediction]].to_dict("records"),
+    )
+    for row in records:
+        firm_id = str(row[firm])
+        fiscal_year = _required_int(row[year], year)
+        key = (firm_id, fiscal_year)
         if key in anchors:
             raise ValueError(f"P03 duplicate panel anchor={key}")
-        anchors[key] = pd.Timestamp(row[prediction]).to_pydatetime()
+        anchors[key] = _required_datetime(row[prediction], prediction)
     return anchors
+
+
+def _required_int(value: object, context: str) -> int:
+    if value is None or isinstance(value, bool):
+        raise ValueError(f"{context}: integer value required")
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"{context}: integer value required")
+    numeric = float(text)
+    if not numeric.is_integer():
+        raise ValueError(f"{context}: integer value required")
+    return int(numeric)
+
+
+def _required_datetime(value: object, context: str) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day)
+    if value is None:
+        raise ValueError(f"{context}: datetime value required")
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"{context}: datetime value required")
+    return pd.Timestamp(text).to_pydatetime()
 
 
 if __name__ == "__main__":
