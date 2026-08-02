@@ -57,12 +57,14 @@ REPOSITORY_MAINTENANCE_SCRIPTS = {
     "scripts/migrate_evidence_ledger_v6_to_v7.py",
 }
 PRODUCTION_DATA_BOUNDARIES = {
-    # P07 feature-computation data layer (replaced the pre-computed feature store):
-    # reads the registered raw financial-statement source and computes features
-    # directly, so it works with physical firm-year/source column names.
+    # P07 feature-computation data layer and final-input feature binder.
     "src/features/raw_loader.py",
     "src/features/compute.py",
     "src/features/panel_source.py",
+    # The single final firm-year file is exposed through separate S1/S2/S3
+    # semantic views here. This module is an explicit registered raw boundary,
+    # not an empirical stage that may invent independent data bindings.
+    "src/evidence/final_firm_year.py",
     # Explicit documentation-export boundaries. These scripts read only verified
     # runtime artifacts and write researcher-facing audit/calibration tables outside
     # the immutable production artifact namespace.
