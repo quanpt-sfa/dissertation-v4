@@ -1,9 +1,6 @@
-from __future__ import annotations
-
 from pathlib import Path
 
 import yaml
-
 
 FINAL_INPUT = "data/source/vn_pipeline_final_firm_year_2015_2025.parquet"
 
