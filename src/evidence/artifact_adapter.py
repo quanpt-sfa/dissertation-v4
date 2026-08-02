@@ -59,7 +59,9 @@ def bind_sanction_decision_ledger_columns(
     result = frame.copy()
     if firm_column != FIRM_ID:
         if firm_column in result.columns and FIRM_ID in result.columns:
-            raise ValueError("sanction decision ledger contains both internal and physical firm keys")
+            raise ValueError(
+                "sanction decision ledger contains both internal and physical firm keys"
+            )
         if firm_column not in result.columns:
             if FIRM_ID not in result.columns:
                 raise ValueError("sanction decision ledger is missing its internal firm key")
