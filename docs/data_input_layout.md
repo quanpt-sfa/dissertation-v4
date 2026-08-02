@@ -1,87 +1,200 @@
 # Bố trí dữ liệu đầu vào
 
-## Gốc dữ liệu
+## Hợp đồng vật lý
 
-Dữ liệu nằm trong chính repo hiện tại. `--raw-root` và biến
-`DISSERTATION_RAW_ROOT` phải trỏ tới:
-
-```text
-D:\Works\dissertation\dissertation-v4
-```
-
-Source catalog chỉ đọc các đường dẫn chính xác dưới `data/source/`. Pipeline không dò file
-ngoài catalog và không dùng bảng tích hợp hoặc bảng dẫn xuất làm nguồn phân tích độc lập.
-
-## Cây thư mục
+Production pipeline chỉ nhận **một file dữ liệu vật lý**:
 
 ```text
-data/
-|-- source/                         # nguồn chính thức được discovery
-|   |-- firm_identity_master_augmented.csv
-|   |-- listing_history_expanded_step31_vietstock_profile_timeline.csv
-|   |-- firm_event_sanction_panel.csv
-|   |-- financial_statement_full_long.csv.gz
-|   |-- bctc_audit_annual_long.csv
-|   |-- bctc_industry_icb.csv
-|   |-- ownership_year_latest_snapshot_long.csv.gz
-|   |-- macro_cpi_annual.csv
-|   |-- dividend_annual_long.csv.gz
-|   `-- known_cases.csv
-|-- config_reference/
-|   `-- locked_data_assumptions.csv
-|-- validation_only/
-|   |-- firm_year_pipeline_base_2015_2026.csv.gz
-|   |-- financial_statement_pre_post_pairs.csv.gz
-|   `-- state_ownership_inference.csv
-|-- README_START_INPUTS.md
-|`-- manifest_sha256.csv
+<RAW_ROOT>/
+|-- extract_provenance.json
+`-- data/
+    `-- source/
+        `-- vn_pipeline_final_firm_year_2015_2025.parquet
 ```
 
-## Trạng thái discovery
+`extract_provenance.json` là manifest nguồn, không phải dataset thứ hai. File Parquet là dataset duy
+nhất được snapshot, audit và đọc trong P01–P15. `--raw-root` và biến
+`DISSERTATION_RAW_ROOT` phải cùng trỏ tới `<RAW_ROOT>`.
 
-| Profile | File | Vai trò | Trạng thái mặc định |
-| --- | --- | --- | --- |
-| `firm_identity_master` | `data/source/firm_identity_master_augmented.csv` | master định danh | bật, bắt buộc |
-| `listing_history` | `data/source/listing_history_expanded_step31_vietstock_profile_timeline.csv` | lịch sử niêm yết | bật, bắt buộc |
-| `sanction_evidence` | `data/source/firm_event_sanction_panel.csv` | evidence sự kiện | bật, bắt buộc |
-| `financial_statement_core_long` | `data/source/financial_statement_full_long.csv.gz` | BCTC trước/sau kiểm toán | bật, bắt buộc |
-| `audit_annual_long` | `data/source/bctc_audit_annual_long.csv` | ý kiến và công ty kiểm toán | bật, bắt buộc |
-| `industry_icb` | `data/source/bctc_industry_icb.csv` | phân ngành | bật, bắt buộc |
-| `ownership_snapshots` | `data/source/ownership_year_latest_snapshot_long.csv.gz` | sở hữu | bật, bắt buộc |
-| `macro_cpi` | `data/source/macro_cpi_annual.csv` | quy đổi danh nghĩa | tắt đến khi feature registry yêu cầu |
-| `dividend_annual_long` | `data/source/dividend_annual_long.csv.gz` | chính sách cổ tức | tắt đến khi feature registry khóa |
-| `known_cases` | `data/source/known_cases.csv` | K1–K4 niêm phong | tùy chọn; chỉ mở tại P15 |
+Bốn source ID logic vẫn được giữ để bảo toàn contract của S1, S2, S3 và known-case validation:
 
-`config_reference/` không phải dữ liệu phân tích. Các rule đã khóa được chuyển vào module config
-tương ứng. `validation_only/` chỉ dùng cho golden comparison/regression test và không có glob trong
-source catalog.
+- `financial_statement_core_long`;
+- `audit_annual_long`;
+- `sanction_evidence`;
+- `known_cases`.
 
-## Các rule đầu vào đã khóa
+Cả bốn source ID cùng resolve tới đúng một đường dẫn Parquet và cùng một SHA-256. Đây là bốn
+semantic views của một file, không phải bốn file đầu vào.
 
-- BCTC được coi là khả dụng ngày 31/03 năm `t+1`; snapshot ghi rule dẫn xuất này vào protocol hash.
-- Năm 2026 là prospective và không tham gia retrospective evaluation.
-- Price, market capitalization, enterprise value, return và liquidity bị loại khỏi predictor set.
-- Sở hữu nhà nước chỉ được giữ nguyên hoặc giảm do thoái vốn; tăng bất thường tạo review flag.
-- VSM/VSMS và VTS/VTSC dùng rule phân giải theo tên đã khóa.
-- Audit firm bị thiếu được giữ là missing và có missing indicator; không mã hóa thành 0.
+## Grain và phạm vi
 
-## Tính bất biến và Git
+File final phải có đúng một dòng cho mỗi:
 
-- File trong `data/` là đầu vào cục bộ, bất biến trong một run và bị `.gitignore` toàn bộ.
-- `manifest_sha256.csv` được xác minh trước khi giải nén; snapshot tính lại SHA-256 cho từng source.
-- Thêm file, đổi bytes, schema, semantic binding hoặc rule availability đều tạo protocol hash mới.
-- Artifact chính thức nằm trong `artifacts/runs/<run-id>/` và cũng không vào Git.
+```text
+firm_master_id x fiscal_year
+```
+
+Phạm vi production hiện hành:
+
+- doanh nghiệp phi tài chính trên HOSE/HNX;
+- năm tài chính 2015–2025;
+- báo cáo năm hợp nhất;
+- chỉ các firm-year thỏa rule listing overlap đã khóa;
+- `prediction_time` là annual anchor được data-build job materialize và pipeline kiểm tra lại.
+
+Trùng `firm_master_id x fiscal_year`, thiếu key, lệch prediction anchor hoặc khác tập firm-year giữa
+P02 và P07 đều làm pipeline dừng fail-closed.
+
+## Nhóm cột bắt buộc
+
+### Key, mẫu và provenance
+
+```text
+firm_master_id
+issuer_ticker
+fiscal_year
+prediction_time
+source_snapshot_hash
+exchange_at_fye
+industry_code
+```
+
+### Thành phần S1
+
+```text
+pat_unaudited
+pat_audited
+revenue_unaudited
+revenue_audited
+```
+
+Pipeline vẫn tự áp dụng ngưỡng materiality đã khóa. Data-build job không được tạo nhãn S1 cuối cùng.
+Thiếu một cặp trước/sau kiểm toán phải giữ là unknown.
+
+### Thành phần S2
+
+```text
+audit_report_observed
+audit_opinion_raw
+audit_report_version_id
+```
+
+`audit_report_observed=false` không được chuyển thành clean opinion. Khi report được quan sát,
+`audit_opinion_raw` phải map được vào taxonomy đã khóa hoặc được ghi nhận là normalization failure.
+
+### Endpoint và provenance S3
+
+```text
+s3_source_opportunity
+s3_broad_endpoint
+s3_reporting_endpoint
+s3_content_endpoint
+s3_timeliness_endpoint
+s3_document_ids_json
+s3_first_label_known_date
+s3_last_label_known_date
+s3_taxonomy_codes_json
+```
+
+Quy tắc ba trạng thái:
+
+- opportunity true: bốn endpoint phải là true/false;
+- opportunity không true: bốn endpoint phải null;
+- endpoint positive: `s3_document_ids_json` phải chứa ít nhất một document ID.
+
+False ở đây chỉ là observed endpoint zero trong source-year hoàn chỉnh; không phải latent non-fraud.
+
+### Known cases nhúng trong firm-year
+
+Các cột sau phải tồn tại để P15 chạy, nhưng được để null cho firm-year không thuộc known cases:
+
+```text
+known_case_id
+known_case_construct
+known_case_role
+known_case_training_include_flag
+known_case_calibration_include_flag
+known_case_model_selection_include_flag
+known_case_external_validation_include_flag
+```
+
+Known case hợp lệ phải có role `SIMULATION_EXTERNAL_VALIDATION`, không đi vào training,
+calibration hoặc model selection và chỉ được mở ở P15.
+
+### Predictors
+
+File final phải chứa các predictor columns đã được data-build job tính. Tên cột vật lý phải khớp
+`physical_column` trong `config/methodology/features.yaml`.
+
+P07 không tính lại feature từ BCTC long. P07 chỉ:
+
+- bind feature columns đã đăng ký;
+- kiểm tra coverage, missingness, scale và redundancy;
+- áp leakage firewall và model eligibility;
+- tạo feature views và model matrix manifest.
+
+Direct S1/S2/S3 components và known-case columns không được tự động đưa vào model matrix chỉ vì có
+mặt trong file final.
+
+## `extract_provenance.json`
+
+Manifest phải nằm trực tiếp dưới `<RAW_ROOT>` và có đủ:
+
+```json
+{
+  "vendor": "...",
+  "vendor_product": "...",
+  "pull_date": "YYYY-MM-DD",
+  "vendor_version": "...",
+  "extract_query": "...",
+  "revision_policy": "...",
+  "point_in_time_vintages_available": false
+}
+```
+
+Không ghi password, connection string hoặc secret vào manifest.
+
+## Trách nhiệm của data-build job
+
+Việc nối SQL Server, listing, audit, enforcement, ownership và known-case sources diễn ra **ngoài
+production modeling pipeline**. Data-build job phải xuất:
+
+```text
+data/source/vn_pipeline_final_firm_year_2015_2025.parquet
+```
+
+Nó phải fail khi:
+
+- grain firm-year bị trùng;
+- population hoặc annual scope sai;
+- source components xung đột;
+- feature crosswalk chưa được phê duyệt;
+- missing evidence bị chuyển thành negative;
+- known cases bị đưa vào modeling roles;
+- S3 endpoint không nhất quán với source opportunity;
+- row provenance hoặc source snapshot hash bị thiếu.
+
+## Tính bất biến
+
+- Parquet final là bất biến trong một run và bị khóa SHA-256 tại snapshot.
+- Bốn semantic views phải cùng trỏ tới một relative path và cùng hash.
+- Đổi bytes, schema, semantic binding, feature set hoặc evidence construction tạo run mới.
+- Artifact chính thức nằm trong `artifacts/runs/<run-id>/` và không vào Git.
+- `--resume` chỉ hợp lệ khi code, config, snapshot và Parquet không đổi.
 
 ## Lệnh chạy
 
 ```powershell
 uv run python scripts/run_pipeline.py `
-  --run-id dissertation-2015-2026-start-v1 `
-  --raw-root "D:\Works\dissertation\dissertation-v4" `
-  --output-root "D:\Works\dissertation\dissertation-v4\artifacts\runs" `
-  --through P17
+  --run-id final-firm-year-2015-2025-v1 `
+  --raw-root "D:\Works\dissertation\final-input" `
+  --output-root "D:\Works\dissertation\artifacts\runs" `
+  --through P17 `
+  --workers 12
 ```
 
-Mỗi `run-id` là bất biến. Dùng `--resume` chỉ khi code, config và snapshot không đổi. Nếu thiếu
-`risksets.data_cutoff` hoặc empirical binding khác, production runner phải dừng fail-closed tại đúng
-blocker; không tự suy đoán giá trị.
+Trước khi chạy, file phải nằm tại:
+
+```text
+D:\Works\dissertation\final-input\data\source\vn_pipeline_final_firm_year_2015_2025.parquet
+```
