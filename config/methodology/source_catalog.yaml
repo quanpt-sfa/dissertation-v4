@@ -2,7 +2,7 @@ source_catalog:
   root_environment_variable: DISSERTATION_RAW_ROOT
   snapshot_schema_version: 1
   profiles:
-    final_firm_year_s1:
+    financial_statement_core_long:
       enabled: true
       required: true
       discovery:
@@ -100,7 +100,7 @@ source_catalog:
         availability_date_rule: physical_column
         row_aggregation: one_row_per_firm_year
 
-    final_firm_year_s2:
+    audit_annual_long:
       enabled: true
       required: true
       discovery:
@@ -185,7 +185,7 @@ source_catalog:
       panel_mapping:
         enabled: false
 
-    final_firm_year_s3:
+    sanction_evidence:
       enabled: true
       required: true
       discovery:
@@ -201,6 +201,8 @@ source_catalog:
       original_unit: firm-year
       role: evidence
       verification_status: selectively_observed_enforcement_proxy
+      measurement_process_role: public_positive_evidence_with_selective_verification
+      high_specificity_assumed: false
       coverage_dimensions:
       - fiscal_year
       - s3_source_opportunity
@@ -256,7 +258,9 @@ source_catalog:
         availability_rule: sanction_calendar_year
         explicit_negative_allowed: true
         observed_endpoint_zero_allowed: true
+        legacy_explicit_negative_term_deprecated: true
         absence_policy: observed_endpoint_zero_when_complete_source_year
+        zero_label_interpretation: observed_source_endpoint_zero_not_latent_negative
         opportunity_semantic: s3_source_opportunity
         duplicate_representative_rule: identical_signature_then_document_id_firm
         target_year_rule: sanction_year_minus_one
@@ -272,6 +276,13 @@ source_catalog:
         - label_known_date
         - publish_date
         - decision_date
+        measurement_process:
+          observation_opportunity: s3_source_opportunity
+          verification: observed_true_only_for_public_positive_endpoint
+          determination: endpoint_specific_public_determination
+          recording: public_decision_recorded
+          observed_source_label: preaggregated_endpoint_incidence
+          high_specificity_assumed: false
         wide_endpoints:
           source_opportunity_semantic: s3_source_opportunity
           document_ids_semantic: s3_document_ids_json
@@ -295,7 +306,7 @@ source_catalog:
       panel_mapping:
         enabled: false
 
-    final_firm_year_known_cases:
+    known_cases:
       enabled: true
       required: true
       discovery:
@@ -311,6 +322,8 @@ source_catalog:
       original_unit: firm-year
       role: known_case
       verification_status: externally_reviewed_positive_case
+      measurement_process_role: external_falsification_positive_evidence
+      high_specificity_assumed: false
       coverage_dimensions:
       - fiscal_year
       data_risks:
