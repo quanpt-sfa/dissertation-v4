@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import pytest
 
-from features.panel_source import _assemble_from_final
+from features.panel_source import assemble_from_final
 
 FIRM = "firm_master_id"
 YEAR = "fiscal_year"
@@ -80,7 +81,7 @@ def test_final_wide_input_derives_prepost_and_lagged_ratio_features(
         ),
     ]
 
-    result = _assemble_from_final(
+    result = assemble_from_final(
         base_panel=base_panel,
         feature_definitions=definitions,
         intended_definitions=[],
@@ -94,8 +95,7 @@ def test_final_wide_input_derives_prepost_and_lagged_ratio_features(
     assert result.panel["audit_adj_net_revenue_relative"].tolist() == [0.1, 1.0 / 6.0]
     assert pd.isna(result.panel.loc[0, "ratio_sales_growth"])
     assert result.panel.loc[1, "ratio_sales_growth"] == pytest.approx(0.2)
-    derived_features = result.validation_report["derived_features"]
-    assert isinstance(derived_features, list)
+    derived_features = cast(list[str], result.validation_report["derived_features"])
     assert set(derived_features) == {
         "audit_adj_net_revenue_signed",
         "audit_adj_net_revenue_relative",
@@ -122,7 +122,7 @@ def test_final_wide_input_fails_closed_for_missing_locked_atomic_feature(
     final_frame.to_parquet(path, index=False)
 
     with pytest.raises(ValueError, match="fs_aud_total_assets"):
-        _assemble_from_final(
+        assemble_from_final(
             base_panel=final_frame.copy(),
             feature_definitions=[
                 _definition(
