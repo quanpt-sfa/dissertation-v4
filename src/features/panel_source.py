@@ -133,7 +133,9 @@ def _shift_one_year(
     year_column: str,
 ) -> pd.Series:
     frame = series.rename("_feature_value").reset_index()
-    frame[year_column] = pd.to_numeric(frame[year_column], errors="raise").astype("int64") + 1
+    frame[year_column] = (
+        pd.to_numeric(frame[year_column], errors="raise").astype("int64") + 1
+    )
     return frame.set_index([firm_column, year_column])["_feature_value"].astype("float64")
 
 
@@ -148,17 +150,12 @@ def _evaluate_formula_series(
         operand_values: dict[str, float] = {}
         for name, series in operands.items():
             raw_value: object = series.get(key, np.nan)
-            operand_values[name] = (
-                math_nan() if pd.isna(raw_value) else float(cast(Any, raw_value))
-            )
+            if pd.isna(raw_value):
+                operand_values[name] = float("nan")
+            else:
+                operand_values[name] = float(cast(Any, raw_value))
         values.append(evaluate_ratio_formula(formula, operand_values))
     return pd.Series(values, index=index, dtype="float64")
-
-
-def math_nan() -> float:
-    """Return a typed NaN without exposing numpy scalar types downstream."""
-
-    return float("nan")
 
 
 def _derive_wide_feature(
@@ -176,7 +173,9 @@ def _derive_wide_feature(
 
     if step == "prepost_difference":
         dependencies = _dependencies(definition)
-        if not dependencies or any(dependency not in computed for dependency in dependencies):
+        if not dependencies or any(
+            dependency not in computed for dependency in dependencies
+        ):
             return None
         operands = {
             dependency: _numeric_series(computed[dependency]).reindex(index)
@@ -363,7 +362,12 @@ def _assemble_from_final(
                 "status": status,
             }
         )
-        if resolved and isinstance(physical, str) and physical and physical not in values_by_physical:
+        if (
+            resolved
+            and isinstance(physical, str)
+            and physical
+            and physical not in values_by_physical
+        ):
             values_by_physical[physical] = computed[feature_id].reset_index(drop=True)
 
     final_values = pd.DataFrame(
