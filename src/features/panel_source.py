@@ -131,12 +131,12 @@ def assemble_from_raw(
 
     firm_ids = sorted(str(value) for value in long_values[FIRM].dropna().unique())
     panel_firms = set(spine[firm_column].dropna().astype(str))
-    identifier_audit = _build_identifier_audit(
+    identifier_audit = build_identifier_audit(
         firm_ids=firm_ids,
         panel_firms=panel_firms,
         firm_column=firm_column,
     )
-    file_audit = _build_file_audit(
+    file_audit = build_file_audit(
         status_frame=status_frame,
         raw_source_path=raw_source_path,
         raw_rows=len(raw_frame),
@@ -162,7 +162,7 @@ def assemble_from_raw(
     )
 
 
-def _build_file_audit(
+def build_file_audit(
     *,
     status_frame: pd.DataFrame,
     raw_source_path: Path,
@@ -171,7 +171,7 @@ def _build_file_audit(
 ) -> pd.DataFrame:
     """Return one source-binding audit row per registered feature.
 
-    The historical artifact contract is keyed by ``feature_id``.  Under the
+    The historical artifact contract is keyed by ``feature_id``. Under the
     unified raw-computation path every registered feature is backed by the same
     immutable long-format source, so the source metadata is repeated per
     feature rather than replacing the feature key with a source-level row.
@@ -192,7 +192,7 @@ def _build_file_audit(
     return audit
 
 
-def _build_identifier_audit(
+def build_identifier_audit(
     *,
     firm_ids: Sequence[str],
     panel_firms: set[str],
@@ -201,7 +201,7 @@ def _build_identifier_audit(
     """Return identifier audit with the canonical firm key first.
 
     ``feature_store_identifier_audit_frame`` requires the physical canonical
-    firm key as its ordered leading column.  Compatibility aliases remain in
+    firm key as its ordered leading column. Compatibility aliases remain in
     the frame because downstream P07 summaries still report source identifiers.
     """
     values = list(firm_ids)
