@@ -12,10 +12,11 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import numpy as np
 import pandas as pd
+from numpy.typing import NDArray
 
 from features.compute import FIRM, YEAR, compute_feature_values, evaluate_ratio_formula
 from features.raw_loader import build_long_values, read_financial_statement_long
@@ -54,7 +55,7 @@ def assemble_from_raw(
     """Dispatch to the final wide input or the archived long-format path."""
 
     if raw_source_path.suffix.casefold() == ".parquet":
-        return _assemble_from_final(
+        return assemble_from_final(
             base_panel=base_panel,
             feature_definitions=feature_definitions,
             intended_definitions=intended_definitions,
@@ -105,8 +106,8 @@ def _transformation_step(definition: Mapping[str, object]) -> str | None:
         return None
     steps = {
         str(item.get("transformation_step"))
-        for item in cast(list[object], raw_lineage)
-        if isinstance(item, Mapping) and item.get("transformation_step") is not None
+        for item in cast(list[Mapping[str, object]], raw_lineage)
+        if item.get("transformation_step") is not None
     }
     if len(steps) > 1:
         raise ValueError(
@@ -142,16 +143,19 @@ def _evaluate_formula_series(
     operands: Mapping[str, pd.Series],
     index: pd.MultiIndex,
 ) -> pd.Series:
+    names = list(operands)
+    arrays: dict[str, NDArray[np.float64]] = {
+        name: cast(
+            NDArray[np.float64],
+            _numeric_series(operands[name])
+            .reindex(index)
+            .to_numpy(dtype="float64", na_value=np.nan),
+        )
+        for name in names
+    }
     values: list[float] = []
-    for raw_key in index:
-        key = cast(tuple[object, object], raw_key)
-        operand_values: dict[str, float] = {}
-        for name, series in operands.items():
-            raw_value: object = series.get(key, np.nan)
-            if pd.isna(raw_value):
-                operand_values[name] = float("nan")
-            else:
-                operand_values[name] = float(cast(Any, raw_value))
+    for offset in range(len(index)):
+        operand_values = {name: float(arrays[name][offset]) for name in names}
         values.append(evaluate_ratio_formula(formula, operand_values))
     return pd.Series(values, index=index, dtype="float64")
 
@@ -265,7 +269,7 @@ def _resolve_final_features(
     return computed, reason_by_feature
 
 
-def _assemble_from_final(
+def assemble_from_final(
     *,
     base_panel: pd.DataFrame,
     feature_definitions: Sequence[Mapping[str, object]],
