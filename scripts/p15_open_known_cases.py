@@ -115,13 +115,15 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
         FISCAL_YEAR,
         "case_construct",
         "case_role",
-        "training_include_flag",
-        "calibration_include_flag",
-        "model_selection_include_flag",
         "external_validation_include_flag",
+        "case_seal_status",
+        "case_opens_at_step",
     }
     if not required.issubset(semantics):
-        raise ValueError("embedded known-case semantics are incomplete")
+        raise ValueError(
+            "embedded known-case semantics are incomplete: "
+            f"{sorted(required - set(semantics))}"
+        )
     entity = EntityResolutionSpec.from_mapping(registry.get("entity_resolution"))
     columns = physical_columns(registry)
     rows: list[dict[str, Any]] = []
@@ -140,28 +142,22 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
         fiscal_year = _parse_year(row.get(str(semantics[FISCAL_YEAR])))
         case_construct = str(row.get(str(semantics["case_construct"]), "")).strip()
         case_role = str(row.get(str(semantics["case_role"]), "")).strip()
-        flags = {
-            name: _parse_bool(row.get(str(semantics[name])), name)
-            for name in (
-                "training_include_flag",
-                "calibration_include_flag",
-                "model_selection_include_flag",
-                "external_validation_include_flag",
-            )
-        }
+        external_flag = _parse_bool(
+            row.get(str(semantics["external_validation_include_flag"])),
+            "external_validation_include_flag",
+        )
+        seal_status = str(row.get(str(semantics["case_seal_status"]), "")).strip()
+        opens_at_step = str(row.get(str(semantics["case_opens_at_step"]), "")).strip()
         if case_construct != "CONFIRMED_FINANCIAL_REPORTING_CASE":
             raise ValueError("known case construct must be CONFIRMED_FINANCIAL_REPORTING_CASE")
         if case_role != "SIMULATION_EXTERNAL_VALIDATION":
             raise ValueError("known case role must be SIMULATION_EXTERNAL_VALIDATION")
-        if flags != {
-            "training_include_flag": False,
-            "calibration_include_flag": False,
-            "model_selection_include_flag": False,
-            "external_validation_include_flag": True,
-        }:
-            raise ValueError(
-                "known case inclusion flags violate the sealed external-validation role"
-            )
+        if external_flag is not True:
+            raise ValueError("known case must be included only for external validation")
+        if opens_at_step.upper() != "P15":
+            raise ValueError("known case may open only at P15")
+        if not _is_sealed_status(seal_status):
+            raise ValueError("known case seal status must explicitly indicate sealed or locked")
         key = (case_id, canonical, fiscal_year)
         if key in seen:
             raise ValueError(f"duplicate embedded known-case row={key}")
@@ -200,6 +196,13 @@ def _parse_bool(value: object, field: str) -> bool:
     if normalized in {"false", "0", "no", "n"}:
         return False
     raise ValueError(f"known case field={field}: boolean value required")
+
+
+def _is_sealed_status(value: str) -> bool:
+    normalized = value.strip().casefold().replace("-", "_").replace(" ", "_")
+    if not normalized or "unseal" in normalized or normalized.startswith("open"):
+        return False
+    return "seal" in normalized or "lock" in normalized
 
 
 if __name__ == "__main__":
