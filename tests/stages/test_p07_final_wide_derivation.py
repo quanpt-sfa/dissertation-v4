@@ -31,7 +31,9 @@ def _definition(
     }
 
 
-def test_final_wide_input_derives_prepost_and_lagged_ratio_features(tmp_path: Path) -> None:
+def test_final_wide_input_derives_prepost_and_lagged_ratio_features(
+    tmp_path: Path,
+) -> None:
     prediction_time = pd.to_datetime(["2021-03-31", "2022-03-31"])
     final_frame = pd.DataFrame(
         {
@@ -98,7 +100,9 @@ def test_final_wide_input_derives_prepost_and_lagged_ratio_features(tmp_path: Pa
     assert result.panel["audit_adj_net_revenue_relative"].tolist() == [0.1, 1.0 / 6.0]
     assert pd.isna(result.panel.loc[0, "ratio_sales_growth"])
     assert result.panel.loc[1, "ratio_sales_growth"] == pytest.approx(0.2)
-    assert set(result.validation_report["derived_features"]) == {
+    derived_features = result.validation_report["derived_features"]
+    assert isinstance(derived_features, list)
+    assert set(derived_features) == {
         "audit_adj_net_revenue_signed",
         "audit_adj_net_revenue_relative",
         "ratio_sales_growth",
@@ -110,7 +114,9 @@ def test_final_wide_input_derives_prepost_and_lagged_ratio_features(tmp_path: Pa
     )
 
 
-def test_final_wide_input_fails_closed_for_missing_locked_atomic_feature(tmp_path: Path) -> None:
+def test_final_wide_input_fails_closed_for_missing_locked_atomic_feature(
+    tmp_path: Path,
+) -> None:
     final_frame = pd.DataFrame(
         {
             FIRM: ["F001"],
