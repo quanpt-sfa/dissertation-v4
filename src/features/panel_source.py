@@ -133,9 +133,7 @@ def _shift_one_year(
     year_column: str,
 ) -> pd.Series:
     frame = series.rename("_feature_value").reset_index()
-    frame[year_column] = (
-        pd.to_numeric(frame[year_column], errors="raise").astype("int64") + 1
-    )
+    frame[year_column] = pd.to_numeric(frame[year_column], errors="raise").astype("int64") + 1
     return frame.set_index([firm_column, year_column])["_feature_value"].astype("float64")
 
 
@@ -173,9 +171,7 @@ def _derive_wide_feature(
 
     if step == "prepost_difference":
         dependencies = _dependencies(definition)
-        if not dependencies or any(
-            dependency not in computed for dependency in dependencies
-        ):
+        if not dependencies or any(dependency not in computed for dependency in dependencies):
             return None
         operands = {
             dependency: _numeric_series(computed[dependency]).reindex(index)
