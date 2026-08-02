@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from functools import cache
 from pathlib import Path
 from typing import Any, cast
@@ -92,4 +93,42 @@ def test_wide_s3_ledger_binds_internal_firm_id_to_physical_contract() -> None:
         "taxonomy_reason_code",
     ]
     assert ledger.loc[0, firm_column] == "E706"
+    contract_registry(registry).validate("sanction_decision_ledger", ledger)
+
+
+def test_wide_s3_ledger_collapses_repeated_document_firm_provenance() -> None:
+    registry = _registry()
+    columns = physical_columns(registry)
+    firm_column = columns[FIRM_ID]
+    first = _internal_ledger()
+    second = first.copy()
+    second.loc[:, "target_fiscal_year"] = 2022
+    second.loc[:, "construct_target"] = '["S3_CONTENT","S3_REPORTING"]'
+    second.loc[:, "source_record_refs"] = '["source-ref-2"]'
+    second.loc[:, "taxonomy_codes"] = '["FS_FALSE_MISLEADING"]'
+    internal = pd.concat([first, second], ignore_index=True)
+
+    ledger = bind_sanction_decision_ledger_columns(internal, firm_column=firm_column)
+
+    assert len(ledger) == 1
+    assert not ledger.duplicated(["document_id", firm_column]).any()
+    assert pd.isna(ledger.loc[0, "target_fiscal_year"])
+    assert ledger.loc[0, "period_link_confidence"] == "unresolved_multiple_target_years"
+    assert (
+        ledger.loc[0, "taxonomy_reason_code"]
+        == "MULTIPLE_TARGET_FISCAL_YEARS_IN_FINAL_PROVENANCE"
+    )
+    assert json.loads(str(ledger.loc[0, "construct_target"])) == [
+        "S3_BROAD",
+        "S3_CONTENT",
+        "S3_REPORTING",
+    ]
+    assert json.loads(str(ledger.loc[0, "source_record_refs"])) == [
+        "source-ref",
+        "source-ref-2",
+    ]
+    assert json.loads(str(ledger.loc[0, "taxonomy_codes"])) == [
+        "DISCLOSURE_UNSPECIFIED",
+        "FS_FALSE_MISLEADING",
+    ]
     contract_registry(registry).validate("sanction_decision_ledger", ledger)
