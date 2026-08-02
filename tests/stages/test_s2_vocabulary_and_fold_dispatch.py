@@ -18,7 +18,10 @@ FoldExecutionSets = Callable[[dict[str, object]], tuple[list[str], list[str]]]
 
 
 def _registry() -> dict[str, object]:
-    return compile_registry(ROOT / "config" / "pipeline.yaml").registry
+    return cast(
+        dict[str, object],
+        compile_registry(ROOT / "config" / "pipeline.yaml").registry,
+    )
 
 
 def _load_runner() -> ModuleType:
