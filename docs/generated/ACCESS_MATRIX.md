@@ -271,9 +271,11 @@ Source: config/pipeline.yaml
       "SIMULATED"
     ],
     "read_sensitivity_classes": [
+      "public",
       "restricted"
     ],
     "reads": [
+      "mcse_report",
       "feature_panel",
       "feature_registry",
       "risk_sets",
