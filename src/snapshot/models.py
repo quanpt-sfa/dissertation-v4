@@ -317,10 +317,10 @@ class EvidenceProfile:
                 raise ValueError(f"{context}.audit_adjustment.denominator: unsupported")
             floor = adjustment.get("minimum_absolute_denominator")
             if floor is not None and (
-                not isinstance(floor, (int, float)) or isinstance(floor, bool) or float(floor) <= 0
+                not isinstance(floor, (int, float)) or isinstance(floor, bool) or float(floor) < 0
             ):
                 raise ValueError(
-                    f"{context}.audit_adjustment.minimum_absolute_denominator: positive or null"
+                    f"{context}.audit_adjustment.minimum_absolute_denominator: nonnegative or null"
                 )
             for index, logical in enumerate(logical_sources):
                 for name in ("canonical_item", "statement_family"):
