@@ -6,7 +6,6 @@ from typing import Any, cast
 from core.access_matrix import assert_access
 from core.registry_compiler import compile_registry
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
