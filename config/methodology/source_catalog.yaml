@@ -2,254 +2,64 @@ source_catalog:
   root_environment_variable: DISSERTATION_RAW_ROOT
   snapshot_schema_version: 1
   profiles:
-    firm_identity_master:
+    final_firm_year_s1:
       enabled: true
       required: true
       discovery:
         globs:
-        - data/source/firm_identity_master_augmented.csv
+        - data/source/vn_pipeline_final_firm_year_2015_2025.parquet
         excludes: []
         cardinality: one
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
-      channel_id: S3
-      source_type: firm_identity_master
-      source_agency: curated_identity_master
-      original_unit: issuer
-      role: reference
-      verification_status: observed_with_review_flags
-      coverage_dimensions:
-      - exchange
-      - identity_status
-      - master_origin
-      data_risks:
-      - nonstandard_identifier
-      - review_required_identity
-      semantic_fields:
-        firm_id:
-        - issuer_ticker
-        ticker:
-        - issuer_ticker
-      required_semantic_fields:
-      - firm_id
-      key_semantics:
-      - firm_id
-      date_semantics: []
-      panel_mapping:
-        enabled: false
-    listing_history:
-      enabled: true
-      required: true
-      discovery:
-        globs:
-        - data/source/listing_history_expanded_step31_vietstock_profile_timeline.csv
-        excludes: []
-        cardinality: one
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
-      channel_id: S3
-      source_type: listing_history
-      source_agency: Vietstock_profile_timeline
-      original_unit: issuer-listing-spell
-      role: reference
-      verification_status: observed_with_precision_flags
-      coverage_dimensions:
-      - exchange
-      - listing_type
-      - start_precision
-      - end_precision
-      data_risks:
-      - ticker_reuse
-      - overlapping_spells
-      - imprecise_boundary_date
-      semantic_fields:
-        firm_id:
-        - code
-        segment_order:
-        - segment_order
-        availability_date:
-        - start_date
-        end_date:
-        - end_date
-      required_semantic_fields:
-      - firm_id
-      - segment_order
-      - availability_date
-      key_semantics:
-      - firm_id
-      - segment_order
-      date_semantics:
-      - availability_date
-      - end_date
-      panel_mapping:
-        enabled: false
-    sanction_evidence:
-      enabled: true
-      required: true
-      discovery:
-        globs:
-        - data/source/firm_event_sanction_panel.csv
-        excludes: []
-        cardinality: one
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
-      channel_id: S3
-      source_type: official
-      source_agency: enforcement_decision_ledger
-      original_unit: enforcement-event
-      role: evidence
-      verification_status: selectively_observed_enforcement_proxy
-      measurement_process_role: public_positive_evidence_with_selective_verification
-      high_specificity_assumed: false
-      coverage_dimensions:
-      - sanction_year
-      - construct_family
-      - normalized_violation_code
-      data_risks:
-      - decision_to_firm_link
-      - multi_firm_decision
-      - incomplete_source_year
-      - unmapped_taxonomy
-      semantic_fields:
-        firm_id:
-        - issuer_ticker
-        document_id:
-        - document_id
-        target_fiscal_year:
-        - target_fiscal_year
-        primary_violation_l1:
-        - primary_violation_l1
-        primary_violation_l2:
-        - primary_violation_l2
-        construct_family:
-        - construct_family
-        construct_target:
-        - construct_target
-        normalized_violation_code:
-        - normalized_violation_code
-        row_inclusion:
-        - train_include_flag
-        hard_positive:
-        - is_direct_label
-        legacy_event_id:
-        - firm_event_id
-        period_link_source:
-        - period_link_source
-        period_link_confidence:
-        - period_link_confidence
-      required_semantic_fields:
-      - firm_id
-      - document_id
-      - target_fiscal_year
-      - row_inclusion
-      - hard_positive
-      key_semantics: []
-      date_semantics: []
-      evidence_mapping:
-        processor: sanction_calendar_year
-        temporal_role: next_calendar_year_regulatory_event
-        availability_rule: sanction_calendar_year
-        target_year_rule: sanction_year_minus_one
-        decision_key_semantic: document_id
-        decision_provenance_semantic: decision_number
-        sanction_year_precedence:
-        - sanction_year
-        - decision_date
-        - publish_date
-        label_known_date_precedence:
-        - label_known_date
-        - publish_date
-        - decision_date
-        affected_fiscal_year_role: sensitivity_provenance_only
-        explicit_negative_allowed: true
-        observed_endpoint_zero_allowed: true
-        legacy_explicit_negative_term_deprecated: true
-        row_inclusion_semantic: row_inclusion
-        positive_semantic: hard_positive
-        absence_policy: observed_endpoint_zero_when_complete_source_year
-        zero_label_interpretation: observed_source_endpoint_zero_not_latent_negative
-        opportunity_semantic: derived_source_year_completeness
-        measurement_process:
-          observation_opportunity: derived_source_year_completeness
-          verification: observed_true_only_for_public_positive_endpoint
-          determination: endpoint_specific_public_determination
-          recording: public_decision_recorded
-          observed_source_label: endpoint_incidence_in_complete_source_year
-          high_specificity_assumed: false
-        duplicate_representative_rule: identical_signature_then_document_id_firm
-        taxonomy_registry: s3_taxonomy
-        logical_sources:
-        - source_id: S3_BROAD
-          endpoint_id: S3_BROAD
-        - source_id: S3_REPORTING
-          endpoint_id: S3_REPORTING
-        - source_id: S3_CONTENT
-          endpoint_id: S3_CONTENT
-        - source_id: S3_TIMELINESS
-          endpoint_id: S3_TIMELINESS
-      panel_mapping:
-        enabled: false
-    financial_statement_core_long:
-      enabled: true
-      required: true
-      discovery:
-        globs:
-        - data/source/financial_statement_full_long.csv.gz
-        excludes: []
-        cardinality: one
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
+      format: parquet
+      reader: {}
       channel_id: S1
-      source_type: financial_statement_core_long
-      source_agency: normalized_bctc_exports
-      original_unit: firm-year-audit-status-item
+      source_type: final_firm_year_master
+      source_agency: curated_final_input_builder
+      original_unit: firm-year
       role: evidence
       verification_status: observed_opportunity_only
       coverage_dimensions:
       - fiscal_year
-      - audit_status
-      - statement_family
-      - source_item_id
+      - exchange_at_fye
+      - industry_code
       data_risks:
-      - duplicate_item
-      - scope_conflict
+      - duplicate_firm_year
       - schema_drift
-      - missing_pair
+      - missing_prepost_components
+      - stale_final_build
       semantic_fields:
         firm_id:
+        - firm_master_id
+        ticker:
         - issuer_ticker
         fiscal_year:
         - fiscal_year
-        audit_status:
-        - audit_status
-        statement_family:
-        - statement_family
-        statement_scope:
-        - scope
-        item_id:
-        - source_item_id
-        value:
-        - value_numeric
-        unit:
-        - unit
-        source_file:
-        - source_file
-        source_row:
-        - source_row
+        availability_date:
+        - prediction_time
+        pat_unaudited:
+        - pat_unaudited
+        pat_audited:
+        - pat_audited
+        revenue_unaudited:
+        - revenue_unaudited
+        revenue_audited:
+        - revenue_audited
+        source_snapshot_hash:
+        - source_snapshot_hash
       required_semantic_fields:
       - firm_id
       - fiscal_year
       - availability_date
-      key_semantics: []
-      date_semantics: []
+      - pat_unaudited
+      - pat_audited
+      - revenue_unaudited
+      - revenue_audited
+      - source_snapshot_hash
+      key_semantics:
+      - firm_id
+      - fiscal_year
+      date_semantics:
+      - availability_date
       evidence_mapping:
         processor: audit_adjustment
         temporal_role: annual_measurement_at_anchor
@@ -258,6 +68,13 @@ source_catalog:
         absence_policy: unknown
         opportunity_semantic: derived_matched_pair
         duplicate_representative_rule: fail_on_duplicate_status_record
+        wide_components:
+          S1_profit_adjustment:
+            unaudited_semantic: pat_unaudited
+            audited_semantic: pat_audited
+          S1_revenue_adjustment:
+            unaudited_semantic: revenue_unaudited
+            audited_semantic: revenue_audited
         audit_adjustment:
           unaudited_status: unaudited
           audited_status: audited
@@ -280,61 +97,51 @@ source_catalog:
         enabled: true
         core_predictor: true
         contributes_to_firm_master: true
-        availability_date_rule: fiscal_year_plus_one_month_day
-        availability_month_day: 03-31
-        row_aggregation: firm_year_presence
-    audit_annual_long:
+        availability_date_rule: physical_column
+        row_aggregation: one_row_per_firm_year
+
+    final_firm_year_s2:
       enabled: true
       required: true
       discovery:
         globs:
-        - data/source/bctc_audit_annual_long.csv
+        - data/source/vn_pipeline_final_firm_year_2015_2025.parquet
         excludes: []
         cardinality: one
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
+      format: parquet
+      reader: {}
       channel_id: S2
-      source_type: audit_opinion_and_firm
-      source_agency: normalized_bctc_audit_exports
-      original_unit: firm-year-audit-indicator
+      source_type: final_firm_year_master
+      source_agency: curated_final_input_builder
+      original_unit: firm-year
       role: evidence
       verification_status: observed_opportunity_only
       coverage_dimensions:
-      - year
-      - audit_indicator
-      - statement_scope
+      - fiscal_year
+      - audit_report_observed
       data_risks:
-      - missing_audit_firm
-      - duplicate_indicator
+      - missing_audit_report
       - opinion_normalization
+      - stale_final_build
       semantic_fields:
         firm_id:
-        - issuer_ticker
+        - firm_master_id
         fiscal_year:
-        - year
-        audit_indicator:
-        - audit_indicator
+        - fiscal_year
+        audit_report_observed:
+        - audit_report_observed
         audit_opinion:
         - audit_opinion_raw
-        audit_firm:
-        - audit_firm_raw
-        period_type:
-        - period_type
-        statement_scope:
-        - statement_scope
-        audit_status:
-        - audit_status
-        source_file:
-        - source_file
-        source_column:
-        - source_column
+        audit_report_version_id:
+        - audit_report_version_id
       required_semantic_fields:
       - firm_id
       - fiscal_year
-      - audit_indicator
-      key_semantics: []
+      - audit_report_observed
+      - audit_opinion
+      key_semantics:
+      - firm_id
+      - fiscal_year
       date_semantics: []
       evidence_mapping:
         processor: audit_opinion
@@ -344,16 +151,24 @@ source_catalog:
         absence_policy: unknown
         opportunity_semantic: derived_valid_audit_report
         duplicate_representative_rule: identical_normalized_opinion_or_fail
+        wide_opinion:
+          observation_semantic: audit_report_observed
+          opinion_semantic: audit_opinion
+          source_ref_semantic: audit_report_version_id
         audit_opinion:
           indicator_value: audit_opinion
           period_type: annual
-          statement_scope: Hợp nhất
+          statement_scope: consolidated
           audited_status: audited
           raw_to_normalized:
             Chấp nhận toàn phần: clean
             Ý kiến ngoại trừ: qualified
             Từ chối ra ý kiến: disclaimer
             Ý kiến trái ngược: adverse
+            clean: clean
+            qualified: qualified
+            disclaimer: disclaimer
+            adverse: adverse
           positive_categories:
           - qualified
           - disclaimer
@@ -369,235 +184,163 @@ source_catalog:
           endpoint_id: non_clean_audit_opinion
       panel_mapping:
         enabled: false
-    industry_icb:
+
+    final_firm_year_s3:
       enabled: true
       required: true
       discovery:
         globs:
-        - data/source/bctc_industry_icb.csv
+        - data/source/vn_pipeline_final_firm_year_2015_2025.parquet
         excludes: []
         cardinality: one
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
-      channel_id: S1
-      source_type: industry_classification
-      source_agency: normalized_bctc_icb
-      original_unit: issuer
-      role: predictor
-      verification_status: observed
-      coverage_dimensions:
-      - exchange
-      - icb_l1
-      - icb_l2
-      - icb_l3
-      data_risks:
-      - classification_drift
-      - duplicate_issuer
-      semantic_fields:
-        firm_id:
-        - issuer_ticker
-        industry_l1:
-        - icb_l1
-        industry_l2:
-        - icb_l2
-        industry_l3:
-        - icb_l3
-        industry_l4:
-        - icb_l4
-        industry_l5:
-        - icb_l5
-      required_semantic_fields:
-      - firm_id
-      key_semantics:
-      - firm_id
-      date_semantics: []
-      panel_mapping:
-        enabled: false
-    ownership_snapshots:
-      enabled: true
-      required: true
-      discovery:
-        globs:
-        - data/source/ownership_year_latest_snapshot_long.csv.gz
-        excludes: []
-        cardinality: one
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
-      channel_id: S1
-      source_type: ownership_snapshot_long
-      source_agency: normalized_ownership_exports
-      original_unit: firm-year-variable
-      role: predictor
-      verification_status: observed
-      coverage_dimensions:
-      - fiscal_year
-      - variable_id
-      data_risks:
-      - missing_snapshot
-      - non_monotone_state_ownership
-      - duplicate_variable
-      semantic_fields:
-        firm_id:
-        - issuer_ticker
-        fiscal_year:
-        - fiscal_year
-        availability_date:
-        - snapshot_date
-        variable_id:
-        - variable_id
-        value:
-        - value_numeric
-      required_semantic_fields:
-      - firm_id
-      - fiscal_year
-      - availability_date
-      - variable_id
-      key_semantics: []
-      date_semantics:
-      - availability_date
-      panel_mapping:
-        enabled: false
-    macro_cpi:
-      enabled: false
-      required: false
-      discovery:
-        globs:
-        - data/source/macro_cpi_annual.csv
-        excludes: []
-        cardinality: one
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
-      channel_id: S1
-      source_type: macro_cpi
-      source_agency: annual_cpi_reference
-      original_unit: calendar-year
-      role: auxiliary
-      verification_status: observed
-      coverage_dimensions:
-      - year
-      data_risks:
-      - base_year_interpretation
-      semantic_fields:
-        fiscal_year:
-        - Year
-        cpi_index:
-        - Index
-      required_semantic_fields:
-      - fiscal_year
-      - cpi_index
-      key_semantics:
-      - fiscal_year
-      date_semantics: []
-      panel_mapping:
-        enabled: false
-    dividend_annual_long:
-      enabled: false
-      required: false
-      discovery:
-        globs:
-        - data/source/dividend_annual_long.csv.gz
-        excludes: []
-        cardinality: one
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
-      channel_id: S1
-      source_type: dividend_annual_long
-      source_agency: normalized_dividend_exports
-      original_unit: firm-year-dividend-variable
-      role: predictor
-      verification_status: observed
-      coverage_dimensions:
-      - fiscal_year
-      - dividend_type
-      - variable_id
-      data_risks:
-      - policy_not_locked
-      - missing_dividend_record
-      semantic_fields:
-        firm_id:
-        - issuer_ticker
-        fiscal_year:
-        - fiscal_year
-        variable_id:
-        - variable_id
-        value:
-        - value_numeric
-      required_semantic_fields:
-      - firm_id
-      - fiscal_year
-      - variable_id
-      key_semantics: []
-      date_semantics: []
-      panel_mapping:
-        enabled: false
-    known_cases:
-      enabled: true
-      required: false
-      discovery:
-        globs:
-        - data/source/known_case_registry.csv
-        excludes: []
-        cardinality: one_or_none
-      format: csv
-      reader:
-        encoding: utf-8-sig
-        delimiter: ','
+      format: parquet
+      reader: {}
       channel_id: S3
-      source_type: sealed_known_case_ledger
-      source_agency: independent_case_review
-      original_unit: case-firm-year
+      source_type: final_firm_year_master
+      source_agency: curated_final_input_builder
+      original_unit: firm-year
+      role: evidence
+      verification_status: selectively_observed_enforcement_proxy
+      coverage_dimensions:
+      - fiscal_year
+      - s3_source_opportunity
+      data_risks:
+      - incomplete_source_year
+      - endpoint_aggregation_error
+      - missing_decision_provenance
+      - stale_final_build
+      semantic_fields:
+        firm_id:
+        - firm_master_id
+        fiscal_year:
+        - fiscal_year
+        s3_source_opportunity:
+        - s3_source_opportunity
+        s3_broad_endpoint:
+        - s3_broad_endpoint
+        s3_reporting_endpoint:
+        - s3_reporting_endpoint
+        s3_content_endpoint:
+        - s3_content_endpoint
+        s3_timeliness_endpoint:
+        - s3_timeliness_endpoint
+        s3_document_ids_json:
+        - s3_document_ids_json
+        s3_first_label_known_date:
+        - s3_first_label_known_date
+        s3_last_label_known_date:
+        - s3_last_label_known_date
+        s3_taxonomy_codes_json:
+        - s3_taxonomy_codes_json
+      required_semantic_fields:
+      - firm_id
+      - fiscal_year
+      - s3_source_opportunity
+      - s3_broad_endpoint
+      - s3_reporting_endpoint
+      - s3_content_endpoint
+      - s3_timeliness_endpoint
+      - s3_document_ids_json
+      - s3_first_label_known_date
+      - s3_last_label_known_date
+      - s3_taxonomy_codes_json
+      key_semantics:
+      - firm_id
+      - fiscal_year
+      date_semantics:
+      - s3_first_label_known_date
+      - s3_last_label_known_date
+      evidence_mapping:
+        processor: sanction_calendar_year
+        temporal_role: next_calendar_year_regulatory_event
+        availability_rule: sanction_calendar_year
+        explicit_negative_allowed: true
+        observed_endpoint_zero_allowed: true
+        absence_policy: observed_endpoint_zero_when_complete_source_year
+        opportunity_semantic: s3_source_opportunity
+        duplicate_representative_rule: identical_signature_then_document_id_firm
+        target_year_rule: sanction_year_minus_one
+        decision_key_semantic: document_id
+        decision_provenance_semantic: decision_number
+        affected_fiscal_year_role: sensitivity_provenance_only
+        taxonomy_registry: s3_taxonomy
+        sanction_year_precedence:
+        - sanction_year
+        - decision_date
+        - publish_date
+        label_known_date_precedence:
+        - label_known_date
+        - publish_date
+        - decision_date
+        wide_endpoints:
+          source_opportunity_semantic: s3_source_opportunity
+          document_ids_semantic: s3_document_ids_json
+          first_label_known_date_semantic: s3_first_label_known_date
+          last_label_known_date_semantic: s3_last_label_known_date
+          taxonomy_codes_semantic: s3_taxonomy_codes_json
+          endpoint_semantics:
+            S3_BROAD: s3_broad_endpoint
+            S3_REPORTING: s3_reporting_endpoint
+            S3_CONTENT: s3_content_endpoint
+            S3_TIMELINESS: s3_timeliness_endpoint
+        logical_sources:
+        - source_id: S3_BROAD
+          endpoint_id: S3_BROAD
+        - source_id: S3_REPORTING
+          endpoint_id: S3_REPORTING
+        - source_id: S3_CONTENT
+          endpoint_id: S3_CONTENT
+        - source_id: S3_TIMELINESS
+          endpoint_id: S3_TIMELINESS
+      panel_mapping:
+        enabled: false
+
+    final_firm_year_known_cases:
+      enabled: true
+      required: true
+      discovery:
+        globs:
+        - data/source/vn_pipeline_final_firm_year_2015_2025.parquet
+        excludes: []
+        cardinality: one
+      format: parquet
+      reader: {}
+      channel_id: S3
+      source_type: final_firm_year_master
+      source_agency: curated_final_input_builder
+      original_unit: firm-year
       role: known_case
       verification_status: externally_reviewed_positive_case
-      measurement_process_role: external_falsification_positive_evidence
-      high_specificity_assumed: false
       coverage_dimensions:
-      - year
+      - fiscal_year
       data_risks:
-      - identity_disclosure
+      - embedded_case_metadata_missing
       - eligibility_mismatch
       semantic_fields:
         firm_id:
         - firm_master_id
-        - firm_id
-        - issuer_ticker
         fiscal_year:
         - fiscal_year
-        - year
         case_id:
-        - case_id
         - known_case_id
         case_construct:
-        - case_construct
+        - known_case_construct
         case_role:
-        - role
+        - known_case_role
         training_include_flag:
-        - training_include_flag
+        - known_case_training_include_flag
         calibration_include_flag:
-        - calibration_include_flag
+        - known_case_calibration_include_flag
         model_selection_include_flag:
-        - model_selection_include_flag
+        - known_case_model_selection_include_flag
         external_validation_include_flag:
-        - external_validation_include_flag
+        - known_case_external_validation_include_flag
       required_semantic_fields:
       - firm_id
       - fiscal_year
-      - case_id
-      - case_construct
-      - case_role
-      - training_include_flag
-      - calibration_include_flag
-      - model_selection_include_flag
-      - external_validation_include_flag
       key_semantics:
-      - case_id
+      - firm_id
+      - fiscal_year
       date_semantics: []
       panel_mapping:
         enabled: false
