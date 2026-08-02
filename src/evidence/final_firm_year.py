@@ -12,7 +12,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -560,8 +560,8 @@ def _effective_opportunity(
     """Return complete S3 opportunity only when both layers are observed.
 
     A complete public-source year is not, by itself, evidence that a particular
-    firm-year endpoint had an observation opportunity.  Likewise, a firm-level
-    observation flag cannot establish source-year completeness.  Therefore the
+    firm-year endpoint had an observation opportunity. Likewise, a firm-level
+    observation flag cannot establish source-year completeness. Therefore the
     observed endpoint zero is admissible only when both indicators are true.
     """
 
