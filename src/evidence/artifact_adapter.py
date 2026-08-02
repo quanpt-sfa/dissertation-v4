@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 
 import pandas as pd
 
@@ -173,9 +174,12 @@ def _merge_json_string_arrays(values: pd.Series) -> str:
         if not isinstance(value, str) or not value:
             continue
         decoded: object = json.loads(value)
-        if not isinstance(decoded, list) or not all(isinstance(item, str) for item in decoded):
+        if not isinstance(decoded, list):
             raise ValueError("S3 ledger aggregate fields must contain JSON string arrays")
-        merged.update(decoded)
+        for item in cast(list[object], decoded):
+            if not isinstance(item, str):
+                raise ValueError("S3 ledger aggregate fields must contain JSON string arrays")
+            merged.add(item)
     return json.dumps(sorted(merged), ensure_ascii=False, separators=(",", ":"))
 
 
