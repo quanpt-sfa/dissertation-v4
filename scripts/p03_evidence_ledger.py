@@ -5,6 +5,8 @@ existing parser regression test. Production evidence construction is delegated
 to :mod:`scripts.p03_final_evidence_ledger`.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import sys
