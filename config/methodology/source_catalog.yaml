@@ -164,6 +164,7 @@ source_catalog:
             Từ chối ra ý kiến: disclaimer
             Ý kiến trái ngược: adverse
             clean: clean
+            unmodified: clean
             qualified: qualified
             disclaimer: disclaimer
             adverse: adverse
