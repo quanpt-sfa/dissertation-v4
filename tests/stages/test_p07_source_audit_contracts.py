@@ -9,7 +9,7 @@ import pandas as pd
 import yaml
 
 from core.schema_registry import ContractRegistry, compile_schemas
-from features.panel_source import _build_file_audit, _build_identifier_audit
+from features.panel_source import build_file_audit, build_identifier_audit
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -42,7 +42,7 @@ def test_unified_file_audit_matches_feature_keyed_artifact_contract(tmp_path: Pa
             },
         ]
     )
-    audit = _build_file_audit(
+    audit = build_file_audit(
         status_frame=status_frame,
         raw_source_path=tmp_path / "vn_annual_unified_long_2015_2025.parquet",
         raw_rows=445_456,
@@ -65,7 +65,7 @@ def test_unified_file_audit_matches_feature_keyed_artifact_contract(tmp_path: Pa
 
 
 def test_identifier_audit_leads_with_canonical_physical_key() -> None:
-    audit = _build_identifier_audit(
+    audit = build_identifier_audit(
         firm_ids=["F001", "F002"],
         panel_firms={"F001"},
         firm_column="firm_master_id",
