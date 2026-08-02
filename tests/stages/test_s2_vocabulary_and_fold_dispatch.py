@@ -7,9 +7,11 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from types import ModuleType
-from typing import cast
+from typing import Any, cast
 
-from core.evidence_registry import logical_evidence_sources
+import yaml
+
+from core.evidence_registry import LogicalEvidenceSource
 from core.registry_compiler import compile_registry
 from evidence.annual import OpinionRow, build_audit_opinion_records
 
@@ -21,6 +23,38 @@ def _registry() -> dict[str, object]:
     return cast(
         dict[str, object],
         compile_registry(ROOT / "config" / "pipeline.yaml").registry,
+    )
+
+
+def _s2_source() -> LogicalEvidenceSource:
+    raw = cast(
+        dict[str, Any],
+        yaml.safe_load(
+            (ROOT / "config" / "methodology" / "source_catalog.yaml").read_text(
+                encoding="utf-8"
+            )
+        ),
+    )
+    catalog = cast(dict[str, Any], raw["source_catalog"])
+    profiles = cast(dict[str, Any], catalog["profiles"])
+    profile = cast(dict[str, Any], profiles["audit_annual_long"])
+    evidence = cast(dict[str, Any], profile["evidence_mapping"])
+    logical_sources = cast(list[dict[str, Any]], evidence["logical_sources"])
+    logical = logical_sources[0]
+    return LogicalEvidenceSource(
+        source_id=str(logical["source_id"]),
+        endpoint_id=str(logical["endpoint_id"]),
+        channel_id=str(profile["channel_id"]),
+        physical_source_id="audit_annual_long",
+        profile_id="audit_annual_long",
+        processor=str(evidence["processor"]),
+        temporal_role=str(evidence["temporal_role"]),
+        availability_rule=str(evidence["availability_rule"]),
+        explicit_negative_allowed=bool(evidence["explicit_negative_allowed"]),
+        verification_status=str(profile["verification_status"]),
+        opportunity_semantic=str(evidence["opportunity_semantic"]),
+        logical_config=dict(logical),
+        processor_config=dict(evidence),
     )
 
 
@@ -48,11 +82,10 @@ def _opinion_row(raw: str) -> OpinionRow:
 
 
 def test_final_parquet_unmodified_opinion_is_an_explicit_clean_negative() -> None:
-    source = logical_evidence_sources(_registry())["S2_audit_opinion"]
     result = build_audit_opinion_records(
         panel_anchors={("F1", 2024): datetime(2025, 3, 31)},
         rows=[_opinion_row("UNMODIFIED")],
-        source=source,
+        source=_s2_source(),
     )
 
     record = result.records[0]
@@ -64,11 +97,10 @@ def test_final_parquet_unmodified_opinion_is_an_explicit_clean_negative() -> Non
 
 
 def test_unknown_opinion_is_not_coerced_to_clean() -> None:
-    source = logical_evidence_sources(_registry())["S2_audit_opinion"]
     result = build_audit_opinion_records(
         panel_anchors={("F1", 2024): datetime(2025, 3, 31)},
         rows=[_opinion_row("UNKNOWN")],
-        source=source,
+        source=_s2_source(),
     )
 
     record = result.records[0]
