@@ -110,7 +110,10 @@ def test_unknown_opinion_is_not_coerced_to_clean() -> None:
 
 
 def test_runner_keeps_initial_fold_for_p09_but_not_confirmatory_stages() -> None:
-    fold_execution_sets = cast(FoldExecutionSets, getattr(_load_runner(), "_fold_execution_sets"))
+    fold_execution_sets = cast(
+        FoldExecutionSets,
+        getattr(_load_runner(), "_fold_execution_sets"),
+    )
     p09_folds, confirmatory_folds = fold_execution_sets(_registry())
 
     assert p09_folds == ["2020", "2021", "2022", "2023", "2024"]
