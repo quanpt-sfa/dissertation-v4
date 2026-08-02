@@ -96,7 +96,7 @@ Required receipts: []
 
 Splits and weights
 
-Reads: ['feature_panel', 'feature_registry', 'risk_sets', 'observability_registry', 'source_channel_matrices', 'fold_eligibility']
+Reads: ['mcse_report', 'feature_panel', 'feature_registry', 'risk_sets', 'observability_registry', 'source_channel_matrices', 'fold_eligibility']
 
 Writes: ['temporal_split_registry', 'channel_time_split_registry', 'fold_aware_weights', 'weight_diagnostics']
 
