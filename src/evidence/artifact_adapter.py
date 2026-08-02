@@ -128,9 +128,7 @@ def _enforce_document_firm_grain(frame: pd.DataFrame, firm_column: str) -> pd.Da
         )
         selected.loc[:, TARGET_FISCAL_YEAR] = years[0] if len(years) == 1 else pd.NA
         selected.loc[:, CONSTRUCT_TARGET] = _merge_json_string_arrays(group[CONSTRUCT_TARGET])
-        selected.loc[:, SOURCE_RECORD_REFS] = _merge_json_string_arrays(
-            group[SOURCE_RECORD_REFS]
-        )
+        selected.loc[:, SOURCE_RECORD_REFS] = _merge_json_string_arrays(group[SOURCE_RECORD_REFS])
         selected.loc[:, TAXONOMY_CODES] = _merge_json_string_arrays(group[TAXONOMY_CODES])
         selected.loc[:, HARD_POSITIVE] = bool(group[HARD_POSITIVE].fillna(False).any())
         selected.loc[:, ROW_INCLUSION] = bool(group[ROW_INCLUSION].fillna(False).any())
