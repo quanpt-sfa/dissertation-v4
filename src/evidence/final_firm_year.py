@@ -557,12 +557,18 @@ def _effective_opportunity(
     source_opportunity: bool | None,
     observation_opportunity: bool | None,
 ) -> bool | None:
+    """Return complete S3 opportunity only when both layers are observed.
+
+    A complete public-source year is not, by itself, evidence that a particular
+    firm-year endpoint had an observation opportunity.  Likewise, a firm-level
+    observation flag cannot establish source-year completeness.  Therefore the
+    observed endpoint zero is admissible only when both indicators are true.
+    """
+
     if source_opportunity is False or observation_opportunity is False:
         return False
-    if source_opportunity is True:
+    if source_opportunity is True and observation_opportunity is True:
         return True
-    if observation_opportunity is True:
-        return None
     return None
 
 
@@ -618,15 +624,16 @@ def _collect_provenance(
                 "labelknowndate",
                 "firstlabelknowndate",
                 "lastlabelknowndate",
-                "publishdate",
                 "decisiondate",
-                "recordingdate",
+                "publishdate",
             }:
-                for item in _scalar_strings(child):
-                    parsed = _optional_datetime(item)
-                    if parsed is not None:
-                        dates.add(parsed)
-            if "taxonomy" in key or "violationcode" in key:
+                dates.update(_date_values(child))
+            if key in {
+                "taxonomycode",
+                "taxonomycodes",
+                "normalizedviolationcode",
+                "normalizedviolationcodes",
+            }:
                 taxonomy_codes.update(_scalar_strings(child))
             _collect_provenance(child, key, document_ids, dates, taxonomy_codes)
         return
@@ -636,32 +643,41 @@ def _collect_provenance(
 
 
 def _scalar_strings(value: object) -> set[str]:
+    if value is None:
+        return set()
     if isinstance(value, list):
-        return {
-            text
-            for item in cast(list[object], value)
-            if (text := _optional_text_value(item)) is not None
-        }
-    text = _optional_text_value(value)
-    return {text} if text is not None else set()
-
-
-def _optional_datetime(value: object) -> datetime | None:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, date):
-        return datetime(value.year, value.month, value.day)
+        result: set[str] = set()
+        for item in cast(list[object], value):
+            result.update(_scalar_strings(item))
+        return result
     text = str(value).strip()
+    return {text} if text else set()
+
+
+def _date_values(value: object) -> set[datetime]:
+    result: set[datetime] = set()
+    for text in _scalar_strings(value):
+        parsed = _parse_datetime(text)
+        if parsed is not None:
+            result.add(parsed)
+    return result
+
+
+def _parse_datetime(value: str) -> datetime | None:
+    text = value.strip()
     if not text:
         return None
     try:
-        return pd.Timestamp(text).to_pydatetime()
+        timestamp = pd.Timestamp(text)
     except (TypeError, ValueError):
         return None
+    if pd.isna(timestamp):
+        return None
+    if timestamp.tzinfo is not None:
+        timestamp = timestamp.tz_convert(None)
+    return timestamp.to_pydatetime()
 
 
 def _derived_provenance_key(canonical_json: str) -> str:
-    digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
-    return f"provenance_sha256:{digest}"
+    digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()[:16]
+    return f"embedded-provenance-{digest}"
