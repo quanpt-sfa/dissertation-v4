@@ -20,7 +20,7 @@ source_catalog:
       verification_status: observed_opportunity_only
       coverage_dimensions:
       - fiscal_year
-      - exchange_at_fye
+      - exchange_or_board
       - industry_code
       data_risks:
       - duplicate_firm_year
@@ -30,22 +30,20 @@ source_catalog:
       semantic_fields:
         firm_id:
         - firm_master_id
-        ticker:
-        - issuer_ticker
         fiscal_year:
         - fiscal_year
         availability_date:
         - prediction_time
         pat_unaudited:
-        - pat_unaudited
+        - fs_unaud_profit_after_tax
         pat_audited:
-        - pat_audited
+        - fs_aud_profit_after_tax
         revenue_unaudited:
-        - revenue_unaudited
+        - fs_unaud_net_revenue
         revenue_audited:
-        - revenue_audited
+        - fs_aud_net_revenue
         source_snapshot_hash:
-        - source_snapshot_hash
+        - source_unified_population_sha256
       required_semantic_fields:
       - firm_id
       - fiscal_year
@@ -118,7 +116,7 @@ source_catalog:
       verification_status: observed_opportunity_only
       coverage_dimensions:
       - fiscal_year
-      - audit_report_observed
+      - s2_audit_indicator
       data_risks:
       - missing_audit_report
       - opinion_normalization
@@ -129,11 +127,11 @@ source_catalog:
         fiscal_year:
         - fiscal_year
         audit_report_observed:
-        - audit_report_observed
+        - s2_audit_indicator
         audit_opinion:
-        - audit_opinion_raw
-        audit_report_version_id:
-        - audit_report_version_id
+        - s2_audit_opinion
+        audit_firm:
+        - s2_audit_firm
       required_semantic_fields:
       - firm_id
       - fiscal_year
@@ -154,7 +152,7 @@ source_catalog:
         wide_opinion:
           observation_semantic: audit_report_observed
           opinion_semantic: audit_opinion
-          source_ref_semantic: audit_report_version_id
+          source_ref_semantic: audit_firm
         audit_opinion:
           indicator_value: audit_opinion
           period_type: annual
@@ -205,7 +203,7 @@ source_catalog:
       high_specificity_assumed: false
       coverage_dimensions:
       - fiscal_year
-      - s3_source_opportunity
+      - endpoint_specific_source_opportunity
       data_risks:
       - incomplete_source_year
       - endpoint_aggregation_error
@@ -216,42 +214,61 @@ source_catalog:
         - firm_master_id
         fiscal_year:
         - fiscal_year
-        s3_source_opportunity:
-        - s3_source_opportunity
         s3_broad_endpoint:
-        - s3_broad_endpoint
+        - s3_broad_endpoint_evidence
+        s3_broad_source_opportunity:
+        - s3_broad_source_opportunity
+        s3_broad_observation_opportunity:
+        - s3_broad_observation_opportunity
+        s3_broad_provenance:
+        - s3_broad_provenance_json
         s3_reporting_endpoint:
-        - s3_reporting_endpoint
+        - s3_reporting_endpoint_evidence
+        s3_reporting_source_opportunity:
+        - s3_reporting_source_opportunity
+        s3_reporting_observation_opportunity:
+        - s3_reporting_observation_opportunity
+        s3_reporting_provenance:
+        - s3_reporting_provenance_json
         s3_content_endpoint:
-        - s3_content_endpoint
+        - s3_content_endpoint_evidence
+        s3_content_source_opportunity:
+        - s3_content_source_opportunity
+        s3_content_observation_opportunity:
+        - s3_content_observation_opportunity
+        s3_content_provenance:
+        - s3_content_provenance_json
         s3_timeliness_endpoint:
-        - s3_timeliness_endpoint
-        s3_document_ids_json:
-        - s3_document_ids_json
-        s3_first_label_known_date:
-        - s3_first_label_known_date
-        s3_last_label_known_date:
-        - s3_last_label_known_date
-        s3_taxonomy_codes_json:
-        - s3_taxonomy_codes_json
+        - s3_timeliness_endpoint_evidence
+        s3_timeliness_source_opportunity:
+        - s3_timeliness_source_opportunity
+        s3_timeliness_observation_opportunity:
+        - s3_timeliness_observation_opportunity
+        s3_timeliness_provenance:
+        - s3_timeliness_provenance_json
       required_semantic_fields:
       - firm_id
       - fiscal_year
-      - s3_source_opportunity
       - s3_broad_endpoint
+      - s3_broad_source_opportunity
+      - s3_broad_observation_opportunity
+      - s3_broad_provenance
       - s3_reporting_endpoint
+      - s3_reporting_source_opportunity
+      - s3_reporting_observation_opportunity
+      - s3_reporting_provenance
       - s3_content_endpoint
+      - s3_content_source_opportunity
+      - s3_content_observation_opportunity
+      - s3_content_provenance
       - s3_timeliness_endpoint
-      - s3_document_ids_json
-      - s3_first_label_known_date
-      - s3_last_label_known_date
-      - s3_taxonomy_codes_json
+      - s3_timeliness_source_opportunity
+      - s3_timeliness_observation_opportunity
+      - s3_timeliness_provenance
       key_semantics:
       - firm_id
       - fiscal_year
-      date_semantics:
-      - s3_first_label_known_date
-      - s3_last_label_known_date
+      date_semantics: []
       evidence_mapping:
         processor: sanction_calendar_year
         temporal_role: next_calendar_year_regulatory_event
@@ -261,7 +278,7 @@ source_catalog:
         legacy_explicit_negative_term_deprecated: true
         absence_policy: observed_endpoint_zero_when_complete_source_year
         zero_label_interpretation: observed_source_endpoint_zero_not_latent_negative
-        opportunity_semantic: s3_source_opportunity
+        opportunity_semantic: endpoint_specific_source_opportunity
         duplicate_representative_rule: identical_signature_then_document_id_firm
         target_year_rule: sanction_year_minus_one
         decision_key_semantic: document_id
@@ -277,23 +294,34 @@ source_catalog:
         - publish_date
         - decision_date
         measurement_process:
-          observation_opportunity: s3_source_opportunity
+          observation_opportunity: endpoint_specific_observation_opportunity
           verification: observed_true_only_for_public_positive_endpoint
           determination: endpoint_specific_public_determination
           recording: public_decision_recorded
           observed_source_label: preaggregated_endpoint_incidence
           high_specificity_assumed: false
         wide_endpoints:
-          source_opportunity_semantic: s3_source_opportunity
-          document_ids_semantic: s3_document_ids_json
-          first_label_known_date_semantic: s3_first_label_known_date
-          last_label_known_date_semantic: s3_last_label_known_date
-          taxonomy_codes_semantic: s3_taxonomy_codes_json
-          endpoint_semantics:
-            S3_BROAD: s3_broad_endpoint
-            S3_REPORTING: s3_reporting_endpoint
-            S3_CONTENT: s3_content_endpoint
-            S3_TIMELINESS: s3_timeliness_endpoint
+          endpoint_bindings:
+            S3_BROAD:
+              outcome_semantic: s3_broad_endpoint
+              source_opportunity_semantic: s3_broad_source_opportunity
+              observation_opportunity_semantic: s3_broad_observation_opportunity
+              provenance_semantic: s3_broad_provenance
+            S3_REPORTING:
+              outcome_semantic: s3_reporting_endpoint
+              source_opportunity_semantic: s3_reporting_source_opportunity
+              observation_opportunity_semantic: s3_reporting_observation_opportunity
+              provenance_semantic: s3_reporting_provenance
+            S3_CONTENT:
+              outcome_semantic: s3_content_endpoint
+              source_opportunity_semantic: s3_content_source_opportunity
+              observation_opportunity_semantic: s3_content_observation_opportunity
+              provenance_semantic: s3_content_provenance
+            S3_TIMELINESS:
+              outcome_semantic: s3_timeliness_endpoint
+              source_opportunity_semantic: s3_timeliness_source_opportunity
+              observation_opportunity_semantic: s3_timeliness_observation_opportunity
+              provenance_semantic: s3_timeliness_provenance
         logical_sources:
         - source_id: S3_BROAD
           endpoint_id: S3_BROAD
@@ -340,17 +368,21 @@ source_catalog:
         - known_case_construct
         case_role:
         - known_case_role
-        training_include_flag:
-        - known_case_training_include_flag
-        calibration_include_flag:
-        - known_case_calibration_include_flag
-        model_selection_include_flag:
-        - known_case_model_selection_include_flag
         external_validation_include_flag:
         - known_case_external_validation_include_flag
+        case_seal_status:
+        - known_case_seal_status
+        case_opens_at_step:
+        - known_case_opens_at_step
       required_semantic_fields:
       - firm_id
       - fiscal_year
+      - case_id
+      - case_construct
+      - case_role
+      - external_validation_include_flag
+      - case_seal_status
+      - case_opens_at_step
       key_semantics:
       - firm_id
       - fiscal_year
