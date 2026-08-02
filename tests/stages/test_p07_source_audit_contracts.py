@@ -33,7 +33,9 @@ def _contracts() -> ContractRegistry:
     )
 
 
-def test_unified_file_audit_matches_feature_keyed_artifact_contract(tmp_path: Path) -> None:
+def test_unified_file_audit_matches_feature_keyed_artifact_contract(
+    tmp_path: Path,
+) -> None:
     status_frame = pd.DataFrame(
         [
             {"feature_id": "feature_a", "status": "PASS", "reason_code": "computed"},
