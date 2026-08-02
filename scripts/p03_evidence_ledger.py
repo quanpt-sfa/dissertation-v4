@@ -164,9 +164,7 @@ def _optional_float(row: dict[str, object], semantics: dict[str, Any], name: str
     return None if value is None else float(value)
 
 
-def _optional_boolean(
-    row: dict[str, object], semantics: dict[str, Any], name: str
-) -> bool | None:
+def _optional_boolean(row: dict[str, object], semantics: dict[str, Any], name: str) -> bool | None:
     column = semantics.get(name)
     return None if not isinstance(column, str) else _boolean(row.get(column))
 

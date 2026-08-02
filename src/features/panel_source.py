@@ -120,9 +120,9 @@ def _assemble_from_final(
         )
     final_frame = final_frame.copy()
     final_frame[firm_column] = final_frame[firm_column].astype("string")
-    final_frame[year_column] = pd.to_numeric(
-        final_frame[year_column], errors="raise"
-    ).astype("int16")
+    final_frame[year_column] = pd.to_numeric(final_frame[year_column], errors="raise").astype(
+        "int16"
+    )
     final_frame[prediction_time_column] = pd.to_datetime(
         final_frame[prediction_time_column], errors="raise"
     ).astype("datetime64[ns]")
@@ -350,9 +350,7 @@ def _assemble_from_legacy_long(
                 prediction_time_column,
             ]
         ),
-        research_decision_audit=status_frame.loc[
-            :, ["feature_id", "status", "reason_code"]
-        ].copy(),
+        research_decision_audit=status_frame.loc[:, ["feature_id", "status", "reason_code"]].copy(),
         coverage_audit=pd.DataFrame(coverage_rows),
         component_completeness=pd.DataFrame(completeness_rows),
     )

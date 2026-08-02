@@ -128,9 +128,7 @@ def build_wide_opinion_rows(
     observation_semantic = _required_text(
         wide.get("observation_semantic"), "wide_opinion.observation_semantic"
     )
-    opinion_semantic = _required_text(
-        wide.get("opinion_semantic"), "wide_opinion.opinion_semantic"
-    )
+    opinion_semantic = _required_text(wide.get("opinion_semantic"), "wide_opinion.opinion_semantic")
     source_ref_semantic = _optional_text_value(wide.get("source_ref_semantic"))
     firm_column = _semantic_column(semantics, "firm_id")
     year_column = _semantic_column(semantics, "fiscal_year")

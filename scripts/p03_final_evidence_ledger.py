@@ -155,9 +155,7 @@ def main() -> int:
     return 0
 
 
-def _physical_source(
-    registry: dict[str, Any], processor: str
-) -> tuple[str, dict[str, Any]]:
+def _physical_source(registry: dict[str, Any], processor: str) -> tuple[str, dict[str, Any]]:
     sources = mapping(
         mapping(
             mapping(registry.get("data_sources"), "data_sources").get("source_registry"),
@@ -180,14 +178,14 @@ def _physical_source(
     return matches[0]
 
 
-def _panel_anchors(
-    panel: pd.DataFrame, columns: dict[str, str]
-) -> dict[tuple[str, int], datetime]:
+def _panel_anchors(panel: pd.DataFrame, columns: dict[str, str]) -> dict[tuple[str, int], datetime]:
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
     prediction = columns[PREDICTION_TIME]
     anchors: dict[tuple[str, int], datetime] = {}
-    for row in cast(list[dict[str, object]], panel.loc[:, [firm, year, prediction]].to_dict("records")):
+    for row in cast(
+        list[dict[str, object]], panel.loc[:, [firm, year, prediction]].to_dict("records")
+    ):
         key = (str(row[firm]), int(row[year]))
         if key in anchors:
             raise ValueError(f"P03 duplicate panel anchor={key}")
