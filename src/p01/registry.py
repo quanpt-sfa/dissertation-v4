@@ -51,18 +51,39 @@ def resolve_source(
     if hash_policy != "locked_sha256_required":
         raise ValueError("P01 requires hash_policy=locked_sha256_required")
     sources = _mapping(source_registry.get("sources"), "data_sources.source_registry.sources")
-    if source_id not in sources:
-        raise KeyError(f"source_id={source_id} is not registered in the locked protocol")
-    spec = SourceSpec.from_mapping(source_id, sources[source_id])
+    resolved_id = _resolve_compatibility_alias(source_id, sources)
+    spec = SourceSpec.from_mapping(resolved_id, sources[resolved_id])
     if not spec.enabled:
-        raise ValueError(f"source_id={source_id} is disabled")
+        raise ValueError(f"source_id={resolved_id} is disabled")
     root_value = os.environ.get(root_env)
     if not root_value:
         raise OSError(f"environment variable {root_env} is not set")
     root = Path(root_value).expanduser().resolve()
     path = (root / spec.relative_path).resolve()
     if path == root or root not in path.parents:
-        raise ValueError(f"source_id={source_id}: relative_path escapes source root")
+        raise ValueError(f"source_id={resolved_id}: relative_path escapes source root")
     if not path.is_file():
         raise FileNotFoundError(path)
     return spec, path
+
+
+def _resolve_compatibility_alias(source_id: str, sources: dict[str, Any]) -> str:
+    """Map the retired long-file feature source to the final S1 semantic view."""
+
+    if source_id in sources:
+        return source_id
+    if source_id != "financial_statement_core_long":
+        raise KeyError(f"source_id={source_id} is not registered in the locked protocol")
+    matches: list[str] = []
+    for candidate_id, raw in sources.items():
+        candidate = _mapping(raw, f"source={candidate_id}")
+        evidence = candidate.get("evidence_mapping")
+        if not isinstance(evidence, dict):
+            continue
+        if cast(dict[str, object], evidence).get("processor") == "audit_adjustment":
+            matches.append(str(candidate_id))
+    if len(matches) != 1:
+        raise KeyError(
+            "legacy feature source requires exactly one registered audit-adjustment final view"
+        )
+    return matches[0]
