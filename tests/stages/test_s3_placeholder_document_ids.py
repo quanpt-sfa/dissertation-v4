@@ -98,8 +98,7 @@ def test_placeholder_document_id_uses_stable_provenance_key_and_collapses() -> N
     assert pd.isna(ledger.loc[0, "target_fiscal_year"])
     assert ledger.loc[0, "period_link_confidence"] == "unresolved_multiple_target_years"
     assert (
-        ledger.loc[0, "taxonomy_reason_code"]
-        == "MULTIPLE_TARGET_FISCAL_YEARS_IN_FINAL_PROVENANCE"
+        ledger.loc[0, "taxonomy_reason_code"] == "MULTIPLE_TARGET_FISCAL_YEARS_IN_FINAL_PROVENANCE"
     )
     assert json.loads(str(ledger.loc[0, "construct_target"])) == [
         "S3_CONTENT",
