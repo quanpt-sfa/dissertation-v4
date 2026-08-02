@@ -1,14 +1,16 @@
 """Semantic views over the single final firm-year Parquet input.
 
-The production pipeline receives one physical file.  Snapshot profiles expose
-that file through separate S1, S2, S3, and known-case semantic views so the
-existing evidence contracts remain source-specific without requiring multiple
-raw files on disk.
+The production file is wide at ``firm_master_id × fiscal_year``.  This module
+binds the actual final-build column names to the existing S1, S2, and S3
+measurement contracts without recreating latent negatives or reading any
+additional physical source file.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -34,6 +36,14 @@ class WideS3Build:
     audit: dict[str, object]
 
 
+@dataclass(frozen=True)
+class _ProvenanceMeta:
+    canonical_json: str | None
+    document_ids: tuple[str, ...]
+    dates: tuple[datetime, ...]
+    taxonomy_codes: tuple[str, ...]
+
+
 def build_wide_adjustment_rows(
     *,
     source_id: str,
@@ -43,7 +53,7 @@ def build_wide_adjustment_rows(
     entity: EntityResolutionSpec,
     logical_sources: list[LogicalEvidenceSource],
 ) -> list[AdjustmentRow]:
-    """Expand four wide S1 component columns into registered pre/post rows."""
+    """Expand final-file PAT and revenue columns into registered pre/post rows."""
 
     if not logical_sources:
         raise ValueError("wide S1 requires logical sources")
@@ -120,7 +130,12 @@ def build_wide_opinion_rows(
     entity: EntityResolutionSpec,
     logical_source: LogicalEvidenceSource,
 ) -> list[OpinionRow]:
-    """Create S2 opinion rows only when an annual audit report is observed."""
+    """Create S2 rows from the final build's indicator/opinion fields.
+
+    ``s2_audit_indicator`` may be a boolean observation flag or the retained
+    indicator token ``audit_opinion``. Both representations are interpreted
+    explicitly; arbitrary non-empty strings are rejected.
+    """
 
     config = logical_source.processor_config
     wide = _mapping(config.get("wide_opinion"), "S2 wide_opinion")
@@ -146,8 +161,11 @@ def build_wide_opinion_rows(
 
     rows: list[OpinionRow] = []
     for raw in iter_rows(path, spec):
-        observed = _optional_bool(raw.get(observation_column))
-        if observed is not True:
+        raw_opinion = _optional_text_value(raw.get(opinion_column))
+        observed = _audit_indicator_observed(raw.get(observation_column), indicator_value)
+        if not observed:
+            if raw_opinion is not None:
+                raise ValueError("S2 opinion is present while the audit indicator is not observed")
             continue
         firm_id = _canonical_firm(raw, firm_column, source_id, entity)
         fiscal_year = _required_year(raw.get(year_column))
@@ -156,7 +174,7 @@ def build_wide_opinion_rows(
             OpinionRow(
                 firm_id=firm_id,
                 fiscal_year=fiscal_year,
-                opinion_raw=_optional_text_value(raw.get(opinion_column)),
+                opinion_raw=raw_opinion,
                 audit_indicator=indicator_value,
                 period_type=period_type,
                 statement_scope=statement_scope,
@@ -177,46 +195,33 @@ def build_wide_s3_records(
     logical_sources: list[LogicalEvidenceSource],
     panel_anchors: dict[tuple[str, int], datetime],
 ) -> WideS3Build:
-    """Read pre-aggregated S3 endpoint incidence without recreating latent negatives."""
+    """Read endpoint-specific S3 opportunity, outcome, and provenance columns."""
 
     if not logical_sources:
         raise ValueError("wide S3 requires logical sources")
     config = logical_sources[0].processor_config
     wide = _mapping(config.get("wide_endpoints"), "S3 wide_endpoints")
-    endpoint_semantics = _mapping(wide.get("endpoint_semantics"), "S3 endpoint_semantics")
-    opportunity_semantic = _required_text(
-        wide.get("source_opportunity_semantic"),
-        "wide_endpoints.source_opportunity_semantic",
-    )
-    document_semantic = _required_text(
-        wide.get("document_ids_semantic"), "wide_endpoints.document_ids_semantic"
-    )
-    first_date_semantic = _required_text(
-        wide.get("first_label_known_date_semantic"),
-        "wide_endpoints.first_label_known_date_semantic",
-    )
-    last_date_semantic = _required_text(
-        wide.get("last_label_known_date_semantic"),
-        "wide_endpoints.last_label_known_date_semantic",
-    )
-    taxonomy_semantic = _required_text(
-        wide.get("taxonomy_codes_semantic"),
-        "wide_endpoints.taxonomy_codes_semantic",
-    )
+    raw_bindings = _mapping(wide.get("endpoint_bindings"), "S3 endpoint_bindings")
     firm_column = _semantic_column(semantics, "firm_id")
     year_column = _semantic_column(semantics, "fiscal_year")
-    opportunity_column = _semantic_column(semantics, opportunity_semantic)
-    document_column = _semantic_column(semantics, document_semantic)
-    first_date_column = _semantic_column(semantics, first_date_semantic)
-    last_date_column = _semantic_column(semantics, last_date_semantic)
-    taxonomy_column = _semantic_column(semantics, taxonomy_semantic)
-    endpoint_columns = {
-        logical_id: _semantic_column(
-            semantics,
-            _required_text(endpoint_semantics.get(logical_id), f"endpoint_semantics.{logical_id}"),
-        )
-        for logical_id in sorted(endpoint_semantics)
-    }
+
+    logical_by_id = {source.source_id: source for source in logical_sources}
+    if set(logical_by_id) != set(raw_bindings):
+        raise ValueError("S3 endpoint bindings differ from the logical source registry")
+
+    bindings: dict[str, dict[str, str]] = {}
+    for logical_id in sorted(logical_by_id):
+        raw_binding = _mapping(raw_bindings.get(logical_id), f"S3 binding={logical_id}")
+        binding: dict[str, str] = {}
+        for field in (
+            "outcome_semantic",
+            "source_opportunity_semantic",
+            "observation_opportunity_semantic",
+            "provenance_semantic",
+        ):
+            semantic = _required_text(raw_binding.get(field), f"{logical_id}.{field}")
+            binding[field] = _semantic_column(semantics, semantic)
+        bindings[logical_id] = binding
 
     raw_by_key: dict[tuple[str, int], dict[str, object]] = {}
     for raw in iter_rows(path, spec):
@@ -228,46 +233,61 @@ def build_wide_s3_records(
         raw_by_key[key] = raw
 
     records: list[EvidenceRecord] = []
-    decision_rows: list[dict[str, object]] = []
     positive_count = 0
     negative_count = 0
     unknown_count = 0
-    seen_decision_keys: set[tuple[str, str]] = set()
-    logical_by_id = {source.source_id: source for source in logical_sources}
-    if set(logical_by_id) != set(endpoint_columns):
-        raise ValueError("S3 endpoint semantic bindings differ from logical source registry")
+    opportunity_count = 0
+    opportunity_by_endpoint = {logical_id: 0 for logical_id in logical_by_id}
+    decision_map: dict[tuple[str, str, int], dict[str, object]] = {}
 
     for (firm_id, fiscal_year), _anchor in sorted(panel_anchors.items()):
         raw = raw_by_key.get((firm_id, fiscal_year))
         if raw is None:
             raise ValueError(f"final firm-year input is missing panel row={(firm_id, fiscal_year)}")
-        opportunity = _optional_bool(raw.get(opportunity_column))
-        document_ids = _json_string_list(raw.get(document_column), document_semantic)
-        taxonomy_codes = _json_string_list(raw.get(taxonomy_column), taxonomy_semantic)
-        first_date = _optional_datetime(raw.get(first_date_column))
-        last_date = _optional_datetime(raw.get(last_date_column))
-        endpoint_values = {
-            logical_id: _optional_bool(raw.get(column))
-            for logical_id, column in endpoint_columns.items()
-        }
-        if opportunity is True and any(value is None for value in endpoint_values.values()):
-            missing = sorted(key for key, value in endpoint_values.items() if value is None)
-            raise ValueError(
-                f"complete S3 source year has missing endpoint values for {(firm_id, fiscal_year)}: {missing}"
-            )
-        if opportunity is not True and any(value is not None for value in endpoint_values.values()):
-            raise ValueError(
-                f"S3 endpoint value observed without source opportunity for {(firm_id, fiscal_year)}"
-            )
-        positive_endpoints = sorted(key for key, value in endpoint_values.items() if value is True)
-        if positive_endpoints and not document_ids:
-            raise ValueError(
-                f"positive S3 endpoint requires document provenance for {(firm_id, fiscal_year)}"
-            )
 
         for logical_id in sorted(logical_by_id):
             source = logical_by_id[logical_id]
-            outcome = endpoint_values[logical_id]
+            binding = bindings[logical_id]
+            source_opportunity = _optional_bool(raw.get(binding["source_opportunity_semantic"]))
+            observation_opportunity = _optional_bool(
+                raw.get(binding["observation_opportunity_semantic"])
+            )
+            effective_opportunity = _effective_opportunity(
+                source_opportunity,
+                observation_opportunity,
+            )
+            raw_outcome = _optional_bool(raw.get(binding["outcome_semantic"]))
+            if effective_opportunity is True:
+                if raw_outcome is None:
+                    raise ValueError(
+                        f"complete S3 opportunity has missing endpoint for "
+                        f"{(firm_id, fiscal_year, logical_id)}"
+                    )
+                outcome = raw_outcome
+                opportunity_count += 1
+                opportunity_by_endpoint[logical_id] += 1
+            else:
+                if raw_outcome is True:
+                    raise ValueError(
+                        f"positive S3 endpoint lacks observation opportunity for "
+                        f"{(firm_id, fiscal_year, logical_id)}"
+                    )
+                # A stored zero outside an observed opportunity remains unknown.
+                outcome = None
+
+            provenance = _provenance_meta(
+                raw.get(binding["provenance_semantic"]),
+                f"{logical_id} provenance",
+            )
+            if outcome is True and provenance.canonical_json is None:
+                raise ValueError(
+                    f"positive S3 endpoint requires provenance for "
+                    f"{(firm_id, fiscal_year, logical_id)}"
+                )
+            if outcome is not True and provenance.canonical_json is not None:
+                # Provenance may document coverage, but it must not imply a positive endpoint.
+                pass
+
             if outcome is True:
                 positive_count += 1
                 reason_code = "S3_PUBLIC_ENDPOINT_POSITIVE"
@@ -276,7 +296,14 @@ def build_wide_s3_records(
                 reason_code = "S3_COMPLETE_SOURCE_YEAR_ENDPOINT_ZERO"
             else:
                 unknown_count += 1
-                reason_code = "S3_SOURCE_YEAR_INCOMPLETE_OR_UNKNOWN"
+                reason_code = "S3_SOURCE_OR_OBSERVATION_OPPORTUNITY_UNKNOWN"
+
+            document_ids = list(provenance.document_ids)
+            if outcome is True and not document_ids:
+                assert provenance.canonical_json is not None
+                document_ids = [_derived_provenance_key(provenance.canonical_json)]
+            first_date = min(provenance.dates) if provenance.dates else None
+            last_date = max(provenance.dates) if provenance.dates else None
             fully_observed_positive = outcome is True
             records.append(
                 EvidenceRecord(
@@ -293,11 +320,11 @@ def build_wide_s3_records(
                     evidence_record_kind="firm_year_endpoint_result",
                     temporal_role=source.temporal_role,
                     availability_basis=source.availability_rule,
-                    source_opportunity=opportunity,
+                    source_opportunity=effective_opportunity,
                     opportunity_basis=(
-                        "S3_SOURCE_YEAR_COMPLETE"
-                        if opportunity is True
-                        else "S3_SOURCE_YEAR_INCOMPLETE_OR_UNKNOWN"
+                        "S3_ENDPOINT_OPPORTUNITY_OBSERVED"
+                        if effective_opportunity is True
+                        else "S3_ENDPOINT_OPPORTUNITY_FALSE_OR_UNKNOWN"
                     ),
                     verification_status=True if fully_observed_positive else None,
                     determination_status=True if fully_observed_positive else None,
@@ -307,49 +334,67 @@ def build_wide_s3_records(
                     recording_date=first_date if fully_observed_positive else None,
                     reason_unknown=reason_code if outcome is None else None,
                     evidence_category=source.endpoint_id,
-                    source_record_refs=(
-                        json.dumps(document_ids, ensure_ascii=False) if document_ids else None
-                    ),
+                    source_record_refs=provenance.canonical_json,
                     period_link_source="precomputed_fiscal_year_endpoint",
                     period_link_confidence="deterministic_final_build",
                     outcome_basis=reason_code,
                     duplicate_representative_rule=str(config["duplicate_representative_rule"]),
                     sanction_year=fiscal_year + 1,
                     target_fiscal_year=fiscal_year,
-                    decision_count=len(document_ids),
+                    decision_count=len(document_ids) if fully_observed_positive else 0,
                     document_ids=json.dumps(document_ids, ensure_ascii=False),
                     first_label_known_date=first_date,
                     last_label_known_date=last_date,
-                    taxonomy_codes=json.dumps(taxonomy_codes, ensure_ascii=False),
-                    taxonomy_reason_code="FINAL_FIRM_YEAR_AGGREGATED_ENDPOINT",
+                    taxonomy_codes=json.dumps(list(provenance.taxonomy_codes), ensure_ascii=False),
+                    taxonomy_reason_code="FINAL_ENDPOINT_PROVENANCE_JSON",
                 )
             )
 
-        for document_id in document_ids:
-            decision_key = (document_id, firm_id)
-            if decision_key in seen_decision_keys:
-                continue
-            seen_decision_keys.add(decision_key)
-            decision_rows.append(
-                {
-                    "document_id": document_id,
-                    "firm_id": firm_id,
-                    "target_fiscal_year": fiscal_year,
-                    "primary_violation_l1": None,
-                    "primary_violation_l2": None,
-                    "construct_family": "AGGREGATED_PUBLIC_ENDPOINT",
-                    "construct_target": json.dumps(positive_endpoints, ensure_ascii=False),
-                    "normalized_violation_code": None,
-                    "hard_positive": bool(positive_endpoints),
-                    "row_inclusion": True,
-                    "legacy_event_id": None,
-                    "period_link_source": "precomputed_fiscal_year_endpoint",
-                    "period_link_confidence": "deterministic_final_build",
-                    "source_record_refs": json.dumps(document_ids, ensure_ascii=False),
-                    "taxonomy_codes": json.dumps(taxonomy_codes, ensure_ascii=False),
-                    "taxonomy_reason_code": "FINAL_FIRM_YEAR_AGGREGATED_ENDPOINT",
-                }
-            )
+            if outcome is True:
+                for document_id in document_ids:
+                    key = (document_id, firm_id, fiscal_year)
+                    item = decision_map.setdefault(
+                        key,
+                        {
+                            "document_id": document_id,
+                            "firm_id": firm_id,
+                            "target_fiscal_year": fiscal_year,
+                            "endpoints": set(),
+                            "source_refs": set(),
+                            "taxonomy_codes": set(),
+                        },
+                    )
+                    cast(set[str], item["endpoints"]).add(source.endpoint_id)
+                    if provenance.canonical_json is not None:
+                        cast(set[str], item["source_refs"]).add(provenance.canonical_json)
+                    cast(set[str], item["taxonomy_codes"]).update(provenance.taxonomy_codes)
+
+    decision_rows: list[dict[str, object]] = []
+    for key in sorted(decision_map):
+        item = decision_map[key]
+        endpoints = sorted(cast(set[str], item["endpoints"]))
+        refs = sorted(cast(set[str], item["source_refs"]))
+        taxonomy = sorted(cast(set[str], item["taxonomy_codes"]))
+        decision_rows.append(
+            {
+                "document_id": item["document_id"],
+                "firm_id": item["firm_id"],
+                "target_fiscal_year": item["target_fiscal_year"],
+                "primary_violation_l1": None,
+                "primary_violation_l2": None,
+                "construct_family": "AGGREGATED_PUBLIC_ENDPOINT",
+                "construct_target": json.dumps(endpoints, ensure_ascii=False),
+                "normalized_violation_code": None,
+                "hard_positive": True,
+                "row_inclusion": True,
+                "legacy_event_id": None,
+                "period_link_source": "precomputed_fiscal_year_endpoint",
+                "period_link_confidence": "deterministic_final_build",
+                "source_record_refs": json.dumps(refs, ensure_ascii=False),
+                "taxonomy_codes": json.dumps(taxonomy, ensure_ascii=False),
+                "taxonomy_reason_code": "FINAL_ENDPOINT_PROVENANCE_JSON",
+            }
+        )
 
     ledger = _decision_ledger(decision_rows)
     return WideS3Build(
@@ -357,18 +402,18 @@ def build_wide_s3_records(
         decision_ledger=ledger,
         audit={
             "processor": "sanction_calendar_year",
-            "input_mode": "preaggregated_final_firm_year",
+            "input_mode": "preaggregated_endpoint_specific_final_firm_year",
             "physical_source_id": source_id,
             "logical_source_ids": sorted(logical_by_id),
             "panel_firm_year_count": len(panel_anchors),
             "endpoint_record_count": len(records),
             "decision_firm_mapping_count": len(ledger),
-            "source_opportunity_count": sum(
-                _optional_bool(raw.get(opportunity_column)) is True for raw in raw_by_key.values()
-            ),
+            "source_opportunity_count": opportunity_count,
+            "source_opportunity_count_by_endpoint": opportunity_by_endpoint,
             "positive_count": positive_count,
             "explicit_endpoint_zero_count": negative_count,
             "unknown_count": unknown_count,
+            "stored_zero_without_opportunity_is_unknown": True,
             "missing_is_negative": False,
             "high_specificity_assumed": False,
         },
@@ -395,21 +440,12 @@ def _decision_ledger(rows: list[dict[str, object]]) -> pd.DataFrame:
         "taxonomy_reason_code",
     ]
     frame = pd.DataFrame(rows, columns=columns)
-    for column in (
-        "document_id",
-        "firm_id",
-        "primary_violation_l1",
-        "primary_violation_l2",
-        "construct_family",
-        "construct_target",
-        "normalized_violation_code",
-        "legacy_event_id",
-        "period_link_source",
-        "period_link_confidence",
-        "source_record_refs",
-        "taxonomy_codes",
-        "taxonomy_reason_code",
-    ):
+    string_columns = [
+        column
+        for column in columns
+        if column not in {"target_fiscal_year", "hard_positive", "row_inclusion"}
+    ]
+    for column in string_columns:
         frame[column] = frame[column].astype("string")
     frame["target_fiscal_year"] = frame["target_fiscal_year"].astype("Int16")
     frame["hard_positive"] = frame["hard_positive"].astype("boolean")
@@ -454,7 +490,10 @@ def _canonical_firm(
 def _required_year(value: object) -> int:
     if isinstance(value, bool) or value is None:
         raise ValueError("final input fiscal_year is missing")
-    year = int(str(value))
+    numeric = float(str(value))
+    if not numeric.is_integer():
+        raise ValueError(f"final input fiscal_year is invalid: {value}")
+    year = int(numeric)
     if not 1900 <= year <= 2200:
         raise ValueError(f"final input fiscal_year is invalid: {year}")
     return year
@@ -492,6 +531,121 @@ def _optional_bool(value: object) -> bool | None:
     raise ValueError(f"final input boolean value is invalid: {value}")
 
 
+def _audit_indicator_observed(value: object, indicator_value: str) -> bool:
+    try:
+        parsed = _optional_bool(value)
+    except ValueError:
+        parsed = None
+    if parsed is not None:
+        return parsed
+    text = _optional_text_value(value)
+    if text is None:
+        return False
+    if _normalize_token(text) == _normalize_token(indicator_value):
+        return True
+    raise ValueError(
+        f"S2 audit indicator={value!r} is neither boolean nor the registered token "
+        f"{indicator_value!r}"
+    )
+
+
+def _normalize_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.casefold())
+
+
+def _effective_opportunity(
+    source_opportunity: bool | None,
+    observation_opportunity: bool | None,
+) -> bool | None:
+    if source_opportunity is False or observation_opportunity is False:
+        return False
+    if source_opportunity is True:
+        return True
+    if observation_opportunity is True:
+        return None
+    return None
+
+
+def _provenance_meta(value: object, context: str) -> _ProvenanceMeta:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return _ProvenanceMeta(None, (), (), ())
+    raw: object
+    if isinstance(value, (dict, list)):
+        raw = value
+    else:
+        text = str(value).strip()
+        if not text:
+            return _ProvenanceMeta(None, (), (), ())
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{context}: valid JSON required") from exc
+    if raw in ({}, []):
+        return _ProvenanceMeta(None, (), (), ())
+    canonical = json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    document_ids: set[str] = set()
+    dates: set[datetime] = set()
+    taxonomy_codes: set[str] = set()
+    _collect_provenance(raw, None, document_ids, dates, taxonomy_codes)
+    return _ProvenanceMeta(
+        canonical_json=canonical,
+        document_ids=tuple(sorted(document_ids)),
+        dates=tuple(sorted(dates)),
+        taxonomy_codes=tuple(sorted(taxonomy_codes)),
+    )
+
+
+def _collect_provenance(
+    value: object,
+    parent_key: str | None,
+    document_ids: set[str],
+    dates: set[datetime],
+    taxonomy_codes: set[str],
+) -> None:
+    if isinstance(value, dict):
+        for key_raw, child in cast(dict[object, object], value).items():
+            key = _normalize_token(str(key_raw))
+            if key in {
+                "documentid",
+                "documentids",
+                "decisionid",
+                "decisionids",
+                "decisionnumber",
+                "decisionnumbers",
+            }:
+                document_ids.update(_scalar_strings(child))
+            if key in {
+                "labelknowndate",
+                "firstlabelknowndate",
+                "lastlabelknowndate",
+                "publishdate",
+                "decisiondate",
+                "recordingdate",
+            }:
+                for item in _scalar_strings(child):
+                    parsed = _optional_datetime(item)
+                    if parsed is not None:
+                        dates.add(parsed)
+            if "taxonomy" in key or "violationcode" in key:
+                taxonomy_codes.update(_scalar_strings(child))
+            _collect_provenance(child, key, document_ids, dates, taxonomy_codes)
+        return
+    if isinstance(value, list):
+        for child in cast(list[object], value):
+            _collect_provenance(child, parent_key, document_ids, dates, taxonomy_codes)
+
+
+def _scalar_strings(value: object) -> set[str]:
+    if isinstance(value, list):
+        return {
+            text
+            for item in cast(list[object], value)
+            if (text := _optional_text_value(item)) is not None
+        }
+    text = _optional_text_value(value)
+    return {text} if text is not None else set()
+
+
 def _optional_datetime(value: object) -> datetime | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
@@ -502,23 +656,12 @@ def _optional_datetime(value: object) -> datetime | None:
     text = str(value).strip()
     if not text:
         return None
-    return pd.Timestamp(text).to_pydatetime()
+    try:
+        return pd.Timestamp(text).to_pydatetime()
+    except (TypeError, ValueError):
+        return None
 
 
-def _json_string_list(value: object, context: str) -> list[str]:
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return []
-    if isinstance(value, list):
-        raw = cast(list[object], value)
-    else:
-        text = str(value).strip()
-        if not text:
-            return []
-        parsed: object = json.loads(text)
-        if not isinstance(parsed, list):
-            raise ValueError(f"{context}: JSON array required")
-        raw = cast(list[object], parsed)
-    values = [str(item).strip() for item in raw if str(item).strip()]
-    if len(values) != len(set(values)):
-        raise ValueError(f"{context}: duplicate values are not allowed")
-    return values
+def _derived_provenance_key(canonical_json: str) -> str:
+    digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+    return f"provenance_sha256:{digest}"
