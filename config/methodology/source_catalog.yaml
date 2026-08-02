@@ -368,6 +368,12 @@ source_catalog:
         - known_case_construct
         case_role:
         - known_case_role
+        training_include_flag:
+        - known_case_training_include_flag
+        calibration_include_flag:
+        - known_case_calibration_include_flag
+        model_selection_include_flag:
+        - known_case_model_selection_include_flag
         external_validation_include_flag:
         - known_case_external_validation_include_flag
         case_seal_status:
@@ -377,12 +383,6 @@ source_catalog:
       required_semantic_fields:
       - firm_id
       - fiscal_year
-      - case_id
-      - case_construct
-      - case_role
-      - external_validation_include_flag
-      - case_seal_status
-      - case_opens_at_step
       key_semantics:
       - firm_id
       - fiscal_year
