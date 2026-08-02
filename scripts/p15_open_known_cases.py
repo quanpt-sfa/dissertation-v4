@@ -25,7 +25,12 @@ def main() -> int:
     parser.add_argument("--registry", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
     args = parser.parse_args()
-    loaded = load_run(registry_path=args.registry, run_id=args.run_id, step_id="P15", state="GATE2")
+    loaded = load_run(
+        registry_path=args.registry,
+        run_id=args.run_id,
+        step_id="P15",
+        state="GATE2",
+    )
     mapping(loaded.context.read("gate2_verdict", {}), "Gate 2 receipt")
     cases = _read_cases(loaded.registry)
     if not cases:
