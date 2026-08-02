@@ -305,6 +305,7 @@ steps:
     unit_coordinates:
     - fold_id
     reads:
+    - mcse_report
     - feature_panel
     - feature_registry
     - risk_sets
