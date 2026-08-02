@@ -5,6 +5,9 @@ from pathlib import Path
 import yaml
 
 
+FINAL_INPUT = "data/source/vn_pipeline_final_firm_year_2015_2025.parquet"
+
+
 def test_primary_source_set_excludes_next_year_s3_enforcement() -> None:
     config = yaml.safe_load(Path("config/methodology/measurement.yaml").read_text(encoding="utf-8"))
     measurement = config["measurement"]
@@ -28,13 +31,20 @@ def test_known_case_registry_contract_is_external_validation_only() -> None:
         Path("config/methodology/source_catalog.yaml").read_text(encoding="utf-8")
     )
     known = config["source_catalog"]["profiles"]["known_cases"]
-    assert known["discovery"]["globs"] == ["data/source/known_case_registry.csv"]
-    required = set(known["required_semantic_fields"])
+    assert known["discovery"]["globs"] == [FINAL_INPUT]
+    assert known["format"] == "parquet"
+    assert known["role"] == "known_case"
+
+    # Case fields must exist in the file schema, but they are nullable on all
+    # ordinary firm-years and therefore must not be row-level required values.
+    semantics = set(known["semantic_fields"])
     assert {
+        "case_id",
         "case_construct",
         "case_role",
         "training_include_flag",
         "calibration_include_flag",
         "model_selection_include_flag",
         "external_validation_include_flag",
-    }.issubset(required)
+    }.issubset(semantics)
+    assert set(known["required_semantic_fields"]) == {"firm_id", "fiscal_year"}
