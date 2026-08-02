@@ -576,14 +576,16 @@ def _provenance_meta(value: object, context: str) -> _ProvenanceMeta:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return _ProvenanceMeta(None, (), (), ())
     raw: object
-    if isinstance(value, (dict, list)):
-        raw = value
+    if isinstance(value, dict):
+        raw = cast(dict[object, object], value)
+    elif isinstance(value, list):
+        raw = cast(list[object], value)
     else:
         text = str(value).strip()
         if not text:
             return _ProvenanceMeta(None, (), (), ())
         try:
-            raw = json.loads(text)
+            raw = cast(object, json.loads(text))
         except json.JSONDecodeError as exc:
             raise ValueError(f"{context}: valid JSON required") from exc
     if raw in ({}, []):
