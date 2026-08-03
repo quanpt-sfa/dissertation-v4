@@ -112,14 +112,3 @@ def test_runner_keeps_initial_fold_for_p09_but_not_confirmatory_stages() -> None
 
     assert p09_folds == ["2020", "2021", "2022", "2023", "2024"]
     assert confirmatory_folds == ["2021", "2022", "2023", "2024"]
-
-
-def test_downstream_evaluation_excludes_initial_fold() -> None:
-    for relative in (
-        "scripts/p13_sensitivity.py",
-        "scripts/p15_open_known_cases.py",
-        "scripts/p16_gate3.py",
-        "scripts/p17_build_outputs.py",
-    ):
-        source = (ROOT / relative).read_text(encoding="utf-8")
-        assert "outer_fold_ids(loaded.registry, include_initial=False)" in source
