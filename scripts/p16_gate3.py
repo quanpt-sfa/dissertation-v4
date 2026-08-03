@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import cast
@@ -19,11 +20,28 @@ from gates.service import gate3_verdict
 from sensitivity.service import select_observed_target_outcomes
 
 
+def _default_workers() -> int:
+    raw = os.environ.get("P16_WORKERS")
+    if raw is None:
+        return min(10, max(1, os.cpu_count() or 1))
+    try:
+        workers = int(raw)
+    except ValueError as exc:
+        raise ValueError("P16_WORKERS must be an integer") from exc
+    if workers < 1:
+        raise ValueError("P16_WORKERS must be positive")
+    return workers
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--workers", type=int, default=_default_workers())
     args = parser.parse_args()
+    if args.workers < 1:
+        parser.error("--workers must be positive")
+
     loaded = load_run(
         registry_path=args.registry, run_id=args.run_id, step_id="P16", state="KNOWN_CASES_OPEN"
     )
@@ -83,6 +101,11 @@ def main() -> int:
     evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
     bootstrap = mapping(inference.get("bootstrap"), "inference.bootstrap")
     common = mapping(evaluation.get("gate_common"), "evaluation.gate_common")
+    print(
+        f"P16 Gate 3 bootstrap replications={int(bootstrap['replications'])} "
+        f"workers={args.workers}",
+        flush=True,
+    )
     threshold, receipt = gate3_verdict(
         gate2=gate2,
         known_case_results=[mapping(item, "known case result") for item in known],
@@ -100,11 +123,16 @@ def main() -> int:
         measurement_stability_minimum=int(selection_config["stability_minimum_selected_folds"]),
         measurement_stability_denominator=int(selection_config["stability_denominator_folds"]),
         rng=generator(loaded.protocol_hash, "P16", {}, "gate3_family_bootstrap"),
+        workers=args.workers,
     )
     receipt["protocol_hash"] = loaded.protocol_hash
+    receipt["workers"] = args.workers
+    threshold["workers"] = args.workers
     loaded.context.write("threshold_interaction_results", threshold, {})
     loaded.context.write("gate3_verdict", receipt, {})
-    print(f"P16 status={receipt['status']} verdict={receipt['verdict']}")
+    print(
+        f"P16 status={receipt['status']} verdict={receipt['verdict']} workers={args.workers}"
+    )
     return 0
 
 
