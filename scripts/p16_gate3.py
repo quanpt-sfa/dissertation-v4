@@ -31,7 +31,7 @@ def main() -> int:
     feature_registry = sequence(loaded.context.read("feature_registry", {}), "feature registry")
     outcomes = loaded.context.read("sealed_outcome_store", {})
     predictions: list[pd.DataFrame] = []
-    for fold_id in outer_fold_ids(loaded.registry):
+    for fold_id in outer_fold_ids(loaded.registry, include_initial=False):
         loaded.context.read("evaluation_metrics", {OUTER_FOLD: fold_id})
         value = loaded.context.read("raw_outer_predictions", {OUTER_FOLD: fold_id})
         if isinstance(value, pd.DataFrame):
