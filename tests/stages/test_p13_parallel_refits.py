@@ -82,9 +82,7 @@ def test_parallel_source_refits_are_worker_invariant(
     seeds = {
         (fold_id, exclusion_id): index + 1
         for index, (exclusion_id, fold_id) in enumerate(
-            (exclusion_id, fold_id)
-            for exclusion_id in exclusion_ids
-            for fold_id in outer_folds
+            (exclusion_id, fold_id) for exclusion_id in exclusion_ids for fold_id in outer_folds
         )
     }
     arguments: dict[str, Any] = {
@@ -116,13 +114,8 @@ def test_parallel_source_refits_are_worker_invariant(
     )
 
     assert parallel == sequential
-    assert [
-        (row["exclusion_id"], row[OUTER_FOLD])
-        for row in parallel["results"]
-    ] == [
-        (exclusion_id, fold_id)
-        for exclusion_id in exclusion_ids
-        for fold_id in outer_folds
+    assert [(row["exclusion_id"], row[OUTER_FOLD]) for row in parallel["results"]] == [
+        (exclusion_id, fold_id) for exclusion_id in exclusion_ids for fold_id in outer_folds
     ]
 
 
