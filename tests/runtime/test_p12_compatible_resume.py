@@ -12,7 +12,10 @@ from core.resume import (
     P12_COMPATIBILITY_BASE_COMMIT,
     P12_COMPATIBILITY_PATCH_ID,
     P12_COMPATIBILITY_REQUIRED_PATHS,
+    P12_SELECTION_COMPATIBILITY_COMMIT,
+    P12_SELECTION_COMPATIBILITY_PATCH_ID,
     p11_boundary_complete,
+    quarantine_partial_p12_outputs,
     read_compatibility_receipt,
     verify_p12_implementation,
     write_compatibility_receipt,
@@ -32,18 +35,20 @@ def _sha256(value: bytes) -> str:
 def _write_artifact(
     run_root: Path,
     *,
+    target: Path,
     artifact_id: str,
-    fold_id: str,
+    producer_step: str,
+    coordinates: dict[str, str],
     protocol_hash: str,
+    value: dict[str, object] | None = None,
 ) -> None:
-    target = run_root / "P11" / artifact_id / f"{fold_id}.json"
     target.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps({"artifact_id": artifact_id, "fold_id": fold_id}).encode("utf-8")
+    content = json.dumps(value or {"artifact_id": artifact_id, **coordinates}).encode("utf-8")
     target.write_bytes(content)
     manifest = {
         "artifact_id": artifact_id,
-        "producer_step": "P11",
-        "coordinates": {"outer_fold": fold_id},
+        "producer_step": producer_step,
+        "coordinates": coordinates,
         "protocol_hash": protocol_hash,
         "content_hash": _sha256(content),
     }
@@ -64,11 +69,7 @@ def _p11_fixture(tmp_path: Path) -> tuple[Path, str]:
             "fully_nested_outer_years": [2021, 2022],
             "initial_in_confirmatory_pool": False,
         },
-        "steps": {
-            "P11": {
-                "writes": ["model_artifacts", "model_freeze_receipt"],
-            }
-        },
+        "steps": {"P11": {"writes": ["model_artifacts", "model_freeze_receipt"]}},
         "artifacts": {
             "model_artifacts": {
                 "producer_step": "P11",
@@ -86,21 +87,62 @@ def _p11_fixture(tmp_path: Path) -> tuple[Path, str]:
     return run_root, protocol_hash
 
 
-def test_p12_uses_frozen_selection_hash_without_undeclared_read() -> None:
+def _p12_fixture(tmp_path: Path) -> tuple[Path, str]:
+    run_root = tmp_path / "run"
+    p00 = run_root / "P00"
+    p00.mkdir(parents=True)
+    protocol_hash = "p" * 64
+    (p00 / "protocol_hash.txt").write_text(protocol_hash, encoding="utf-8")
+    writes = [
+        "outer_open_receipt",
+        "calibration_outputs",
+        "evaluation_metrics",
+        "bootstrap_batches",
+        "utility_scenarios",
+    ]
+    registry: dict[str, object] = {
+        "folds": {
+            "initial_outer_year": 2020,
+            "fully_nested_outer_years": [2021, 2022],
+            "initial_in_confirmatory_pool": False,
+        },
+        "steps": {"P12": {"writes": writes}},
+        "artifacts": {
+            artifact_id: {
+                "producer_step": "P12",
+                "coordinates": ["outer_fold"],
+                "path_template": f"P12/{artifact_id}/{{outer_fold}}.json",
+            }
+            for artifact_id in writes
+        },
+    }
+    (p00 / "registry.lock.json").write_text(json.dumps(registry), encoding="utf-8")
+    return run_root, protocol_hash
+
+
+def test_p12_uses_locked_pairs_before_outer_open() -> None:
     source = (ROOT / "scripts" / "p12_evaluate.py").read_text(encoding="utf-8")
     assert 'loaded.context.read("measurement_selection_registry"' not in source
     assert 'freeze.get("measurement_selection_hash")' in source
+    assert "reference_by_candidate," in source
+    assert source.index("pairing_audit = validate_paired_prediction_keys") < source.index(
+        'loaded.context.write("outer_open_receipt"'
+    )
 
 
 def test_registered_patch_scope_is_exact_and_nonanalytical() -> None:
-    assert P12_COMPATIBILITY_PATCH_ID == "P12_SELECTION_HASH_READ_V1"
+    assert P12_COMPATIBILITY_PATCH_ID == "P12_PAIRED_SCOPE_V2"
+    assert P12_SELECTION_COMPATIBILITY_PATCH_ID == "P12_SELECTION_HASH_READ_V1"
+    assert P12_SELECTION_COMPATIBILITY_COMMIT == "3c261c5a387d83582b9cc3becbad59a6c1a7cae8"
     assert P12_COMPATIBILITY_BASE_COMMIT == "09116ea5dea68236f46b2466eb50fbfff5c2bd0a"
     assert P12_COMPATIBILITY_REQUIRED_PATHS == {
         "scripts/p12_evaluate.py",
         "src/core/resume.py",
+        "src/evaluation/pairing.py",
     }
     assert P12_COMPATIBILITY_REQUIRED_PATHS.issubset(P12_COMPATIBILITY_ALLOWED_PATHS)
     assert "config/foundation/steps.yaml" not in P12_COMPATIBILITY_ALLOWED_PATHS
+    assert "config/methodology/evaluation.yaml" not in P12_COMPATIBILITY_ALLOWED_PATHS
 
 
 def test_p11_boundary_requires_every_fold_artifact(tmp_path: Path) -> None:
@@ -108,8 +150,10 @@ def test_p11_boundary_requires_every_fold_artifact(tmp_path: Path) -> None:
     for artifact_id in ("model_artifacts", "model_freeze_receipt"):
         _write_artifact(
             run_root,
+            target=run_root / "P11" / artifact_id / "2021.json",
             artifact_id=artifact_id,
-            fold_id="2021",
+            producer_step="P11",
+            coordinates={"outer_fold": "2021"},
             protocol_hash=protocol_hash,
         )
     assert not p11_boundary_complete(run_root)
@@ -117,8 +161,10 @@ def test_p11_boundary_requires_every_fold_artifact(tmp_path: Path) -> None:
     for artifact_id in ("model_artifacts", "model_freeze_receipt"):
         _write_artifact(
             run_root,
+            target=run_root / "P11" / artifact_id / "2022.json",
             artifact_id=artifact_id,
-            fold_id="2022",
+            producer_step="P11",
+            coordinates={"outer_fold": "2022"},
             protocol_hash=protocol_hash,
         )
     assert p11_boundary_complete(run_root)
@@ -150,26 +196,77 @@ def test_compatibility_receipt_round_trip_and_tamper_detection(tmp_path: Path) -
         read_compatibility_receipt(run_root)
 
 
-def test_p12_direct_execution_requires_matching_receipt(
+def test_partial_outer_open_receipts_are_quarantined_idempotently(tmp_path: Path) -> None:
+    run_root, protocol_hash = _p12_fixture(tmp_path)
+    previous_receipt: dict[str, object] = {
+        "patch_id": P12_SELECTION_COMPATIBILITY_PATCH_ID,
+        "protocol_hash": protocol_hash,
+        "locked_git_commit": P12_COMPATIBILITY_BASE_COMMIT,
+        "current_git_commit": P12_SELECTION_COMPATIBILITY_COMMIT,
+    }
+    previous_hash = write_compatibility_receipt(run_root, previous_receipt)
+    previous = read_compatibility_receipt(run_root, P12_SELECTION_COMPATIBILITY_PATCH_ID)
+    assert previous is not None
+    assert previous["receipt_hash"] == previous_hash
+
+    for fold_id in ("2021", "2022"):
+        target = run_root / "P12" / "outer_open_receipt" / f"{fold_id}.json"
+        _write_artifact(
+            run_root,
+            target=target,
+            artifact_id="outer_open_receipt",
+            producer_step="P12",
+            coordinates={"outer_fold": fold_id},
+            protocol_hash=protocol_hash,
+            value={
+                "status": "PASS",
+                "protocol_hash": protocol_hash,
+                "compatibility_patch_id": P12_SELECTION_COMPATIBILITY_PATCH_ID,
+                "compatibility_receipt_hash": previous_hash,
+                "evaluation_git_commit": P12_SELECTION_COMPATIBILITY_COMMIT,
+            },
+        )
+
+    records = quarantine_partial_p12_outputs(run_root, previous)
+    assert [record["outer_fold"] for record in records] == ["2021", "2022"]
+    for fold_id in ("2021", "2022"):
+        original = run_root / "P12" / "outer_open_receipt" / f"{fold_id}.json"
+        quarantined = (
+            run_root
+            / "COMPATIBILITY"
+            / "quarantine"
+            / P12_COMPATIBILITY_PATCH_ID
+            / "P12"
+            / "outer_open_receipt"
+            / f"{fold_id}.json"
+        )
+        assert not original.exists()
+        assert quarantined.is_file()
+        assert quarantined.with_name(quarantined.name + ".manifest.json").is_file()
+
+    repeated = quarantine_partial_p12_outputs(run_root, previous)
+    assert repeated == records
+
+
+def test_p12_direct_execution_requires_matching_latest_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     run_root = tmp_path / "run"
     project_root = tmp_path / "project"
     (run_root / "P00").mkdir(parents=True)
-    (project_root / "scripts").mkdir(parents=True)
     protocol_hash = "p" * 64
-    current_content = b"patched p12"
-    current_hash = _sha256(current_content)
-    locked_hash = "a" * 64
-    (project_root / "scripts" / "p12_evaluate.py").write_bytes(current_content)
+    locked_hashes: dict[str, str] = {}
+    current_hashes: dict[str, str] = {}
+    for index, relative in enumerate(sorted(P12_COMPATIBILITY_REQUIRED_PATHS)):
+        content = f"patched source {index}".encode()
+        target = project_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        locked_hashes[relative] = f"{index + 1}" * 64
+        current_hashes[relative] = _sha256(content)
     (run_root / "P00" / "protocol_hash.txt").write_text(protocol_hash, encoding="utf-8")
     (run_root / "P00" / "source_config_manifest.json").write_text(
-        json.dumps(
-            {
-                "source_code_hashes": {"scripts/p12_evaluate.py": locked_hash},
-            }
-        ),
-        encoding="utf-8",
+        json.dumps({"source_code_hashes": locked_hashes}), encoding="utf-8"
     )
 
     with pytest.raises(RuntimeError, match="compatibility resume receipt"):
@@ -181,10 +278,11 @@ def test_p12_direct_execution_requires_matching_receipt(
         "locked_git_commit": P12_COMPATIBILITY_BASE_COMMIT,
         "current_git_commit": "new-commit",
         "source_code_drift": {
-            "scripts/p12_evaluate.py": {
-                "locked_sha256": locked_hash,
-                "current_sha256": current_hash,
+            relative: {
+                "locked_sha256": locked_hashes[relative],
+                "current_sha256": current_hashes[relative],
             }
+            for relative in P12_COMPATIBILITY_REQUIRED_PATHS
         },
     }
     write_compatibility_receipt(run_root, receipt)
