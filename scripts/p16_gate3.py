@@ -130,9 +130,7 @@ def main() -> int:
     threshold["workers"] = args.workers
     loaded.context.write("threshold_interaction_results", threshold, {})
     loaded.context.write("gate3_verdict", receipt, {})
-    print(
-        f"P16 status={receipt['status']} verdict={receipt['verdict']} workers={args.workers}"
-    )
+    print(f"P16 status={receipt['status']} verdict={receipt['verdict']} workers={args.workers}")
     return 0
 
 
