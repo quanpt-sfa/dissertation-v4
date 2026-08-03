@@ -12,13 +12,17 @@ from core.resume import (
     P12_COMPATIBILITY_BASE_COMMIT,
     P12_COMPATIBILITY_PATCH_ID,
     P12_COMPATIBILITY_REQUIRED_PATHS,
-    _p11_boundary_complete,
-    _write_compatibility_receipt,
+    p11_boundary_complete,
+    write_compatibility_receipt,
     read_compatibility_receipt,
     verify_p12_implementation,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _fixed_git_commit(_root: Path, _args: list[str]) -> str:
+    return "new-commit"
 
 
 def _sha256(value: bytes) -> str:
@@ -108,7 +112,7 @@ def test_p11_boundary_requires_every_fold_artifact(tmp_path: Path) -> None:
             fold_id="2021",
             protocol_hash=protocol_hash,
         )
-    assert not _p11_boundary_complete(run_root)
+    assert not p11_boundary_complete(run_root)
 
     for artifact_id in ("model_artifacts", "model_freeze_receipt"):
         _write_artifact(
@@ -117,11 +121,11 @@ def test_p11_boundary_requires_every_fold_artifact(tmp_path: Path) -> None:
             fold_id="2022",
             protocol_hash=protocol_hash,
         )
-    assert _p11_boundary_complete(run_root)
+    assert p11_boundary_complete(run_root)
 
     target = run_root / "P11" / "model_artifacts" / "2022.json"
     target.write_text("tampered", encoding="utf-8")
-    assert not _p11_boundary_complete(run_root)
+    assert not p11_boundary_complete(run_root)
 
 
 def test_compatibility_receipt_round_trip_and_tamper_detection(tmp_path: Path) -> None:
@@ -135,7 +139,7 @@ def test_compatibility_receipt_round_trip_and_tamper_detection(tmp_path: Path) -
         "locked_git_commit": P12_COMPATIBILITY_BASE_COMMIT,
         "current_git_commit": "new-commit",
     }
-    receipt_hash = _write_compatibility_receipt(run_root, receipt)
+    receipt_hash = write_compatibility_receipt(run_root, receipt)
     observed = read_compatibility_receipt(run_root)
     assert observed is not None
     assert observed["receipt_hash"] == receipt_hash
@@ -183,8 +187,8 @@ def test_p12_direct_execution_requires_matching_receipt(
             }
         },
     }
-    _write_compatibility_receipt(run_root, receipt)
-    monkeypatch.setattr(resume, "_git_output", lambda _root, _args: "new-commit")
+    write_compatibility_receipt(run_root, receipt)
+    monkeypatch.setattr(resume, "_git_output", _fixed_git_commit)
     observed = verify_p12_implementation(run_root, project_root)
     assert observed is not None
     assert observed["current_git_commit"] == "new-commit"

@@ -227,7 +227,7 @@ def _authorize_p12_compatibility_resume(
             "resume refused: repository diff exceeds the registered P12 compatibility patch: "
             f"{changed_paths}"
         )
-    if not _p11_boundary_complete(run_root):
+    if not p11_boundary_complete(run_root):
         raise RuntimeError(
             "resume refused: registered P12 compatibility patch requires every P11 fold artifact "
             "to be complete and hash-verified"
@@ -257,7 +257,7 @@ def _authorize_p12_compatibility_resume(
         "access_matrix_relaxation": False,
         "registry_lock_modified": False,
     }
-    receipt_hash = _write_compatibility_receipt(run_root, receipt)
+    receipt_hash = write_compatibility_receipt(run_root, receipt)
     receipt["receipt_hash"] = receipt_hash
     print(
         "Compatibility resume authorized "
@@ -267,7 +267,7 @@ def _authorize_p12_compatibility_resume(
     return receipt
 
 
-def _p11_boundary_complete(run_root: Path) -> bool:
+def p11_boundary_complete(run_root: Path) -> bool:
     registry = json_object(run_root / "P00" / "registry.lock.json", "locked registry")
     protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
     folds_raw = registry.get("folds")
@@ -323,7 +323,7 @@ def _p11_boundary_complete(run_root: Path) -> bool:
     return True
 
 
-def _write_compatibility_receipt(run_root: Path, receipt: dict[str, object]) -> str:
+def write_compatibility_receipt(run_root: Path, receipt: dict[str, object]) -> str:
     directory = run_root / "COMPATIBILITY"
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{P12_COMPATIBILITY_PATCH_ID}.json"
