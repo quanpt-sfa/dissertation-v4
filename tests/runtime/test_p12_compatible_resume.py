@@ -34,9 +34,7 @@ def _write_artifact(
 ) -> None:
     target = run_root / "P11" / artifact_id / f"{fold_id}.json"
     target.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps({"artifact_id": artifact_id, "fold_id": fold_id}).encode(
-        "utf-8"
-    )
+    content = json.dumps({"artifact_id": artifact_id, "fold_id": fold_id}).encode("utf-8")
     target.write_bytes(content)
     manifest = {
         "artifact_id": artifact_id,
@@ -92,17 +90,12 @@ def test_p12_uses_frozen_selection_hash_without_undeclared_read() -> None:
 
 def test_registered_patch_scope_is_exact_and_nonanalytical() -> None:
     assert P12_COMPATIBILITY_PATCH_ID == "P12_SELECTION_HASH_READ_V1"
-    assert (
-        P12_COMPATIBILITY_BASE_COMMIT
-        == "09116ea5dea68236f46b2466eb50fbfff5c2bd0a"
-    )
+    assert P12_COMPATIBILITY_BASE_COMMIT == "09116ea5dea68236f46b2466eb50fbfff5c2bd0a"
     assert P12_COMPATIBILITY_REQUIRED_PATHS == {
         "scripts/p12_evaluate.py",
         "src/core/resume.py",
     }
-    assert P12_COMPATIBILITY_REQUIRED_PATHS.issubset(
-        P12_COMPATIBILITY_ALLOWED_PATHS
-    )
+    assert P12_COMPATIBILITY_REQUIRED_PATHS.issubset(P12_COMPATIBILITY_ALLOWED_PATHS)
     assert "config/foundation/steps.yaml" not in P12_COMPATIBILITY_ALLOWED_PATHS
 
 
@@ -135,9 +128,7 @@ def test_compatibility_receipt_round_trip_and_tamper_detection(tmp_path: Path) -
     run_root = tmp_path / "run"
     (run_root / "P00").mkdir(parents=True)
     protocol_hash = "p" * 64
-    (run_root / "P00" / "protocol_hash.txt").write_text(
-        protocol_hash, encoding="utf-8"
-    )
+    (run_root / "P00" / "protocol_hash.txt").write_text(protocol_hash, encoding="utf-8")
     receipt: dict[str, object] = {
         "patch_id": P12_COMPATIBILITY_PATCH_ID,
         "protocol_hash": protocol_hash,
@@ -149,9 +140,7 @@ def test_compatibility_receipt_round_trip_and_tamper_detection(tmp_path: Path) -
     assert observed is not None
     assert observed["receipt_hash"] == receipt_hash
 
-    receipt_path = (
-        run_root / "COMPATIBILITY" / f"{P12_COMPATIBILITY_PATCH_ID}.json"
-    )
+    receipt_path = run_root / "COMPATIBILITY" / f"{P12_COMPATIBILITY_PATCH_ID}.json"
     receipt_path.write_text("{}", encoding="utf-8")
     with pytest.raises(RuntimeError, match="receipt hash mismatch"):
         read_compatibility_receipt(run_root)
@@ -169,9 +158,7 @@ def test_p12_direct_execution_requires_matching_receipt(
     current_hash = _sha256(current_content)
     locked_hash = "a" * 64
     (project_root / "scripts" / "p12_evaluate.py").write_bytes(current_content)
-    (run_root / "P00" / "protocol_hash.txt").write_text(
-        protocol_hash, encoding="utf-8"
-    )
+    (run_root / "P00" / "protocol_hash.txt").write_text(protocol_hash, encoding="utf-8")
     (run_root / "P00" / "source_config_manifest.json").write_text(
         json.dumps(
             {
