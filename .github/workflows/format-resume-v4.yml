@@ -1,0 +1,31 @@
+name: format-resume-v4
+
+on:
+  push:
+    branches:
+      - fix/p07-raw-computation-report-contract
+    paths:
+      - .github/workflows/format-resume-v4.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/p07-raw-computation-report-contract
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - run: uv run ruff format src/core/resume.py
+      - run: |
+          rm .github/workflows/format-resume-v4.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/core/resume.py .github/workflows/format-resume-v4.yml
+          git diff --cached --quiet && exit 0
+          git commit -m "style: format resume V4 compatibility helper"
+          git push origin HEAD:fix/p07-raw-computation-report-contract
