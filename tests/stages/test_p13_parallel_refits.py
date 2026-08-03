@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import pytest
@@ -28,22 +28,24 @@ def test_parallel_source_refits_are_worker_invariant(
         PREDICTION: "prediction",
     }
 
-    monkeypatch.setattr(
-        parallel_refits,
-        "_alternative_l1_labels",
-        lambda **_: pd.DataFrame(),
-    )
-    monkeypatch.setattr(
-        parallel_refits,
-        "select_observed_target_outcomes",
-        lambda *_args, **_kwargs: pd.DataFrame(
+    def fake_labels(**_kwargs: object) -> pd.DataFrame:
+        return pd.DataFrame()
+
+    def fake_observed_outcomes(*_args: object, **_kwargs: object) -> pd.DataFrame:
+        return pd.DataFrame(
             [
                 {"firm_master_id": "F1", "fiscal_year": 2021, "outcome": True},
                 {"firm_master_id": "F2", "fiscal_year": 2021, "outcome": False},
                 {"firm_master_id": "F1", "fiscal_year": 2022, "outcome": True},
                 {"firm_master_id": "F2", "fiscal_year": 2022, "outcome": False},
             ]
-        ),
+        )
+
+    monkeypatch.setattr(parallel_refits, "_alternative_l1_labels", fake_labels)
+    monkeypatch.setattr(
+        parallel_refits,
+        "select_observed_target_outcomes",
+        fake_observed_outcomes,
     )
 
     def fake_fit_fold_models(**kwargs: Any) -> ModelFitResult:
@@ -73,7 +75,7 @@ def test_parallel_source_refits_are_worker_invariant(
 
     monkeypatch.setattr(parallel_refits, "fit_fold_models", fake_fit_fold_models)
 
-    matrices = {
+    matrices: dict[str, Any] = {
         "rows": [],
         "expected_sources": {"S1": "C1", "S2": "C2"},
     }
@@ -114,7 +116,8 @@ def test_parallel_source_refits_are_worker_invariant(
     )
 
     assert parallel == sequential
-    assert [(row["exclusion_id"], row[OUTER_FOLD]) for row in parallel["results"]] == [
+    result_rows = cast(list[dict[str, object]], parallel["results"])
+    assert [(row["exclusion_id"], row[OUTER_FOLD]) for row in result_rows] == [
         (exclusion_id, fold_id) for exclusion_id in exclusion_ids for fold_id in outer_folds
     ]
 
