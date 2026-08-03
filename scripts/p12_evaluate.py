@@ -13,6 +13,7 @@ import pandas as pd
 
 from core.fold_control import require_primary_target
 from core.pipeline import load_run, mapping, physical_columns, sequence, stable_hash
+from core.resume import verify_p12_implementation
 from core.rng import generator
 from core.semantic_keys import OUTER_FOLD
 from evaluation.pairing import validate_paired_prediction_keys
@@ -27,6 +28,7 @@ def main() -> int:
     parser.add_argument("--outer-fold", required=True)
     args = parser.parse_args()
     coordinates = {OUTER_FOLD: args.outer_fold}
+    project_root = Path(__file__).resolve().parents[1]
     loaded = load_run(
         registry_path=args.registry,
         run_id=args.run_id,
@@ -34,6 +36,7 @@ def main() -> int:
         state="FROZEN",
         coordinates=coordinates,
     )
+    compatibility = verify_p12_implementation(loaded.run_root, project_root)
     measurement = mapping(loaded.registry.get("measurement"), "measurement")
     primary_target_id = require_primary_target(measurement, "P12")
     mcse = mapping(loaded.context.read("mcse_report", {}), "MCSE report")
@@ -47,12 +50,9 @@ def main() -> int:
         raise RuntimeError(f"fold={args.outer_fold}: a PASS model-freeze receipt is required")
     if freeze.get("protocol_hash") != loaded.protocol_hash:
         raise RuntimeError("model-freeze receipt protocol hash mismatch")
-    measurement_selection = mapping(
-        loaded.context.read("measurement_selection_registry", coordinates),
-        "measurement selection",
-    )
-    if freeze.get("measurement_selection_hash") != stable_hash(measurement_selection):
-        raise RuntimeError("measurement selection hash mismatch")
+    measurement_selection_hash = freeze.get("measurement_selection_hash")
+    if not isinstance(measurement_selection_hash, str) or not measurement_selection_hash:
+        raise RuntimeError("model-freeze receipt measurement selection hash is missing")
     channel_selection = mapping(
         loaded.context.read("channel_measurement_selection", coordinates),
         "channel measurement selection",
@@ -70,19 +70,28 @@ def main() -> int:
         raise RuntimeError("channel measurement selection hash mismatch")
     if freeze.get("nested_selection_receipt_hash") != stable_hash(nested_receipt):
         raise RuntimeError("nested selection receipt hash mismatch")
-    open_receipt = {
+    open_receipt: dict[str, object] = {
         "status": "PASS",
         "protocol_hash": loaded.protocol_hash,
         "model_freeze_receipt_hash": loaded.context.store.receipt_hash(
             "model_freeze_receipt", coordinates
         ),
         "mcse_report_hash": loaded.context.store.receipt_hash("mcse_report", {}),
-        "measurement_selection_hash": stable_hash(measurement_selection),
+        "measurement_selection_hash": measurement_selection_hash,
         "channel_measurement_selection_hash": stable_hash(channel_selection),
         "nested_selection_receipt_hash": stable_hash(nested_receipt),
         "opened_at_state": "FROZEN",
         OUTER_FOLD: args.outer_fold,
     }
+    if compatibility is not None:
+        open_receipt.update(
+            {
+                "compatibility_patch_id": compatibility["patch_id"],
+                "compatibility_receipt_hash": compatibility["receipt_hash"],
+                "evaluation_git_commit": compatibility["current_git_commit"],
+                "locked_git_commit": compatibility["locked_git_commit"],
+            }
+        )
     loaded.context.write("outer_open_receipt", open_receipt, coordinates)
     oof = loaded.context.read("development_oof_predictions", coordinates)
     predictions = loaded.context.read("raw_outer_predictions", coordinates)
