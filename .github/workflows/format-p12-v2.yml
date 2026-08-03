@@ -1,0 +1,37 @@
+name: format-p12-v2
+
+on:
+  push:
+    branches:
+      - fix/p07-raw-computation-report-contract
+    paths:
+      - .github/workflows/format-p12-v2.yml
+      - src/core/resume.py
+      - src/evaluation/pairing.py
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/p07-raw-computation-report-contract
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - run: uv run ruff format src/core/resume.py src/evaluation/pairing.py
+      - name: Commit canonical formatting
+        shell: bash
+        run: |
+          if git diff --quiet -- src/core/resume.py src/evaluation/pairing.py; then
+            echo "No formatting changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/core/resume.py src/evaluation/pairing.py
+          git commit -m "style: format P12 compatibility repair"
+          git push origin HEAD:fix/p07-raw-computation-report-contract
