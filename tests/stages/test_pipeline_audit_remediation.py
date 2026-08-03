@@ -56,7 +56,7 @@ def test_p08_completion_contract_rejects_intermediate_statuses() -> None:
         require_p08_completion({"status": "INCOMPLETE", "precision_target_met": False}, "P09")
 
 
-def test_p12_pairing_requires_exact_firm_year_support() -> None:
+def test_p12_pairing_requires_exact_locked_firm_year_support() -> None:
     columns = {
         FIRM_ID: "firm_key",
         FISCAL_YEAR: "year_key",
@@ -65,21 +65,31 @@ def test_p12_pairing_requires_exact_firm_year_support() -> None:
     }
     candidate = CANDIDATES[0]
     reference = REFERENCES[candidate]
+    pu_model = "track_a:anchor_pu:S3_BROAD:full"
+    locked_pair = {candidate: reference}
     exact = pd.DataFrame(
         [
             {"firm_key": "F1", "year_key": 2024, "model_key": candidate, "score": 0.8},
             {"firm_key": "F2", "year_key": 2024, "model_key": candidate, "score": 0.2},
             {"firm_key": "F1", "year_key": 2024, "model_key": reference, "score": 0.7},
             {"firm_key": "F2", "year_key": 2024, "model_key": reference, "score": 0.3},
+            {"firm_key": "F1", "year_key": 2024, "model_key": pu_model, "score": 0.6},
+            {"firm_key": "F2", "year_key": 2024, "model_key": pu_model, "score": 0.4},
         ]
     )
-    audit = validate_paired_prediction_keys(exact, columns)
+    audit = validate_paired_prediction_keys(exact, columns, locked_pair)
     assert audit["status"] == "PASS"
     assert audit["pair_count"] == 1
+    assert audit["pair_scope"] == "evaluation.gate2.reference_by_candidate"
+    assert audit["unpaired_models_ignored"] == [pu_model]
 
     mismatch = exact.loc[~(exact["model_key"].eq(reference) & exact["firm_key"].eq("F2"))].copy()
     with pytest.raises(RuntimeError, match="FIRM_YEAR_SUPPORT_MISMATCH"):
-        validate_paired_prediction_keys(mismatch, columns)
+        validate_paired_prediction_keys(mismatch, columns, locked_pair)
+
+    missing_reference = exact.loc[~exact["model_key"].eq(reference)].copy()
+    with pytest.raises(RuntimeError, match="REFERENCE_MODEL_MISSING"):
+        validate_paired_prediction_keys(missing_reference, columns, locked_pair)
 
 
 def test_gate2_contract_requires_complete_yield_and_bootstrap_evidence() -> None:
