@@ -33,9 +33,10 @@ def main() -> int:
     loaded = load_run(
         registry_path=args.registry, run_id=args.run_id, step_id="P13", state="EVALUATED"
     )
+    fold_ids = outer_fold_ids(loaded.registry, include_initial=False)
     evaluations: list[dict[str, Any]] = []
     predictions: list[pd.DataFrame] = []
-    for fold_id in outer_fold_ids(loaded.registry):
+    for fold_id in fold_ids:
         metric = mapping(
             loaded.context.read("evaluation_metrics", {OUTER_FOLD: fold_id}),
             "evaluation metrics",
@@ -62,11 +63,11 @@ def main() -> int:
             loaded.context.read("weight_diagnostics", {"fold_id": fold_id}),
             "weight diagnostics",
         )
-        for fold_id in outer_fold_ids(loaded.registry)
+        for fold_id in fold_ids
     ]
     weights_by_fold = {
         fold_id: loaded.context.read("fold_aware_weights", {"fold_id": fold_id})
-        for fold_id in outer_fold_ids(loaded.registry)
+        for fold_id in fold_ids
     }
     if not all(isinstance(value, pd.DataFrame) for value in weights_by_fold.values()):
         raise ValueError("P13 fold weights must be DataFrames")
@@ -113,7 +114,7 @@ def main() -> int:
         feature_registry=[mapping(item, "feature registry item") for item in registry],
         weights_by_fold={key: cast(pd.DataFrame, value) for key, value in weights_by_fold.items()},
         outcomes=cast(pd.DataFrame, outcomes),
-        outer_folds=outer_fold_ids(loaded.registry),
+        outer_folds=fold_ids,
         learner_ids=learner_ids,
         learner_settings=mapping(learners.get("settings"), "learners.settings"),
         learner_search_spaces=search_spaces,
@@ -127,7 +128,7 @@ def main() -> int:
                 f"source_exclusion:{exclusion_id}",
             )
             % (2**32 - 1)
-            for fold_id in outer_fold_ids(loaded.registry)
+            for fold_id in fold_ids
             for exclusion_id in exclusion_ids
         },
     )
