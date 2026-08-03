@@ -32,7 +32,7 @@ def main() -> int:
     gate2_raw = read_optional(loaded.context, "gate2_verdict", {})
     gate2 = mapping(gate2_raw, "Gate 2 receipt") if gate2_raw is not None else None
     evaluations: list[dict[str, Any]] = []
-    for fold_id in outer_fold_ids(loaded.registry):
+    for fold_id in outer_fold_ids(loaded.registry, include_initial=False):
         value = read_optional(loaded.context, "evaluation_metrics", {OUTER_FOLD: fold_id})
         if value is not None:
             evaluations.append(mapping(value, "evaluation metrics"))
