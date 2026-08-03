@@ -8,6 +8,7 @@ from typing import Any, cast
 from .access_matrix import assert_access
 from .artifact_store import ArtifactStore
 from .errors import AccessPolicyError
+from .p00_artifacts import read_p00_artifact
 
 
 class RunContext:
@@ -35,15 +36,15 @@ class RunContext:
         self._verify_required_receipts()
         value = self.store.read(artifact_id, coordinates)
         manifest = self.store.manifest(artifact_id, coordinates)
-        dependency: dict[str, object] = {
-            "artifact_id": artifact_id,
-            "coordinates": dict(coordinates),
-            "content_hash": manifest["content_hash"],
-            "producer_step": manifest["producer_step"],
-            "protocol_hash": manifest["protocol_hash"],
-        }
-        key = (artifact_id, str(sorted(coordinates.items())))
-        self._dependencies[key] = dependency
+        self._record_dependency(artifact_id, coordinates, manifest)
+        return value
+
+    def read_p00(self, artifact_id: str, coordinates: Mapping[str, str]) -> object:
+        """Read a P00 lock artifact under its detached directory-manifest contract."""
+        self._access(artifact_id, "read")
+        self._verify_required_receipts()
+        value, manifest = read_p00_artifact(self.store, artifact_id, coordinates)
+        self._record_dependency(artifact_id, coordinates, manifest)
         return value
 
     def write(
@@ -72,6 +73,22 @@ class RunContext:
                 raise AccessPolicyError("runtime: inherited dependency identity is incomplete")
             key = (artifact_id, str(sorted(cast(dict[object, object], coordinates).items())))
             self._dependencies[key] = dependency
+
+    def _record_dependency(
+        self,
+        artifact_id: str,
+        coordinates: Mapping[str, str],
+        manifest: Mapping[str, object],
+    ) -> None:
+        dependency: dict[str, object] = {
+            "artifact_id": artifact_id,
+            "coordinates": dict(coordinates),
+            "content_hash": manifest["content_hash"],
+            "producer_step": manifest["producer_step"],
+            "protocol_hash": manifest["protocol_hash"],
+        }
+        key = (artifact_id, str(sorted(coordinates.items())))
+        self._dependencies[key] = dependency
 
     def _access(self, artifact_id: str, mode: str) -> None:
         matrix = self.registry.get("access_matrix")
