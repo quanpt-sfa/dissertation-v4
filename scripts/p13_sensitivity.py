@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Any, cast
@@ -16,21 +17,38 @@ from core.pipeline import load_run, mapping, outer_fold_ids, physical_columns, s
 from core.rng import derive_seed
 from core.semantic_keys import OUTCOME, OUTER_FOLD, TARGET_ID
 from identification.service import build_identification_summary
+from sensitivity.parallel_refits import parallel_source_exclusion_refits
 from sensitivity.service import (
     ablation_summary,
     censoring_sensitivity_summary,
     domain_transfer,
     hierarchical_pi_status,
-    source_exclusion_refits,
     source_sensitivity_summary,
 )
+
+
+def _default_workers() -> int:
+    raw = os.environ.get("P13_WORKERS")
+    if raw is None:
+        return min(10, max(1, os.cpu_count() or 1))
+    try:
+        workers = int(raw)
+    except ValueError as exc:
+        raise ValueError("P13_WORKERS must be an integer") from exc
+    if workers < 1:
+        raise ValueError("P13_WORKERS must be positive")
+    return workers
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--workers", type=int, default=_default_workers())
     args = parser.parse_args()
+    if args.workers < 1:
+        parser.error("--workers must be positive")
+
     loaded = load_run(
         registry_path=args.registry, run_id=args.run_id, step_id="P13", state="EVALUATED"
     )
@@ -113,7 +131,12 @@ def main() -> int:
         *[f"source:{value}" for value in source_ids],
         *[f"channel:{value}" for value in channel_ids],
     ]
-    source_refits = source_exclusion_refits(
+    task_count = len(exclusion_ids) * len(fold_ids)
+    print(
+        f"P13 source refits tasks={task_count} workers={min(args.workers, task_count or 1)}",
+        flush=True,
+    )
+    source_refits = parallel_source_exclusion_refits(
         matrices=matrices,
         feature_panel=cast(pd.DataFrame, panel),
         feature_registry=[mapping(item, "feature registry item") for item in registry],
@@ -137,6 +160,7 @@ def main() -> int:
             for fold_id in fold_ids
             for exclusion_id in exclusion_ids
         },
+        workers=args.workers,
     )
     source_refits["registered_summary"] = source_summary
 
@@ -168,7 +192,8 @@ def main() -> int:
     print(
         "P13 status=PASS "
         f"domain_status={domain['status']} "
-        f"identification_status={identification_summary['status']}"
+        f"identification_status={identification_summary['status']} "
+        f"workers={args.workers}"
     )
     return 0
 
