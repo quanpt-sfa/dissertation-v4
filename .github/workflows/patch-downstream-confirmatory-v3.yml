@@ -1,0 +1,410 @@
+name: patch-downstream-confirmatory-v3
+
+on:
+  push:
+    branches:
+      - fix/p07-raw-computation-report-contract
+    paths:
+      - .github/workflows/patch-downstream-confirmatory-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/p07-raw-computation-report-contract
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - name: Apply permanent downstream fold-scope and resume fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path.cwd()
+
+          # 1. Add one canonical helper for the confirmatory evaluation fold set.
+          pipeline_path = root / "src/core/pipeline.py"
+          pipeline = pipeline_path.read_text(encoding="utf-8")
+          if "def confirmatory_outer_fold_ids(" not in pipeline:
+              marker = '''def outer_fold_ids(registry: Mapping[str, Any], *, include_initial: bool = True) -> list[str]:
+              folds = mapping(registry.get("folds"), "folds")
+              values: list[int] = []
+              if include_initial:
+                  initial = folds.get("initial_outer_year")
+                  if not isinstance(initial, int):
+                      raise ValueError("folds.initial_outer_year must be an integer")
+                  values.append(initial)
+              nested = sequence(folds.get("fully_nested_outer_years"), "folds.fully_nested_outer_years")
+              if not all(isinstance(item, int) for item in nested):
+                  raise ValueError("folds.fully_nested_outer_years must contain integers")
+              values.extend(cast(list[int], nested))
+              return [str(value) for value in values]
+          '''
+              replacement = marker + '''
+
+          def confirmatory_outer_fold_ids(registry: Mapping[str, Any]) -> list[str]:
+              """Return only folds authorized for confirmatory evaluation and downstream claims."""
+              folds = mapping(registry.get("folds"), "folds")
+              include_initial = folds.get("initial_in_confirmatory_pool") is True
+              return outer_fold_ids(registry, include_initial=include_initial)
+          '''
+              if marker not in pipeline:
+                  raise RuntimeError("outer_fold_ids block not found")
+              pipeline = pipeline.replace(marker, replacement)
+              pipeline_path.write_text(pipeline, encoding="utf-8")
+
+          # 2. Downstream evaluation stages must never infer the fold set independently.
+          downstream = (
+              "scripts/p13_sensitivity.py",
+              "scripts/p15_open_known_cases.py",
+              "scripts/p16_gate3.py",
+              "scripts/p17_build_outputs.py",
+          )
+          for relative in downstream:
+              path = root / relative
+              text = path.read_text(encoding="utf-8")
+              text = text.replace("outer_fold_ids", "confirmatory_outer_fold_ids")
+              path.write_text(text, encoding="utf-8")
+
+          # 3. Register V3 as an immutable continuation from the already-published V2 receipt.
+          resume_path = root / "src/core/resume.py"
+          resume = resume_path.read_text(encoding="utf-8")
+          constants_pattern = re.compile(
+              r'P12_SELECTION_COMPATIBILITY_PATCH_ID = .*?\n\)\n\n\ndef hash_file',
+              re.DOTALL,
+          )
+          constants = '''P12_SELECTION_COMPATIBILITY_PATCH_ID = "P12_SELECTION_HASH_READ_V1"
+          P12_SELECTION_COMPATIBILITY_COMMIT = "3c261c5a387d83582b9cc3becbad59a6c1a7cae8"
+          P12_PAIRED_COMPATIBILITY_PATCH_ID = "P12_PAIRED_SCOPE_V2"
+          P12_PAIRED_COMPATIBILITY_COMMIT = "67857db9751e9005168c33ee49c956bc7e1340ef"
+          P12_COMPATIBILITY_PATCH_ID = "P13_CONFIRMATORY_SCOPE_V3"
+          P12_COMPATIBILITY_BASE_COMMIT = "09116ea5dea68236f46b2466eb50fbfff5c2bd0a"
+          P12_COMPATIBILITY_REQUIRED_PATHS = frozenset(
+              {
+                  "scripts/p12_evaluate.py",
+                  "src/core/resume.py",
+                  "src/evaluation/pairing.py",
+                  "src/core/pipeline.py",
+                  "scripts/p13_sensitivity.py",
+                  "scripts/p15_open_known_cases.py",
+                  "scripts/p16_gate3.py",
+                  "scripts/p17_build_outputs.py",
+              }
+          )
+          P12_COMPATIBILITY_ALLOWED_PATHS = frozenset(
+              {
+                  *P12_COMPATIBILITY_REQUIRED_PATHS,
+                  "tests/runtime/test_p12_compatible_resume.py",
+                  "tests/stages/test_pipeline_audit_remediation.py",
+                  "tests/stages/test_s2_vocabulary_and_fold_dispatch.py",
+              }
+          )
+
+
+          def hash_file'''
+          resume, count = constants_pattern.subn(constants, resume, count=1)
+          if count != 1:
+              raise RuntimeError("resume constants block not replaced")
+
+          auth_start = resume.index("def _authorize_p12_compatibility_resume(")
+          auth_end = resume.index("\ndef _confirmatory_folds", auth_start)
+          authorize = '''def _authorize_p12_compatibility_resume(
+              *,
+              project_root: Path,
+              run_root: Path,
+              manifest: dict[str, object],
+              source_code_hashes: dict[str, str],
+              drifted_source_paths: list[str],
+          ) -> dict[str, object]:
+              locked_commit = manifest.get("git_commit")
+              if locked_commit != P12_COMPATIBILITY_BASE_COMMIT:
+                  raise RuntimeError(
+                      "resume refused: implementation drift is not covered by a registered compatibility patch"
+                  )
+              if set(drifted_source_paths) != set(P12_COMPATIBILITY_REQUIRED_PATHS):
+                  raise RuntimeError(
+                      "resume refused: source drift exceeds the registered downstream compatibility patch: "
+                      f"{drifted_source_paths}"
+                  )
+
+              current_commit = _git_output(project_root, ["rev-parse", "HEAD"])
+              _require_git_ancestor(project_root, P12_COMPATIBILITY_BASE_COMMIT, current_commit)
+              changed_paths = sorted(
+                  _git_lines(
+                      project_root,
+                      ["diff", "--name-only", f"{locked_commit}..{current_commit}"],
+                  )
+              )
+              changed_set = set(changed_paths)
+              if not P12_COMPATIBILITY_REQUIRED_PATHS.issubset(
+                  changed_set
+              ) or not changed_set.issubset(P12_COMPATIBILITY_ALLOWED_PATHS):
+                  raise RuntimeError(
+                      "resume refused: repository diff exceeds the registered downstream patch: "
+                      f"{changed_paths}"
+                  )
+              if not p11_boundary_complete(run_root):
+                  raise RuntimeError(
+                      "resume refused: downstream compatibility requires complete hash-verified P11 outputs"
+                  )
+              if not p12_boundary_complete(run_root):
+                  raise RuntimeError(
+                      "resume refused: downstream compatibility requires complete hash-verified P12 outputs"
+                  )
+
+              previous = read_compatibility_receipt(
+                  run_root,
+                  P12_PAIRED_COMPATIBILITY_PATCH_ID,
+              )
+              if previous is None:
+                  raise RuntimeError(
+                      "resume refused: the P12 paired-scope compatibility receipt is required"
+                  )
+              if (
+                  previous.get("locked_git_commit") != P12_COMPATIBILITY_BASE_COMMIT
+                  or previous.get("current_git_commit") != P12_PAIRED_COMPATIBILITY_COMMIT
+              ):
+                  raise RuntimeError(
+                      "resume refused: prior P12 paired-scope receipt does not match its lock"
+                  )
+              previous_hash = str(previous["receipt_hash"])
+
+              drift: dict[str, object] = {}
+              for relative in drifted_source_paths:
+                  current_path = project_root / relative
+                  drift[relative] = {
+                      "locked_sha256": source_code_hashes[relative],
+                      "current_sha256": hash_file(current_path),
+                  }
+
+              existing = read_compatibility_receipt(run_root)
+              if existing is not None:
+                  if (
+                      existing.get("locked_git_commit") != locked_commit
+                      or existing.get("current_git_commit") != current_commit
+                      or existing.get("changed_paths") != changed_paths
+                      or existing.get("previous_patch_id")
+                      != P12_PAIRED_COMPATIBILITY_PATCH_ID
+                      or existing.get("previous_receipt_hash") != previous_hash
+                      or existing.get("source_code_drift") != drift
+                      or existing.get("resume_from") != "P13"
+                      or existing.get("p12_boundary_verified") is not True
+                  ):
+                      raise RuntimeError(
+                          "resume refused: existing downstream compatibility receipt does not match current state"
+                      )
+                  print(
+                      "Compatibility resume reused "
+                      f"patch={P12_COMPATIBILITY_PATCH_ID} resume_from=P13 commit={current_commit}",
+                      flush=True,
+                  )
+                  return existing
+
+              receipt: dict[str, object] = {
+                  "schema_version": 3,
+                  "patch_id": P12_COMPATIBILITY_PATCH_ID,
+                  "resume_from": "P13",
+                  "reason_code": "DOWNSTREAM_EVALUATION_INCLUDED_NONCONFIRMATORY_INITIAL_FOLD",
+                  "protocol_hash": (run_root / "P00" / "protocol_hash.txt")
+                  .read_text(encoding="utf-8")
+                  .strip(),
+                  "locked_git_commit": locked_commit,
+                  "current_git_commit": current_commit,
+                  "changed_paths": changed_paths,
+                  "source_code_drift": drift,
+                  "previous_patch_id": P12_PAIRED_COMPATIBILITY_PATCH_ID,
+                  "previous_receipt_hash": previous_hash,
+                  "p11_boundary_verified": True,
+                  "p12_boundary_verified": True,
+                  "downstream_fold_scope_source": "folds.fully_nested_outer_years",
+                  "initial_fold_excluded_from_confirmatory_downstream": True,
+                  "analytical_contract_change": False,
+                  "access_matrix_relaxation": False,
+                  "registry_lock_modified": False,
+              }
+              receipt_hash = write_compatibility_receipt(run_root, receipt)
+              receipt["receipt_hash"] = receipt_hash
+              print(
+                  "Compatibility resume authorized "
+                  f"patch={P12_COMPATIBILITY_PATCH_ID} resume_from=P13 commit={current_commit}",
+                  flush=True,
+              )
+              return receipt
+          '''
+          resume = resume[:auth_start] + authorize + resume[auth_end:]
+
+          boundary_marker = "\ndef p11_boundary_complete(run_root: Path) -> bool:\n"
+          if "def p12_boundary_complete(" not in resume:
+              p12_boundary = '''
+
+          def p12_boundary_complete(run_root: Path) -> bool:
+              """Require every confirmatory P12 output to exist with a valid content hash."""
+              registry = json_object(run_root / "P00" / "registry.lock.json", "locked registry")
+              protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(
+                  encoding="utf-8"
+              ).strip()
+              steps_raw = registry.get("steps")
+              if not isinstance(steps_raw, dict):
+                  return False
+              p12_raw = cast(dict[object, object], steps_raw).get("P12")
+              if not isinstance(p12_raw, dict):
+                  return False
+              writes_raw = cast(dict[object, object], p12_raw).get("writes")
+              if not isinstance(writes_raw, list):
+                  return False
+              for artifact_raw in cast(list[object], writes_raw):
+                  artifact_id = str(artifact_raw)
+                  for fold_id in _confirmatory_folds(registry):
+                      if not artifact_complete(
+                          registry,
+                          run_root,
+                          protocol_hash,
+                          artifact_id,
+                          {"outer_fold": fold_id},
+                      ):
+                          return False
+              return True
+          '''
+              if boundary_marker not in resume:
+                  raise RuntimeError("p11 boundary marker not found")
+              resume = resume.replace(boundary_marker, p12_boundary + boundary_marker, 1)
+
+          resume_path.write_text(resume, encoding="utf-8")
+
+          # 4. Extend regression coverage for V3 and downstream fold scope.
+          test_path = root / "tests/stages/test_s2_vocabulary_and_fold_dispatch.py"
+          test = test_path.read_text(encoding="utf-8")
+          if "from core.pipeline import confirmatory_outer_fold_ids, outer_fold_ids" not in test:
+              test = test.replace(
+                  "from core.evidence_registry import LogicalEvidenceSource\n",
+                  "from core.evidence_registry import LogicalEvidenceSource\n"
+                  "from core.pipeline import confirmatory_outer_fold_ids, outer_fold_ids\n",
+              )
+          if "def test_downstream_stages_use_only_confirmatory_folds" not in test:
+              test += '''
+
+          def test_downstream_stages_use_only_confirmatory_folds() -> None:
+              registry = _registry()
+              assert outer_fold_ids(registry) == ["2020", "2021", "2022", "2023", "2024"]
+              assert confirmatory_outer_fold_ids(registry) == ["2021", "2022", "2023", "2024"]
+
+              for relative in (
+                  "scripts/p13_sensitivity.py",
+                  "scripts/p15_open_known_cases.py",
+                  "scripts/p16_gate3.py",
+                  "scripts/p17_build_outputs.py",
+              ):
+                  source = (ROOT / relative).read_text(encoding="utf-8")
+                  assert "confirmatory_outer_fold_ids(loaded.registry)" in source
+          '''
+          test_path.write_text(test, encoding="utf-8")
+
+          runtime_test_path = root / "tests/runtime/test_p12_compatible_resume.py"
+          runtime_test = runtime_test_path.read_text(encoding="utf-8")
+          runtime_test = runtime_test.replace(
+              "    P12_COMPATIBILITY_REQUIRED_PATHS,\n",
+              "    P12_COMPATIBILITY_REQUIRED_PATHS,\n"
+              "    P12_PAIRED_COMPATIBILITY_COMMIT,\n"
+              "    P12_PAIRED_COMPATIBILITY_PATCH_ID,\n",
+          )
+          runtime_test = runtime_test.replace(
+              "    p11_boundary_complete,\n",
+              "    p11_boundary_complete,\n    p12_boundary_complete,\n",
+          )
+          runtime_test = runtime_test.replace(
+              'assert P12_COMPATIBILITY_PATCH_ID == "P12_PAIRED_SCOPE_V2"',
+              'assert P12_COMPATIBILITY_PATCH_ID == "P13_CONFIRMATORY_SCOPE_V3"',
+          )
+          runtime_test = runtime_test.replace(
+              'assert P12_SELECTION_COMPATIBILITY_PATCH_ID == "P12_SELECTION_HASH_READ_V1"',
+              'assert P12_SELECTION_COMPATIBILITY_PATCH_ID == "P12_SELECTION_HASH_READ_V1"\n'
+              '    assert P12_PAIRED_COMPATIBILITY_PATCH_ID == "P12_PAIRED_SCOPE_V2"\n'
+              '    assert P12_PAIRED_COMPATIBILITY_COMMIT == "67857db9751e9005168c33ee49c956bc7e1340ef"',
+          )
+          required_pattern = re.compile(
+              r'    assert P12_COMPATIBILITY_REQUIRED_PATHS == \{.*?\n    \}',
+              re.DOTALL,
+          )
+          required_assertion = '''    assert P12_COMPATIBILITY_REQUIRED_PATHS == {
+              "scripts/p12_evaluate.py",
+              "src/core/resume.py",
+              "src/evaluation/pairing.py",
+              "src/core/pipeline.py",
+              "scripts/p13_sensitivity.py",
+              "scripts/p15_open_known_cases.py",
+              "scripts/p16_gate3.py",
+              "scripts/p17_build_outputs.py",
+          }'''
+          runtime_test, count = required_pattern.subn(required_assertion, runtime_test, count=1)
+          if count != 1:
+              raise RuntimeError("required-path assertion not replaced")
+          if "def test_p12_boundary_requires_all_confirmatory_outputs" not in runtime_test:
+              insertion_marker = "\ndef test_compatibility_receipt_round_trip_and_tamper_detection"
+              boundary_test = '''
+
+          def test_p12_boundary_requires_all_confirmatory_outputs(tmp_path: Path) -> None:
+              run_root, protocol_hash = _p12_fixture(tmp_path)
+              writes = [
+                  "outer_open_receipt",
+                  "calibration_outputs",
+                  "evaluation_metrics",
+                  "bootstrap_batches",
+                  "utility_scenarios",
+              ]
+              for fold_id in ("2021", "2022"):
+                  for artifact_id in writes:
+                      _write_artifact(
+                          run_root,
+                          target=run_root / "P12" / artifact_id / f"{fold_id}.json",
+                          artifact_id=artifact_id,
+                          producer_step="P12",
+                          coordinates={"outer_fold": fold_id},
+                          protocol_hash=protocol_hash,
+                      )
+              assert p12_boundary_complete(run_root)
+              (run_root / "P12" / "evaluation_metrics" / "2022.json").unlink()
+              assert not p12_boundary_complete(run_root)
+          '''
+              if insertion_marker not in runtime_test:
+                  raise RuntimeError("runtime test insertion marker not found")
+              runtime_test = runtime_test.replace(insertion_marker, boundary_test + insertion_marker, 1)
+          runtime_test_path.write_text(runtime_test, encoding="utf-8")
+          PY
+
+          uv run ruff format \
+            src/core/pipeline.py \
+            src/core/resume.py \
+            scripts/p13_sensitivity.py \
+            scripts/p15_open_known_cases.py \
+            scripts/p16_gate3.py \
+            scripts/p17_build_outputs.py \
+            tests/runtime/test_p12_compatible_resume.py \
+            tests/stages/test_s2_vocabulary_and_fold_dispatch.py
+
+          uv run ruff check .
+          uv run pytest \
+            tests/runtime/test_p12_compatible_resume.py \
+            tests/stages/test_s2_vocabulary_and_fold_dispatch.py \
+            -q
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-downstream-confirmatory-v3.yml
+          git add \
+            src/core/pipeline.py \
+            src/core/resume.py \
+            scripts/p13_sensitivity.py \
+            scripts/p15_open_known_cases.py \
+            scripts/p16_gate3.py \
+            scripts/p17_build_outputs.py \
+            tests/runtime/test_p12_compatible_resume.py \
+            tests/stages/test_s2_vocabulary_and_fold_dispatch.py
+          git commit -m "fix: scope downstream evaluation to confirmatory folds"
+          git push origin HEAD:fix/p07-raw-computation-report-contract
