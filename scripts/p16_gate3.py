@@ -11,10 +11,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
+from core.fold_control import require_primary_target
 from core.pipeline import load_run, mapping, outer_fold_ids, physical_columns, sequence
 from core.rng import generator
 from core.semantic_keys import OUTER_FOLD
 from gates.service import gate3_verdict
+from sensitivity.service import select_observed_target_outcomes
 
 
 def main() -> int:
@@ -25,6 +27,9 @@ def main() -> int:
     loaded = load_run(
         registry_path=args.registry, run_id=args.run_id, step_id="P16", state="KNOWN_CASES_OPEN"
     )
+    columns = physical_columns(loaded.registry)
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    primary_target_id = require_primary_target(measurement, "P16")
     known = sequence(loaded.context.read("known_case_results", {}), "known case results")
     gate2 = mapping(loaded.context.read("gate2_verdict", {}), "Gate 2 receipt")
     panel = loaded.context.read("feature_panel", {})
@@ -38,6 +43,12 @@ def main() -> int:
             predictions.append(value)
     if not isinstance(panel, pd.DataFrame) or not isinstance(outcomes, pd.DataFrame):
         raise ValueError("P16 panel inputs must be DataFrames")
+    observed_outcomes = select_observed_target_outcomes(
+        outcomes,
+        target_id=primary_target_id,
+        columns=columns,
+        context="P16 Gate 3",
+    )
     registered_ids = {
         str(mapping(item, "feature registry item")["feature_id"]) for item in feature_registry
     }
@@ -68,7 +79,6 @@ def main() -> int:
         )
         for fold_id in confirmatory
     ]
-    measurement = mapping(loaded.registry.get("measurement"), "measurement")
     selection_config = mapping(measurement.get("selection"), "measurement.selection")
     evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
     bootstrap = mapping(inference.get("bootstrap"), "inference.bootstrap")
@@ -78,11 +88,11 @@ def main() -> int:
         known_case_results=[mapping(item, "known case result") for item in known],
         feature_panel=panel,
         predictions=pd.concat(predictions, ignore_index=True),
-        outcomes=outcomes,
+        outcomes=observed_outcomes,
         bindings=bindings,
         gate=mapping(evaluation.get("gate3"), "evaluation.gate3"),
         confirmatory_folds=confirmatory,
-        columns=physical_columns(loaded.registry),
+        columns=columns,
         bootstrap_replications=int(bootstrap["replications"]),
         familywise_alpha=float(common["familywise_alpha"]),
         confirmatory_threshold_claims=int(library["confirmatory_threshold_claims"]),
