@@ -100,8 +100,7 @@ def parallel_source_exclusion_refits(
         context="P13 source exclusion",
     )
     source_channels = {
-        str(key): str(value)
-        for key, value in cast(dict[object, object], expected_sources).items()
+        str(key): str(value) for key, value in cast(dict[object, object], expected_sources).items()
     }
     exclusions: dict[str, set[str]] = {
         f"source:{source}": {source} for source in sorted(source_channels)
@@ -122,11 +121,7 @@ def parallel_source_exclusion_refits(
         )
         for exclusion_id, excluded_sources in exclusions.items()
     }
-    tasks = [
-        (exclusion_id, fold_id)
-        for exclusion_id in exclusions
-        for fold_id in outer_folds
-    ]
+    tasks = [(exclusion_id, fold_id) for exclusion_id in exclusions for fold_id in outer_folds]
 
     missing_seeds = [
         (fold_id, exclusion_id)
