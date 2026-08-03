@@ -16,8 +16,11 @@ from core.resume import (
     P12_PAIRED_COMPATIBILITY_PATCH_ID,
     P12_SELECTION_COMPATIBILITY_COMMIT,
     P12_SELECTION_COMPATIBILITY_PATCH_ID,
+    P13_CONFIRMATORY_COMPATIBILITY_COMMIT,
+    P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID,
     p11_boundary_complete,
     p12_boundary_complete,
+    p13_resume_boundary_ready,
     quarantine_partial_p12_outputs,
     read_compatibility_receipt,
     verify_p12_implementation,
@@ -123,6 +126,34 @@ def _p12_fixture(tmp_path: Path) -> tuple[Path, str]:
     return run_root, protocol_hash
 
 
+def _p13_fixture(tmp_path: Path) -> tuple[Path, str]:
+    run_root = tmp_path / "run"
+    p00 = run_root / "P00"
+    p00.mkdir(parents=True)
+    protocol_hash = "p" * 64
+    (p00 / "protocol_hash.txt").write_text(protocol_hash, encoding="utf-8")
+    writes = [
+        "domain_transfer_outputs",
+        "source_sensitivity_outputs",
+        "censoring_sensitivity_outputs",
+        "hierarchical_pi_sensitivity",
+        "ablation_results",
+    ]
+    registry: dict[str, object] = {
+        "steps": {"P13": {"writes": writes}},
+        "artifacts": {
+            artifact_id: {
+                "producer_step": "P13",
+                "coordinates": [],
+                "path_template": f"P13/{artifact_id}.json",
+            }
+            for artifact_id in writes
+        },
+    }
+    (p00 / "registry.lock.json").write_text(json.dumps(registry), encoding="utf-8")
+    return run_root, protocol_hash
+
+
 def test_p12_uses_locked_pairs_before_outer_open() -> None:
     source = (ROOT / "scripts" / "p12_evaluate.py").read_text(encoding="utf-8")
     assert 'loaded.context.read("measurement_selection_registry"' not in source
@@ -134,7 +165,9 @@ def test_p12_uses_locked_pairs_before_outer_open() -> None:
 
 
 def test_registered_patch_scope_is_exact_and_nonanalytical() -> None:
-    assert P12_COMPATIBILITY_PATCH_ID == "P13_CONFIRMATORY_SCOPE_V3"
+    assert P12_COMPATIBILITY_PATCH_ID == "P13_PRIMARY_TARGET_OUTCOME_V4"
+    assert P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID == "P13_CONFIRMATORY_SCOPE_V3"
+    assert P13_CONFIRMATORY_COMPATIBILITY_COMMIT == "42c9fa7549002c361464b6cb1285c8a4793c9615"
     assert P12_PAIRED_COMPATIBILITY_PATCH_ID == "P12_PAIRED_SCOPE_V2"
     assert P12_PAIRED_COMPATIBILITY_COMMIT == "67857db9751e9005168c33ee49c956bc7e1340ef"
     assert P12_SELECTION_COMPATIBILITY_PATCH_ID == "P12_SELECTION_HASH_READ_V1"
@@ -148,8 +181,10 @@ def test_registered_patch_scope_is_exact_and_nonanalytical() -> None:
         "scripts/p15_open_known_cases.py",
         "scripts/p16_gate3.py",
         "scripts/p17_build_outputs.py",
+        "src/sensitivity/service.py",
     }
     assert P12_COMPATIBILITY_REQUIRED_PATHS.issubset(P12_COMPATIBILITY_ALLOWED_PATHS)
+    assert "tests/stages/test_p13_target_outcome_scope.py" in P12_COMPATIBILITY_ALLOWED_PATHS
     assert "config/foundation/steps.yaml" not in P12_COMPATIBILITY_ALLOWED_PATHS
     assert "config/methodology/evaluation.yaml" not in P12_COMPATIBILITY_ALLOWED_PATHS
 
@@ -206,6 +241,31 @@ def test_p12_boundary_requires_every_confirmatory_output(tmp_path: Path) -> None
 
     (run_root / "P12" / "evaluation_metrics" / "2022.json").unlink()
     assert not p12_boundary_complete(run_root)
+
+
+def test_p13_boundary_allows_only_domain_transfer_prefix(tmp_path: Path) -> None:
+    run_root, protocol_hash = _p13_fixture(tmp_path)
+    assert p13_resume_boundary_ready(run_root)
+
+    _write_artifact(
+        run_root,
+        target=run_root / "P13" / "domain_transfer_outputs.json",
+        artifact_id="domain_transfer_outputs",
+        producer_step="P13",
+        coordinates={},
+        protocol_hash=protocol_hash,
+    )
+    assert p13_resume_boundary_ready(run_root)
+
+    _write_artifact(
+        run_root,
+        target=run_root / "P13" / "source_sensitivity_outputs.json",
+        artifact_id="source_sensitivity_outputs",
+        producer_step="P13",
+        coordinates={},
+        protocol_hash=protocol_hash,
+    )
+    assert not p13_resume_boundary_ready(run_root)
 
 
 def test_compatibility_receipt_round_trip_and_tamper_detection(tmp_path: Path) -> None:
@@ -270,7 +330,7 @@ def test_partial_outer_open_receipts_are_quarantined_idempotently(tmp_path: Path
             run_root
             / "COMPATIBILITY"
             / "quarantine"
-            / P12_COMPATIBILITY_PATCH_ID
+            / P12_PAIRED_COMPATIBILITY_PATCH_ID
             / "P12"
             / "outer_open_receipt"
             / f"{fold_id}.json"
