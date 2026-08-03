@@ -1,3 +1,5 @@
+"""Regression coverage for primary-target outcome binding in P13 and P16."""
+
 from __future__ import annotations
 
 from pathlib import Path
