@@ -287,7 +287,9 @@ def _authorize_p12_compatibility_resume(
         previous.get("locked_git_commit") != P12_COMPATIBILITY_BASE_COMMIT
         or previous.get("current_git_commit") != P13_CONFIRMATORY_COMPATIBILITY_COMMIT
     ):
-        raise RuntimeError("resume refused: prior P13 confirmatory-scope receipt does not match its lock")
+        raise RuntimeError(
+            "resume refused: prior P13 confirmatory-scope receipt does not match its lock"
+        )
     previous_hash = str(previous["receipt_hash"])
 
     drift: dict[str, object] = {}
@@ -393,9 +395,7 @@ def quarantine_partial_p12_outputs(
         raise RuntimeError("P12 quarantine requires the locked P12 writes")
     writes = [str(value) for value in cast(list[object], writes_raw)]
     records: list[dict[str, object]] = []
-    quarantine_root = (
-        run_root / "COMPATIBILITY" / "quarantine" / P12_PAIRED_COMPATIBILITY_PATCH_ID
-    )
+    quarantine_root = run_root / "COMPATIBILITY" / "quarantine" / P12_PAIRED_COMPATIBILITY_PATCH_ID
 
     for fold_id in _confirmatory_folds(registry):
         coordinates = {"outer_fold": fold_id}
