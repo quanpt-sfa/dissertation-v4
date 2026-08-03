@@ -34,8 +34,12 @@ class RunContext:
     def read(self, artifact_id: str, coordinates: Mapping[str, str]) -> object:
         self._access(artifact_id, "read")
         self._verify_required_receipts()
-        value = self.store.read(artifact_id, coordinates)
-        manifest = self.store.manifest(artifact_id, coordinates)
+        artifact_spec = self._artifact_spec(artifact_id)
+        if artifact_spec.get("producer_step") == "P00":
+            value, manifest = read_p00_artifact(self.store, artifact_id, coordinates)
+        else:
+            value = self.store.read(artifact_id, coordinates)
+            manifest = self.store.manifest(artifact_id, coordinates)
         self._record_dependency(artifact_id, coordinates, manifest)
         return value
 
@@ -89,6 +93,15 @@ class RunContext:
         }
         key = (artifact_id, str(sorted(coordinates.items())))
         self._dependencies[key] = dependency
+
+    def _artifact_spec(self, artifact_id: str) -> dict[str, Any]:
+        artifacts = self.registry.get("artifacts")
+        if not isinstance(artifacts, dict):
+            raise AccessPolicyError("runtime: artifact catalog unavailable")
+        item = cast(dict[str, Any], artifacts).get(artifact_id)
+        if not isinstance(item, dict):
+            raise AccessPolicyError(f"artifact={artifact_id}: unknown")
+        return cast(dict[str, Any], item)
 
     def _access(self, artifact_id: str, mode: str) -> None:
         matrix = self.registry.get("access_matrix")
