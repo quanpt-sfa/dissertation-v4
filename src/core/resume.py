@@ -10,13 +10,19 @@ from typing import cast
 
 P12_SELECTION_COMPATIBILITY_PATCH_ID = "P12_SELECTION_HASH_READ_V1"
 P12_SELECTION_COMPATIBILITY_COMMIT = "3c261c5a387d83582b9cc3becbad59a6c1a7cae8"
-P12_COMPATIBILITY_PATCH_ID = "P12_PAIRED_SCOPE_V2"
+P12_PAIRED_COMPATIBILITY_PATCH_ID = "P12_PAIRED_SCOPE_V2"
+P12_PAIRED_COMPATIBILITY_COMMIT = "67857db9751e9005168c33ee49c956bc7e1340ef"
+P12_COMPATIBILITY_PATCH_ID = "P13_CONFIRMATORY_SCOPE_V3"
 P12_COMPATIBILITY_BASE_COMMIT = "09116ea5dea68236f46b2466eb50fbfff5c2bd0a"
 P12_COMPATIBILITY_REQUIRED_PATHS = frozenset(
     {
         "scripts/p12_evaluate.py",
         "src/core/resume.py",
         "src/evaluation/pairing.py",
+        "scripts/p13_sensitivity.py",
+        "scripts/p15_open_known_cases.py",
+        "scripts/p16_gate3.py",
+        "scripts/p17_build_outputs.py",
     }
 )
 P12_COMPATIBILITY_ALLOWED_PATHS = frozenset(
@@ -98,7 +104,7 @@ def verify_resume_inputs(
     snapshot: dict[str, object],
     run_root: Path,
 ) -> dict[str, object] | None:
-    """Verify a strict resume or authorize the registered P12 compatibility continuation."""
+    """Verify a strict resume or authorize the registered compatibility continuation."""
     sources = snapshot.get("sources")
     if not isinstance(sources, list):
         raise ValueError("snapshot.sources must be a list")
@@ -153,7 +159,7 @@ def verify_resume_inputs(
 
 
 def verify_p12_implementation(run_root: Path, project_root: Path) -> dict[str, object] | None:
-    """Require a current compatibility receipt when P12-related code differs from the lock."""
+    """Require a current compatibility receipt when registered implementation files drift."""
     manifest = json_object(run_root / "P00" / "source_config_manifest.json", "source manifest")
     hashes_raw = manifest.get("source_code_hashes")
     if not isinstance(hashes_raw, dict):
@@ -240,7 +246,7 @@ def _authorize_p12_compatibility_resume(
         )
     if set(drifted_source_paths) != set(P12_COMPATIBILITY_REQUIRED_PATHS):
         raise RuntimeError(
-            "resume refused: source drift exceeds the registered P12 compatibility patch: "
+            "resume refused: source drift exceeds the registered downstream compatibility patch: "
             f"{drifted_source_paths}"
         )
 
@@ -254,28 +260,28 @@ def _authorize_p12_compatibility_resume(
         P12_COMPATIBILITY_ALLOWED_PATHS
     ):
         raise RuntimeError(
-            "resume refused: repository diff exceeds the registered P12 compatibility patch: "
+            "resume refused: repository diff exceeds the registered downstream patch: "
             f"{changed_paths}"
         )
     if not p11_boundary_complete(run_root):
         raise RuntimeError(
-            "resume refused: registered P12 compatibility patch requires every P11 fold artifact "
-            "to be complete and hash-verified"
+            "resume refused: downstream compatibility requires complete hash-verified P11 outputs"
+        )
+    if not p12_boundary_complete(run_root):
+        raise RuntimeError(
+            "resume refused: downstream compatibility requires complete hash-verified P12 outputs"
         )
 
-    previous = read_compatibility_receipt(run_root, P12_SELECTION_COMPATIBILITY_PATCH_ID)
-    previous_hash: str | None = None
-    if previous is not None:
-        if (
-            previous.get("locked_git_commit") != P12_COMPATIBILITY_BASE_COMMIT
-            or previous.get("current_git_commit") != P12_SELECTION_COMPATIBILITY_COMMIT
-        ):
-            raise RuntimeError(
-                "resume refused: prior P12 compatibility receipt does not match its lock"
-            )
-        previous_hash = str(previous["receipt_hash"])
+    previous = read_compatibility_receipt(run_root, P12_PAIRED_COMPATIBILITY_PATCH_ID)
+    if previous is None:
+        raise RuntimeError("resume refused: the P12 paired-scope compatibility receipt is required")
+    if (
+        previous.get("locked_git_commit") != P12_COMPATIBILITY_BASE_COMMIT
+        or previous.get("current_git_commit") != P12_PAIRED_COMPATIBILITY_COMMIT
+    ):
+        raise RuntimeError("resume refused: prior P12 paired-scope receipt does not match its lock")
+    previous_hash = str(previous["receipt_hash"])
 
-    quarantined = quarantine_partial_p12_outputs(run_root, previous)
     drift: dict[str, object] = {}
     for relative in drifted_source_paths:
         current_path = project_root / relative
@@ -283,11 +289,34 @@ def _authorize_p12_compatibility_resume(
             "locked_sha256": source_code_hashes[relative],
             "current_sha256": hash_file(current_path),
         }
+
+    existing = read_compatibility_receipt(run_root)
+    if existing is not None:
+        if (
+            existing.get("locked_git_commit") != locked_commit
+            or existing.get("current_git_commit") != current_commit
+            or existing.get("changed_paths") != changed_paths
+            or existing.get("previous_patch_id") != P12_PAIRED_COMPATIBILITY_PATCH_ID
+            or existing.get("previous_receipt_hash") != previous_hash
+            or existing.get("source_code_drift") != drift
+            or existing.get("resume_from") != "P13"
+            or existing.get("p12_boundary_verified") is not True
+        ):
+            raise RuntimeError(
+                "resume refused: existing downstream compatibility receipt does not match current state"
+            )
+        print(
+            "Compatibility resume reused "
+            f"patch={P12_COMPATIBILITY_PATCH_ID} resume_from=P13 commit={current_commit}",
+            flush=True,
+        )
+        return existing
+
     receipt: dict[str, object] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "patch_id": P12_COMPATIBILITY_PATCH_ID,
-        "resume_from": "P12",
-        "reason_code": "PAIRING_SCOPE_INFERRED_FROM_SUFFIX_INSTEAD_OF_LOCKED_GATE2_PAIRS",
+        "resume_from": "P13",
+        "reason_code": "DOWNSTREAM_EVALUATION_INCLUDED_NONCONFIRMATORY_INITIAL_FOLD",
         "protocol_hash": (run_root / "P00" / "protocol_hash.txt")
         .read_text(encoding="utf-8")
         .strip(),
@@ -295,12 +324,12 @@ def _authorize_p12_compatibility_resume(
         "current_git_commit": current_commit,
         "changed_paths": changed_paths,
         "source_code_drift": drift,
-        "previous_patch_id": P12_SELECTION_COMPATIBILITY_PATCH_ID if previous else None,
+        "previous_patch_id": P12_PAIRED_COMPATIBILITY_PATCH_ID,
         "previous_receipt_hash": previous_hash,
-        "quarantined_partial_outputs": quarantined,
         "p11_boundary_verified": True,
-        "pairing_scope_source": "evaluation.gate2.reference_by_candidate",
-        "pu_branch_preserved_separate": True,
+        "p12_boundary_verified": True,
+        "downstream_fold_scope_source": "folds.fully_nested_outer_years",
+        "initial_fold_excluded_from_confirmatory_downstream": True,
         "analytical_contract_change": False,
         "access_matrix_relaxation": False,
         "registry_lock_modified": False,
@@ -309,8 +338,7 @@ def _authorize_p12_compatibility_resume(
     receipt["receipt_hash"] = receipt_hash
     print(
         "Compatibility resume authorized "
-        f"patch={P12_COMPATIBILITY_PATCH_ID} resume_from=P12 commit={current_commit} "
-        f"quarantined={len(quarantined)}",
+        f"patch={P12_COMPATIBILITY_PATCH_ID} resume_from=P13 commit={current_commit}",
         flush=True,
     )
     return receipt
@@ -461,6 +489,33 @@ def _existing_quarantine_record(
         "manifest_hash": hash_file(manifest_path),
         "reason_code": "P12_PREFLIGHT_FAILED_AFTER_PREMATURE_OUTER_OPEN_RECEIPT",
     }
+
+
+def p12_boundary_complete(run_root: Path) -> bool:
+    """Require every confirmatory P12 output to exist with a valid content hash."""
+    registry = json_object(run_root / "P00" / "registry.lock.json", "locked registry")
+    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
+    steps_raw = registry.get("steps")
+    if not isinstance(steps_raw, dict):
+        return False
+    p12_raw = cast(dict[object, object], steps_raw).get("P12")
+    if not isinstance(p12_raw, dict):
+        return False
+    writes_raw = cast(dict[object, object], p12_raw).get("writes")
+    if not isinstance(writes_raw, list):
+        return False
+    for artifact_raw in cast(list[object], writes_raw):
+        artifact_id = str(artifact_raw)
+        for fold_id in _confirmatory_folds(registry):
+            if not artifact_complete(
+                registry,
+                run_root,
+                protocol_hash,
+                artifact_id,
+                {"outer_fold": fold_id},
+            ):
+                return False
+    return True
 
 
 def p11_boundary_complete(run_root: Path) -> bool:
