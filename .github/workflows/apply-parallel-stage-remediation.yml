@@ -1,0 +1,974 @@
+name: apply-parallel-stage-remediation
+
+on:
+  push:
+    branches:
+      - fix/p07-raw-computation-report-contract
+    paths:
+      - .github/workflows/apply-parallel-stage-remediation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/p07-raw-computation-report-contract
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Apply deterministic workerization
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"expected patch anchor not found in {path}: {old[:100]!r}")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace(
+              "src/sensitivity/service.py",
+              "from __future__ import annotations\n\nfrom typing import Any, cast\n",
+              "from __future__ import annotations\n\nfrom concurrent.futures import ThreadPoolExecutor\nfrom typing import Any, cast\n",
+          )
+
+          old = '''def source_exclusion_refits(
+              *,
+              matrices: dict[str, Any],
+              feature_panel: pd.DataFrame,
+              feature_registry: list[dict[str, Any]],
+              weights_by_fold: dict[str, pd.DataFrame],
+              outcomes: pd.DataFrame,
+              outer_folds: list[str],
+              learner_ids: list[str],
+              learner_settings: dict[str, Any],
+              learner_search_spaces: dict[str, Any],
+              maximum_valid_configurations: int,
+              evaluation_target_id: str,
+              columns: dict[str, str],
+              seed_by_fold_and_exclusion: dict[tuple[str, str], int],
+          ) -> dict[str, object]:
+              """Actually refit Track A after each source and channel exclusion."""
+              raw_rows = matrices.get("rows")
+              expected_sources = matrices.get("expected_sources")
+              if not isinstance(raw_rows, list) or not isinstance(expected_sources, dict):
+                  raise ValueError("source sensitivity requires source-channel matrices")
+              observed_outcomes = select_observed_target_outcomes(
+                  outcomes,
+                  target_id=evaluation_target_id,
+                  columns=columns,
+                  context="P13 source exclusion",
+              )
+              source_channels = {
+                  str(key): str(value) for key, value in cast(dict[object, object], expected_sources).items()
+              }
+              exclusions: dict[str, set[str]] = {
+                  f"source:{source}": {source} for source in sorted(source_channels)
+              }
+              for channel in sorted(set(source_channels.values())):
+                  exclusions[f"channel:{channel}"] = {
+                      source
+                      for source, source_channel in source_channels.items()
+                      if source_channel == channel
+                  }
+              rows: list[dict[str, object]] = []
+              for exclusion_id, excluded_sources in exclusions.items():
+                  training_target_id = f"L1_without_{exclusion_id}"
+                  labels = _alternative_l1_labels(
+                      matrix_rows=cast(list[object], raw_rows),
+                      excluded_sources=excluded_sources,
+                      target_id=training_target_id,
+                      columns=columns,
+                  )
+                  for fold_id in outer_folds:
+                      weights = weights_by_fold.get(fold_id)
+                      if weights is None:
+                          raise ValueError(f"fold={fold_id}: sensitivity weights required")
+                      fit = fit_fold_models(
+                          feature_panel=feature_panel,
+                          feature_registry=feature_registry,
+                          label_inputs=labels,
+                          weights=weights,
+                          outer_year=int(fold_id),
+                          learner_ids=learner_ids,
+                          learner_settings=learner_settings,
+                          target_id=training_target_id,
+                          measurement_id=training_target_id,
+                          columns=columns,
+                          random_state=seed_by_fold_and_exclusion[(fold_id, exclusion_id)],
+                          track_id="source_sensitivity",
+                          learner_search_spaces=learner_search_spaces,
+                          maximum_valid_configurations=maximum_valid_configurations,
+                      )
+                      evaluated = fit.outer_predictions.merge(
+                          observed_outcomes,
+                          on=[columns[FIRM_ID], columns[FISCAL_YEAR]],
+                          how="inner",
+                          validate="m:1",
+                      )
+                      for model_id, frame in evaluated.groupby(columns[LEARNER_ID], sort=True):
+                          truth = frame[columns[OUTCOME]].astype(bool).tolist()
+                          scores = frame[columns[PREDICTION]].astype(float).tolist()
+                          rows.append(
+                              {
+                                  "exclusion_id": exclusion_id,
+                                  "excluded_source_ids": sorted(excluded_sources),
+                                  OUTER_FOLD: fold_id,
+                                  "model_id": str(model_id),
+                                  "training_target_id": training_target_id,
+                                  "evaluation_target_id": evaluation_target_id,
+                                  "fit_status": fit.models["status"],
+                                  "rows": len(frame),
+                                  "positives": int(frame[columns[OUTCOME]].sum()),
+                                  "average_precision": average_precision(truth, scores),
+                                  "outer_outcomes_used_in_fit": False,
+                                  "tuning_scope": "development_history_only",
+                                  "tuning_budget_maximum": maximum_valid_configurations,
+                              }
+                          )
+              return {
+                  "status": "PASS" if rows else "SKIPPED",
+                  "reason_code": None if rows else "INSUFFICIENT_SOURCE_REFITS",
+                  "evaluation_target_id": evaluation_target_id,
+                  "refit_executed": bool(rows),
+                  "results": rows,
+              }
+          '''
+          new = '''def source_exclusion_refits(
+              *,
+              matrices: dict[str, Any],
+              feature_panel: pd.DataFrame,
+              feature_registry: list[dict[str, Any]],
+              weights_by_fold: dict[str, pd.DataFrame],
+              outcomes: pd.DataFrame,
+              outer_folds: list[str],
+              learner_ids: list[str],
+              learner_settings: dict[str, Any],
+              learner_search_spaces: dict[str, Any],
+              maximum_valid_configurations: int,
+              evaluation_target_id: str,
+              columns: dict[str, str],
+              seed_by_fold_and_exclusion: dict[tuple[str, str], int],
+              workers: int = 1,
+          ) -> dict[str, object]:
+              """Actually refit Track A after each source and channel exclusion."""
+              if workers < 1:
+                  raise ValueError("P13 source-exclusion workers must be positive")
+              raw_rows = matrices.get("rows")
+              expected_sources = matrices.get("expected_sources")
+              if not isinstance(raw_rows, list) or not isinstance(expected_sources, dict):
+                  raise ValueError("source sensitivity requires source-channel matrices")
+              observed_outcomes = select_observed_target_outcomes(
+                  outcomes,
+                  target_id=evaluation_target_id,
+                  columns=columns,
+                  context="P13 source exclusion",
+              )
+              source_channels = {
+                  str(key): str(value) for key, value in cast(dict[object, object], expected_sources).items()
+              }
+              exclusions: dict[str, set[str]] = {
+                  f"source:{source}": {source} for source in sorted(source_channels)
+              }
+              for channel in sorted(set(source_channels.values())):
+                  exclusions[f"channel:{channel}"] = {
+                      source
+                      for source, source_channel in source_channels.items()
+                      if source_channel == channel
+                  }
+              labels_by_exclusion = {
+                  exclusion_id: _alternative_l1_labels(
+                      matrix_rows=cast(list[object], raw_rows),
+                      excluded_sources=excluded_sources,
+                      target_id=f"L1_without_{exclusion_id}",
+                      columns=columns,
+                  )
+                  for exclusion_id, excluded_sources in exclusions.items()
+              }
+              tasks = [
+                  (exclusion_id, fold_id)
+                  for exclusion_id in exclusions
+                  for fold_id in outer_folds
+              ]
+
+              def run_unit(task: tuple[str, str]) -> list[dict[str, object]]:
+                  exclusion_id, fold_id = task
+                  excluded_sources = exclusions[exclusion_id]
+                  training_target_id = f"L1_without_{exclusion_id}"
+                  weights = weights_by_fold.get(fold_id)
+                  if weights is None:
+                      raise ValueError(f"fold={fold_id}: sensitivity weights required")
+                  fit = fit_fold_models(
+                      feature_panel=feature_panel,
+                      feature_registry=feature_registry,
+                      label_inputs=labels_by_exclusion[exclusion_id],
+                      weights=weights,
+                      outer_year=int(fold_id),
+                      learner_ids=learner_ids,
+                      learner_settings=learner_settings,
+                      target_id=training_target_id,
+                      measurement_id=training_target_id,
+                      columns=columns,
+                      random_state=seed_by_fold_and_exclusion[(fold_id, exclusion_id)],
+                      track_id="source_sensitivity",
+                      learner_search_spaces=learner_search_spaces,
+                      maximum_valid_configurations=maximum_valid_configurations,
+                  )
+                  evaluated = fit.outer_predictions.merge(
+                      observed_outcomes,
+                      on=[columns[FIRM_ID], columns[FISCAL_YEAR]],
+                      how="inner",
+                      validate="m:1",
+                  )
+                  unit_rows: list[dict[str, object]] = []
+                  for model_id, frame in evaluated.groupby(columns[LEARNER_ID], sort=True):
+                      truth = frame[columns[OUTCOME]].astype(bool).tolist()
+                      scores = frame[columns[PREDICTION]].astype(float).tolist()
+                      unit_rows.append(
+                          {
+                              "exclusion_id": exclusion_id,
+                              "excluded_source_ids": sorted(excluded_sources),
+                              OUTER_FOLD: fold_id,
+                              "model_id": str(model_id),
+                              "training_target_id": training_target_id,
+                              "evaluation_target_id": evaluation_target_id,
+                              "fit_status": fit.models["status"],
+                              "rows": len(frame),
+                              "positives": int(frame[columns[OUTCOME]].sum()),
+                              "average_precision": average_precision(truth, scores),
+                              "outer_outcomes_used_in_fit": False,
+                              "tuning_scope": "development_history_only",
+                              "tuning_budget_maximum": maximum_valid_configurations,
+                          }
+                      )
+                  return unit_rows
+
+              if workers == 1 or len(tasks) <= 1:
+                  unit_results = [run_unit(task) for task in tasks]
+              else:
+                  with ThreadPoolExecutor(max_workers=min(workers, len(tasks))) as executor:
+                      unit_results = list(executor.map(run_unit, tasks))
+              rows = [row for unit_rows in unit_results for row in unit_rows]
+              return {
+                  "status": "PASS" if rows else "SKIPPED",
+                  "reason_code": None if rows else "INSUFFICIENT_SOURCE_REFITS",
+                  "evaluation_target_id": evaluation_target_id,
+                  "refit_executed": bool(rows),
+                  "results": rows,
+              }
+          '''
+          replace("src/sensitivity/service.py", old, new)
+
+          replace(
+              "scripts/p13_sensitivity.py",
+              "import argparse\nimport sys\n",
+              "import argparse\nimport sys\n",
+          )
+          replace(
+              "scripts/p13_sensitivity.py",
+              '''    parser.add_argument("--registry", type=Path, required=True)
+              parser.add_argument("--run-id", required=True)
+              args = parser.parse_args()
+          ''',
+              '''    parser.add_argument("--registry", type=Path, required=True)
+              parser.add_argument("--run-id", required=True)
+              parser.add_argument("--workers", type=int, default=1)
+              args = parser.parse_args()
+              workers = max(1, args.workers)
+          ''',
+          )
+          replace(
+              "scripts/p13_sensitivity.py",
+              '''        seed_by_fold_and_exclusion={
+                      (fold_id, exclusion_id): derive_seed(
+                          loaded.protocol_hash,
+                          "P13",
+                          {OUTER_FOLD: fold_id},
+                          f"source_exclusion:{exclusion_id}",
+                      )
+                      % (2**32 - 1)
+                      for fold_id in fold_ids
+                      for exclusion_id in exclusion_ids
+                  },
+              )
+          ''',
+              '''        seed_by_fold_and_exclusion={
+                      (fold_id, exclusion_id): derive_seed(
+                          loaded.protocol_hash,
+                          "P13",
+                          {OUTER_FOLD: fold_id},
+                          f"source_exclusion:{exclusion_id}",
+                      )
+                      % (2**32 - 1)
+                      for fold_id in fold_ids
+                      for exclusion_id in exclusion_ids
+                  },
+                  workers=workers,
+              )
+          ''',
+          )
+          replace(
+              "scripts/p13_sensitivity.py",
+              '''    print(
+                  "P13 status=PASS "
+                  f"domain_status={domain['status']} "
+                  f"identification_status={identification_summary['status']}"
+              )
+          ''',
+              '''    print(
+                  "P13 status=PASS "
+                  f"domain_status={domain['status']} "
+                  f"identification_status={identification_summary['status']} "
+                  f"workers={workers}"
+              )
+          ''',
+          )
+
+          replace(
+              "src/gates/service.py",
+              "import math\nfrom collections import defaultdict\n",
+              "import math\nfrom collections import defaultdict\nfrom concurrent.futures import ThreadPoolExecutor\n",
+          )
+          replace(
+              "src/gates/service.py",
+              '''    measurement_stability_denominator: int = 4,
+              rng: np.random.Generator | None = None,
+          ) -> tuple[dict[str, Any], dict[str, Any]]:
+          ''',
+              '''    measurement_stability_denominator: int = 4,
+              rng: np.random.Generator | None = None,
+              workers: int = 1,
+          ) -> tuple[dict[str, Any], dict[str, Any]]:
+              if workers < 1:
+                  raise ValueError("P16 Gate 3 workers must be positive")
+          ''',
+          )
+          replace(
+              "src/gates/service.py",
+              '''                alpha=familywise_alpha / 3.0,
+                      rng=rng,
+                  )
+          ''',
+              '''                alpha=familywise_alpha / 3.0,
+                      rng=rng,
+                      workers=workers,
+                  )
+          ''',
+          )
+          replace(
+              "src/gates/service.py",
+              '''            familywise_alpha=familywise_alpha,
+                  rng=rng,
+              )
+          ''',
+              '''            familywise_alpha=familywise_alpha,
+                  rng=rng,
+                  workers=workers,
+              )
+          ''',
+          )
+          replace(
+              "src/gates/service.py",
+              '''    familywise_alpha: float,
+              rng: np.random.Generator | None,
+          ) -> dict[str, Any]:
+          ''',
+              '''    familywise_alpha: float,
+              rng: np.random.Generator | None,
+              workers: int,
+          ) -> dict[str, Any]:
+          ''',
+          )
+          replace(
+              "src/gates/service.py",
+              '''                alpha=familywise_alpha / 3.0,
+                      rng=rng,
+                  )
+                  breakpoint_intervals.append(interval)
+          ''',
+              '''                alpha=familywise_alpha / 3.0,
+                      rng=rng,
+                      workers=workers,
+                  )
+                  breakpoint_intervals.append(interval)
+          ''',
+          )
+          old = '''def _shape_bootstrap(
+              *,
+              frame: pd.DataFrame,
+              monitoring: str,
+              outcome: str,
+              gate: dict[str, Any],
+              replications: int,
+              alpha: float,
+              rng: np.random.Generator,
+          ) -> tuple[tuple[float, float], tuple[float, float]]:
+              coefficients: list[float] = []
+              breakpoints: list[float] = []
+              for _ in range(replications):
+                  sample = frame.iloc[rng.integers(0, len(frame), size=len(frame))]
+                  if sample[outcome].nunique() < 2:
+                      continue
+                  coefficients.append(_interaction_coefficient(sample, monitoring, outcome, gate))
+                  point, _ = _breakpoint(sample, monitoring, outcome, gate)
+                  if point is not None:
+                      breakpoints.append(point)
+              quantiles = (alpha / 2.0, 1.0 - alpha / 2.0)
+          '''
+          new = '''def _shape_bootstrap(
+              *,
+              frame: pd.DataFrame,
+              monitoring: str,
+              outcome: str,
+              gate: dict[str, Any],
+              replications: int,
+              alpha: float,
+              rng: np.random.Generator,
+              workers: int = 1,
+          ) -> tuple[tuple[float, float], tuple[float, float]]:
+              if workers < 1:
+                  raise ValueError("bootstrap workers must be positive")
+              sample_indices = [
+                  rng.integers(0, len(frame), size=len(frame)) for _ in range(replications)
+              ]
+
+              def evaluate(indices: np.ndarray) -> tuple[float, float | None] | None:
+                  sample = frame.iloc[indices]
+                  if sample[outcome].nunique() < 2:
+                      return None
+                  coefficient = _interaction_coefficient(sample, monitoring, outcome, gate)
+                  point, _ = _breakpoint(sample, monitoring, outcome, gate)
+                  return coefficient, point
+
+              if workers == 1 or len(sample_indices) <= 1:
+                  results = [evaluate(indices) for indices in sample_indices]
+              else:
+                  with ThreadPoolExecutor(
+                      max_workers=min(workers, len(sample_indices))
+                  ) as executor:
+                      results = list(executor.map(evaluate, sample_indices))
+              coefficients = [result[0] for result in results if result is not None]
+              breakpoints = [
+                  result[1]
+                  for result in results
+                  if result is not None and result[1] is not None
+              ]
+              quantiles = (alpha / 2.0, 1.0 - alpha / 2.0)
+          '''
+          replace("src/gates/service.py", old, new)
+
+          replace(
+              "scripts/p16_gate3.py",
+              '''    parser.add_argument("--registry", type=Path, required=True)
+              parser.add_argument("--run-id", required=True)
+              args = parser.parse_args()
+          ''',
+              '''    parser.add_argument("--registry", type=Path, required=True)
+              parser.add_argument("--run-id", required=True)
+              parser.add_argument("--workers", type=int, default=1)
+              args = parser.parse_args()
+              workers = max(1, args.workers)
+          ''',
+          )
+          replace(
+              "scripts/p16_gate3.py",
+              '''        rng=generator(loaded.protocol_hash, "P16", {}, "gate3_family_bootstrap"),
+              )
+          ''',
+              '''        rng=generator(loaded.protocol_hash, "P16", {}, "gate3_family_bootstrap"),
+                  workers=workers,
+              )
+          ''',
+          )
+          replace(
+              "scripts/p16_gate3.py",
+              '''    print(f"P16 status={receipt['status']} verdict={receipt['verdict']}")
+          ''',
+              '''    print(
+                  f"P16 status={receipt['status']} verdict={receipt['verdict']} workers={workers}"
+              )
+          ''',
+          )
+
+          replace(
+              "scripts/run_pipeline.py",
+              'help="Parallel workers for partitioned stages (P01, P10, P11, P12).",',
+              'help="Parallel workers for P01, P08, P10-P13, and P16.",',
+          )
+          old = '''    final_stages = {
+              "P13": "scripts/p13_sensitivity.py",
+              "P14": "scripts/p14_gate2.py",
+              "P15": "scripts/p15_open_known_cases.py",
+              "P16": "scripts/p16_gate3.py",
+              "P17": "scripts/p17_build_outputs.py",
+          }
+          for stage_id, script in final_stages.items():
+              _run_unit(
+                  [python, script, "--registry", str(registry_path), "--run-id", args.run_id],
+                  cwd=project_root,
+                  env=env,
+                  registry=registry,
+                  run_root=run_root,
+                  protocol_hash=protocol_hash,
+                  artifacts=_step_outputs(registry, stage_id, {}),
+              )
+              if args.through == stage_id:
+                  return 0
+          '''
+          new = '''    final_stages = {
+              "P13": "scripts/p13_sensitivity.py",
+              "P14": "scripts/p14_gate2.py",
+              "P15": "scripts/p15_open_known_cases.py",
+              "P16": "scripts/p16_gate3.py",
+              "P17": "scripts/p17_build_outputs.py",
+          }
+          for stage_id, script in final_stages.items():
+              command = [
+                  python,
+                  script,
+                  "--registry",
+                  str(registry_path),
+                  "--run-id",
+                  args.run_id,
+              ]
+              if stage_id in {"P13", "P16"}:
+                  stage_workers = max(
+                      1,
+                      int(os.environ.get(f"{stage_id}_WORKERS", str(workers))),
+                  )
+                  command.extend(["--workers", str(stage_workers)])
+              _run_unit(
+                  command,
+                  cwd=project_root,
+                  env=env,
+                  registry=registry,
+                  run_root=run_root,
+                  protocol_hash=protocol_hash,
+                  artifacts=_step_outputs(registry, stage_id, {}),
+              )
+              if args.through == stage_id:
+                  return 0
+          '''
+          replace("scripts/run_pipeline.py", old, new)
+
+          replace(
+              "src/core/resume.py",
+              '''P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID = "P13_CONFIRMATORY_SCOPE_V3"
+          P13_CONFIRMATORY_COMPATIBILITY_COMMIT = "42c9fa7549002c361464b6cb1285c8a4793c9615"
+          P12_COMPATIBILITY_PATCH_ID = "P13_PRIMARY_TARGET_OUTCOME_V4"
+          ''',
+              '''P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID = "P13_CONFIRMATORY_SCOPE_V3"
+          P13_CONFIRMATORY_COMPATIBILITY_COMMIT = "42c9fa7549002c361464b6cb1285c8a4793c9615"
+          P13_TARGET_COMPATIBILITY_PATCH_ID = "P13_PRIMARY_TARGET_OUTCOME_V4"
+          P13_TARGET_COMPATIBILITY_COMMIT = "146492f25285f83896f6d83d93787f8f607759fa"
+          P12_COMPATIBILITY_PATCH_ID = "P13_P16_PARALLEL_EXECUTION_V5"
+          ''',
+          )
+          replace(
+              "src/core/resume.py",
+              '''        "scripts/p12_evaluate.py",
+                  "src/core/resume.py",
+          ''',
+              '''        "scripts/run_pipeline.py",
+                  "scripts/p12_evaluate.py",
+                  "src/core/resume.py",
+          ''',
+          )
+          replace(
+              "src/core/resume.py",
+              '''        "src/evaluation/pairing.py",
+                  "scripts/p13_sensitivity.py",
+          ''',
+              '''        "src/evaluation/pairing.py",
+                  "src/gates/service.py",
+                  "scripts/p13_sensitivity.py",
+          ''',
+          )
+          replace(
+              "src/core/resume.py",
+              '''        "tests/stages/test_p13_target_outcome_scope.py",
+              }
+          )
+          ''',
+              '''        "tests/stages/test_p13_target_outcome_scope.py",
+                  "tests/stages/test_parallel_stage_execution.py",
+              }
+          )
+          ''',
+          )
+          replace(
+              "src/core/resume.py",
+              '"resume refused: source drift exceeds the registered P13 target-scope patch: "',
+              '"resume refused: source drift exceeds the registered parallel-execution patch: "',
+          )
+          replace(
+              "src/core/resume.py",
+              '"resume refused: repository diff exceeds the registered P13 target-scope patch: "',
+              '"resume refused: repository diff exceeds the registered parallel-execution patch: "',
+          )
+          replace(
+              "src/core/resume.py",
+              '''            "resume refused: P13 target-scope compatibility requires complete hash-verified P11 outputs"
+          ''',
+              '''            "resume refused: parallel execution compatibility requires complete hash-verified P11 outputs"
+          ''',
+          )
+          replace(
+              "src/core/resume.py",
+              '''            "resume refused: P13 target-scope compatibility requires complete hash-verified P12 outputs"
+          ''',
+              '''            "resume refused: parallel execution compatibility requires complete hash-verified P12 outputs"
+          ''',
+          )
+          replace(
+              "src/core/resume.py",
+              '''    previous = read_compatibility_receipt(run_root, P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID)
+              if previous is None:
+                  raise RuntimeError("resume refused: the P13 confirmatory-scope receipt is required")
+              if (
+                  previous.get("locked_git_commit") != P12_COMPATIBILITY_BASE_COMMIT
+                  or previous.get("current_git_commit") != P13_CONFIRMATORY_COMPATIBILITY_COMMIT
+              ):
+                  raise RuntimeError(
+                      "resume refused: prior P13 confirmatory-scope receipt does not match its lock"
+                  )
+          ''',
+              '''    previous = read_compatibility_receipt(run_root, P13_TARGET_COMPATIBILITY_PATCH_ID)
+              if previous is None:
+                  raise RuntimeError("resume refused: the P13 target-scope receipt is required")
+              if (
+                  previous.get("locked_git_commit") != P12_COMPATIBILITY_BASE_COMMIT
+                  or previous.get("current_git_commit") != P13_TARGET_COMPATIBILITY_COMMIT
+              ):
+                  raise RuntimeError(
+                      "resume refused: prior P13 target-scope receipt does not match its lock"
+                  )
+          ''',
+          )
+          replace(
+              "src/core/resume.py",
+              'existing.get("previous_patch_id") != P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID',
+              'existing.get("previous_patch_id") != P13_TARGET_COMPATIBILITY_PATCH_ID',
+          )
+          replace(
+              "src/core/resume.py",
+              '"resume refused: existing P13 target-scope receipt does not match current state"',
+              '"resume refused: existing parallel-execution receipt does not match current state"',
+          )
+          replace(
+              "src/core/resume.py",
+              '''        "schema_version": 4,
+                  "patch_id": P12_COMPATIBILITY_PATCH_ID,
+                  "resume_from": "P13",
+                  "reason_code": "TARGET_AWARE_SEALED_OUTCOMES_MERGED_WITHOUT_PRIMARY_TARGET_FILTER",
+          ''',
+              '''        "schema_version": 5,
+                  "patch_id": P12_COMPATIBILITY_PATCH_ID,
+                  "resume_from": "P13",
+                  "reason_code": "CPU_BOUND_P13_AND_P16_LOOPS_EXECUTED_SEQUENTIALLY",
+          ''',
+          )
+          replace(
+              "src/core/resume.py",
+              '"previous_patch_id": P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID,',
+              '"previous_patch_id": P13_TARGET_COMPATIBILITY_PATCH_ID,',
+          )
+          replace(
+              "src/core/resume.py",
+              '''        "evaluation_target_source": "measurement.primary_target_id",
+                  "target_filter_applied_before_many_to_one_merge": True,
+                  "unknown_outcomes_excluded_before_scoring": True,
+                  "gate3_target_scope_aligned": True,
+          ''',
+              '''        "evaluation_target_source": "measurement.primary_target_id",
+                  "target_filter_applied_before_many_to_one_merge": True,
+                  "unknown_outcomes_excluded_before_scoring": True,
+                  "gate3_target_scope_aligned": True,
+                  "p13_parallel_unit_grain": "exclusion_by_outer_fold",
+                  "p16_bootstrap_indices_precomputed_in_rng_order": True,
+                  "worker_count_is_runtime_only": True,
+                  "worker_invariant_output_required": True,
+          ''',
+          )
+          replace(
+              "src/core/resume.py",
+              '''    return (not present and not complete) or (
+                  present == {"domain_transfer_outputs"} and complete == present
+              )
+          ''',
+              '''    writes = {str(value) for value in cast(list[object], writes_raw)}
+              return (
+                  (not present and not complete)
+                  or (present == {"domain_transfer_outputs"} and complete == present)
+                  or (present == writes and complete == present)
+              )
+          ''',
+          )
+
+          test = '''from __future__ import annotations
+
+          from pathlib import Path
+          from typing import Any
+
+          import numpy as np
+          import pandas as pd
+          import pytest
+
+          import sensitivity.service as sensitivity
+          from core.semantic_keys import (
+              FIRM_ID,
+              FISCAL_YEAR,
+              LEARNER_ID,
+              MATURE,
+              OUTCOME,
+              OUTER_FOLD,
+              PREDICTION,
+              TARGET_ID,
+          )
+          from gates.service import _shape_bootstrap
+          from modeling.service import ModelFitResult
+
+          ROOT = Path(__file__).resolve().parents[2]
+
+
+          def _columns() -> dict[str, str]:
+              return {
+                  FIRM_ID: "firm_master_id",
+                  FISCAL_YEAR: "fiscal_year",
+                  TARGET_ID: "target_id",
+                  OUTCOME: "outcome",
+                  LEARNER_ID: "model_id",
+                  PREDICTION: "prediction",
+              }
+
+
+          def test_p13_worker_count_does_not_change_results(
+              monkeypatch: pytest.MonkeyPatch,
+          ) -> None:
+              columns = _columns()
+
+              def fake_fit_fold_models(**kwargs: Any) -> ModelFitResult:
+                  outer_year = int(kwargs["outer_year"])
+                  target_id = str(kwargs["target_id"])
+                  frame = pd.DataFrame(
+                      [
+                          {
+                              "firm_master_id": "F1",
+                              "fiscal_year": outer_year,
+                              "model_id": f"model:{target_id}",
+                              "prediction": 0.8,
+                          },
+                          {
+                              "firm_master_id": "F2",
+                              "fiscal_year": outer_year,
+                              "model_id": f"model:{target_id}",
+                              "prediction": 0.2,
+                          },
+                      ]
+                  )
+                  return ModelFitResult(
+                      models={"status": "PASS"},
+                      oof_predictions=pd.DataFrame(),
+                      outer_predictions=frame,
+                  )
+
+              monkeypatch.setattr(sensitivity, "fit_fold_models", fake_fit_fold_models)
+              matrices = {
+                  "expected_sources": {"S1": "C1", "S2": "C2"},
+                  "rows": [
+                      {
+                          FIRM_ID: "F1",
+                          FISCAL_YEAR: 2021,
+                          MATURE: True,
+                          "source_outcomes": {"S1": True, "S2": False},
+                      },
+                      {
+                          FIRM_ID: "F2",
+                          FISCAL_YEAR: 2021,
+                          MATURE: True,
+                          "source_outcomes": {"S1": False, "S2": False},
+                      },
+                  ],
+              }
+              feature_panel = pd.DataFrame(
+                  [
+                      {"firm_master_id": "F1", "fiscal_year": 2021},
+                      {"firm_master_id": "F2", "fiscal_year": 2021},
+                  ]
+              )
+              outcomes = pd.DataFrame(
+                  [
+                      {
+                          "firm_master_id": "F1",
+                          "fiscal_year": 2021,
+                          "target_id": "L1_ANNUAL",
+                          "outcome": True,
+                      },
+                      {
+                          "firm_master_id": "F2",
+                          "fiscal_year": 2021,
+                          "target_id": "L1_ANNUAL",
+                          "outcome": False,
+                      },
+                  ]
+              )
+              weights = {"2021": pd.DataFrame({"firm_master_id": ["F1", "F2"]})}
+              exclusions = ["source:S1", "source:S2", "channel:C1", "channel:C2"]
+              seeds = {("2021", exclusion): index + 1 for index, exclusion in enumerate(exclusions)}
+              arguments = dict(
+                  matrices=matrices,
+                  feature_panel=feature_panel,
+                  feature_registry=[],
+                  weights_by_fold=weights,
+                  outcomes=outcomes,
+                  outer_folds=["2021"],
+                  learner_ids=["elastic_net_logistic"],
+                  learner_settings={},
+                  learner_search_spaces={},
+                  maximum_valid_configurations=1,
+                  evaluation_target_id="L1_ANNUAL",
+                  columns=columns,
+                  seed_by_fold_and_exclusion=seeds,
+              )
+              sequential = sensitivity.source_exclusion_refits(**arguments, workers=1)
+              parallel = sensitivity.source_exclusion_refits(**arguments, workers=4)
+              assert parallel == sequential
+
+
+          def test_p16_bootstrap_is_worker_invariant() -> None:
+              frame = pd.DataFrame(
+                  {
+                      "_pressure_z": np.linspace(-2.0, 2.0, 24),
+                      "monitor": np.tile([0.0, 1.0], 12),
+                      "outcome": np.tile([0, 0, 1, 1], 6),
+                  }
+              )
+              gate = {
+                  "logistic_fit": {
+                      "inverse_regularization": 1.0,
+                      "maximum_iterations": 2000,
+                  },
+                  "breakpoint_grid": {
+                      "lower_quantile": 0.2,
+                      "upper_quantile": 0.8,
+                      "points": 7,
+                  },
+              }
+              sequential = _shape_bootstrap(
+                  frame=frame,
+                  monitoring="monitor",
+                  outcome="outcome",
+                  gate=gate,
+                  replications=40,
+                  alpha=0.05,
+                  rng=np.random.default_rng(7103),
+                  workers=1,
+              )
+              parallel = _shape_bootstrap(
+                  frame=frame,
+                  monitoring="monitor",
+                  outcome="outcome",
+                  gate=gate,
+                  replications=40,
+                  alpha=0.05,
+                  rng=np.random.default_rng(7103),
+                  workers=4,
+              )
+              assert parallel == sequential
+
+
+          def test_runner_dispatches_workers_only_to_cpu_bound_final_stages() -> None:
+              runner = (ROOT / "scripts" / "run_pipeline.py").read_text(encoding="utf-8")
+              assert 'if stage_id in {"P13", "P16"}:' in runner
+              assert 'os.environ.get(f"{stage_id}_WORKERS", str(workers))' in runner
+              assert 'command.extend(["--workers", str(stage_workers)])' in runner
+              assert '"P14": "scripts/p14_gate2.py"' in runner
+              assert '"P15": "scripts/p15_open_known_cases.py"' in runner
+              assert '"P17": "scripts/p17_build_outputs.py"' in runner
+          '''
+          Path("tests/stages/test_parallel_stage_execution.py").write_text(
+              test.replace("          ", ""), encoding="utf-8"
+          )
+
+          test_path = Path("tests/runtime/test_p12_compatible_resume.py")
+          text = test_path.read_text(encoding="utf-8")
+          text = text.replace(
+              "    P13_CONFIRMATORY_COMPATIBILITY_COMMIT,\n    P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID,\n",
+              "    P13_CONFIRMATORY_COMPATIBILITY_COMMIT,\n    P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID,\n    P13_TARGET_COMPATIBILITY_COMMIT,\n    P13_TARGET_COMPATIBILITY_PATCH_ID,\n",
+          )
+          text = text.replace(
+              'assert P12_COMPATIBILITY_PATCH_ID == "P13_CONFIRMATORY_SCOPE_V3"',
+              'assert P12_COMPATIBILITY_PATCH_ID == "P13_P16_PARALLEL_EXECUTION_V5"',
+          )
+          text = text.replace(
+              '    assert P12_PAIRED_COMPATIBILITY_PATCH_ID == "P12_PAIRED_SCOPE_V2"\n',
+              '    assert P13_TARGET_COMPATIBILITY_PATCH_ID == "P13_PRIMARY_TARGET_OUTCOME_V4"\n'
+              '    assert P13_TARGET_COMPATIBILITY_COMMIT == "146492f25285f83896f6d83d93787f8f607759fa"\n'
+              '    assert P12_PAIRED_COMPATIBILITY_PATCH_ID == "P12_PAIRED_SCOPE_V2"\n',
+          )
+          text = text.replace(
+              '''        "scripts/p12_evaluate.py",
+                  "src/core/resume.py",
+                  "src/evaluation/pairing.py",
+          ''',
+              '''        "scripts/run_pipeline.py",
+                  "scripts/p12_evaluate.py",
+                  "src/core/resume.py",
+                  "src/evaluation/pairing.py",
+                  "src/gates/service.py",
+          ''',
+          )
+          text = text.replace(
+              '    assert "config/methodology/evaluation.yaml" not in P12_COMPATIBILITY_ALLOWED_PATHS\n',
+              '    assert "config/methodology/evaluation.yaml" not in P12_COMPATIBILITY_ALLOWED_PATHS\n'
+              '    assert "tests/stages/test_parallel_stage_execution.py" in P12_COMPATIBILITY_ALLOWED_PATHS\n',
+          )
+          test_path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Format and test
+        shell: bash
+        run: |
+          uv sync --all-extras
+          uv run ruff format \
+            scripts/run_pipeline.py \
+            scripts/p13_sensitivity.py \
+            scripts/p16_gate3.py \
+            src/core/resume.py \
+            src/gates/service.py \
+            src/sensitivity/service.py \
+            tests/runtime/test_p12_compatible_resume.py \
+            tests/stages/test_parallel_stage_execution.py
+          uv run ruff check \
+            scripts/run_pipeline.py \
+            scripts/p13_sensitivity.py \
+            scripts/p16_gate3.py \
+            src/core/resume.py \
+            src/gates/service.py \
+            src/sensitivity/service.py \
+            tests/runtime/test_p12_compatible_resume.py \
+            tests/stages/test_parallel_stage_execution.py
+          uv run pytest \
+            tests/runtime/test_p12_compatible_resume.py \
+            tests/stages/test_p13_target_outcome_scope.py \
+            tests/stages/test_parallel_stage_execution.py \
+            tests/stages/test_s2_vocabulary_and_fold_dispatch.py \
+            -q
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          rm .github/workflows/apply-parallel-stage-remediation.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "perf: parallelize P13 refits and P16 bootstrap"
+          git push origin HEAD:fix/p07-raw-computation-report-contract
