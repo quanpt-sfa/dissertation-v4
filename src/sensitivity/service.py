@@ -36,6 +36,7 @@ def domain_transfer(
     feature_registry: list[dict[str, object]],
     noninferiority_margin: float,
     support_fraction_minimum: float,
+    evaluation_target_id: str,
     columns: dict[str, str],
 ) -> dict[str, object]:
     bindings = [item for item in feature_registry if isinstance(item.get("domain_id"), str)]
@@ -63,7 +64,18 @@ def domain_transfer(
             "robust_scenario_fraction": None,
             "leave_one_domain_out_refit_executed": False,
         }
-    data_base = feature_panel.merge(outcomes, on=[firm, year], how="inner", validate="1:1")
+    observed_outcomes = select_observed_target_outcomes(
+        outcomes,
+        target_id=evaluation_target_id,
+        columns=columns,
+        context="P13 domain transfer",
+    )
+    data_base = feature_panel.merge(
+        observed_outcomes,
+        on=[firm, year],
+        how="inner",
+        validate="1:1",
+    )
     outer_years = sorted(int(value) for value in predictions[year].unique())
     rows: list[dict[str, object]] = []
     robust: list[bool] = []
@@ -104,6 +116,7 @@ def domain_transfer(
                         "domain_id": binding["domain_id"],
                         "level": str(level),
                         OUTER_FOLD: str(outer_year),
+                        "evaluation_target_id": evaluation_target_id,
                         "train_rows_other_domains": len(train),
                         "test_rows_held_domain": len(test),
                         "positives": int(test[outcome].sum()),
@@ -118,6 +131,7 @@ def domain_transfer(
     return {
         "status": "PASS" if robust and domain_count >= 2 else "SKIPPED",
         "reason_code": None if robust and domain_count >= 2 else "INSUFFICIENT_DOMAIN_REFITS",
+        "evaluation_target_id": evaluation_target_id,
         "domains": rows,
         "robust_scenario_fraction": sum(robust) / len(robust) if robust else None,
         "leave_one_domain_out_refit_executed": bool(robust and domain_count >= 2),
@@ -212,6 +226,38 @@ def source_sensitivity_summary(
     }
 
 
+def select_observed_target_outcomes(
+    outcomes: pd.DataFrame,
+    *,
+    target_id: str,
+    columns: dict[str, str],
+    context: str,
+) -> pd.DataFrame:
+    """Return one observed sealed outcome per firm-year for a single registered target."""
+    if not target_id:
+        raise ValueError(f"{context}: target_id is required")
+    firm = columns[FIRM_ID]
+    year = columns[FISCAL_YEAR]
+    target = columns[TARGET_ID]
+    outcome = columns[OUTCOME]
+    required = {firm, year, target, outcome}
+    if not required.issubset(outcomes.columns):
+        raise ValueError(f"{context}: target-aware sealed outcome contract is incomplete")
+    selected = outcomes.loc[
+        outcomes[target].astype("string").eq(target_id) & outcomes[outcome].notna(),
+        [firm, year, outcome],
+    ].copy()
+    if selected.empty:
+        raise RuntimeError(f"{context}: target={target_id} has no observed sealed outcomes")
+    duplicates = selected.loc[selected.duplicated([firm, year], keep=False), [firm, year]]
+    if not duplicates.empty:
+        sample = duplicates.drop_duplicates().head(5).to_dict(orient="records")
+        raise RuntimeError(
+            f"{context}: target={target_id} outcomes are not unique by firm-year: {sample}"
+        )
+    return selected
+
+
 def source_exclusion_refits(
     *,
     matrices: dict[str, Any],
@@ -224,6 +270,7 @@ def source_exclusion_refits(
     learner_settings: dict[str, Any],
     learner_search_spaces: dict[str, Any],
     maximum_valid_configurations: int,
+    evaluation_target_id: str,
     columns: dict[str, str],
     seed_by_fold_and_exclusion: dict[tuple[str, str], int],
 ) -> dict[str, object]:
@@ -232,6 +279,12 @@ def source_exclusion_refits(
     expected_sources = matrices.get("expected_sources")
     if not isinstance(raw_rows, list) or not isinstance(expected_sources, dict):
         raise ValueError("source sensitivity requires source-channel matrices")
+    observed_outcomes = select_observed_target_outcomes(
+        outcomes,
+        target_id=evaluation_target_id,
+        columns=columns,
+        context="P13 source exclusion",
+    )
     source_channels = {
         str(key): str(value) for key, value in cast(dict[object, object], expected_sources).items()
     }
@@ -246,10 +299,11 @@ def source_exclusion_refits(
         }
     rows: list[dict[str, object]] = []
     for exclusion_id, excluded_sources in exclusions.items():
+        training_target_id = f"L1_without_{exclusion_id}"
         labels = _alternative_l1_labels(
             matrix_rows=cast(list[object], raw_rows),
             excluded_sources=excluded_sources,
-            target_id=f"L1_without_{exclusion_id}",
+            target_id=training_target_id,
             columns=columns,
         )
         for fold_id in outer_folds:
@@ -264,8 +318,8 @@ def source_exclusion_refits(
                 outer_year=int(fold_id),
                 learner_ids=learner_ids,
                 learner_settings=learner_settings,
-                target_id=f"L1_without_{exclusion_id}",
-                measurement_id=f"L1_without_{exclusion_id}",
+                target_id=training_target_id,
+                measurement_id=training_target_id,
                 columns=columns,
                 random_state=seed_by_fold_and_exclusion[(fold_id, exclusion_id)],
                 track_id="source_sensitivity",
@@ -273,7 +327,7 @@ def source_exclusion_refits(
                 maximum_valid_configurations=maximum_valid_configurations,
             )
             evaluated = fit.outer_predictions.merge(
-                outcomes,
+                observed_outcomes,
                 on=[columns[FIRM_ID], columns[FISCAL_YEAR]],
                 how="inner",
                 validate="m:1",
@@ -287,6 +341,8 @@ def source_exclusion_refits(
                         "excluded_source_ids": sorted(excluded_sources),
                         OUTER_FOLD: fold_id,
                         "model_id": str(model_id),
+                        "training_target_id": training_target_id,
+                        "evaluation_target_id": evaluation_target_id,
                         "fit_status": fit.models["status"],
                         "rows": len(frame),
                         "positives": int(frame[columns[OUTCOME]].sum()),
@@ -299,6 +355,7 @@ def source_exclusion_refits(
     return {
         "status": "PASS" if rows else "SKIPPED",
         "reason_code": None if rows else "INSUFFICIENT_SOURCE_REFITS",
+        "evaluation_target_id": evaluation_target_id,
         "refit_executed": bool(rows),
         "results": rows,
     }
