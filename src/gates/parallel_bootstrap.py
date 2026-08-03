@@ -40,8 +40,7 @@ def parallel_shape_bootstrap(
     # Generate every resample on the caller thread, in the same order as the
     # former sequential loop. Worker scheduling therefore cannot alter RNG use.
     resamples = [
-        rng.integers(0, len(frame), size=len(frame), dtype=np.int64)
-        for _ in range(replications)
+        rng.integers(0, len(frame), size=len(frame), dtype=np.int64) for _ in range(replications)
     ]
 
     def evaluate(indices: NDArray[np.int64]) -> tuple[float | None, float | None]:
