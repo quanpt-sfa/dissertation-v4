@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _published_p00(tmp_path: Path) -> tuple[ArtifactStore, dict[str, Any]]:
     compiled = compile_registry(ROOT / "config" / "pipeline.yaml")
-    registry = cast(dict[str, Any], dict(compiled.registry))
+    registry = dict(compiled.registry)
     contracts = contract_registry(registry)
     files: dict[str, object] = {
         "source_config_manifest.json": source_manifest(compiled, ROOT),
