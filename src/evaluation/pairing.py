@@ -12,8 +12,9 @@ from core.semantic_keys import FIRM_ID, FISCAL_YEAR, LEARNER_ID, PREDICTION
 def validate_paired_prediction_keys(
     predictions: pd.DataFrame,
     columns: dict[str, str],
+    reference_by_candidate: dict[str, str],
 ) -> dict[str, object]:
-    """Require exact one-to-one firm-year support for every locked ablation pair."""
+    """Require exact support for each comparison pair locked in the evaluation registry."""
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
     learner = columns[LEARNER_ID]
@@ -26,11 +27,20 @@ def validate_paired_prediction_keys(
         raise RuntimeError("P12_PAIRED_COMPARISON_BLOCKED: OUTER_PREDICTIONS_EMPTY")
     if predictions.duplicated([learner, firm, year]).any():
         raise RuntimeError("P12_PAIRED_COMPARISON_BLOCKED: DUPLICATE_MODEL_FIRM_YEAR")
+    if not reference_by_candidate:
+        raise RuntimeError("P12_PAIRED_COMPARISON_BLOCKED: NO_LOCKED_COMPARISON_PAIRS")
 
-    model_ids = sorted(str(value) for value in predictions[learner].unique())
+    model_ids = {str(value) for value in predictions[learner].unique()}
     pair_rows: list[dict[str, Any]] = []
-    for candidate in (value for value in model_ids if value.endswith(":full")):
-        reference = candidate.removesuffix(":full") + ":observability_only"
+    for candidate, reference in sorted(reference_by_candidate.items()):
+        if candidate == reference:
+            raise RuntimeError(
+                f"P12_PAIRED_COMPARISON_BLOCKED: SELF_REFERENCE_MODEL:{candidate}"
+            )
+        if candidate not in model_ids:
+            raise RuntimeError(
+                f"P12_PAIRED_COMPARISON_BLOCKED: CANDIDATE_MODEL_MISSING:{candidate}"
+            )
         if reference not in model_ids:
             raise RuntimeError(
                 f"P12_PAIRED_COMPARISON_BLOCKED: REFERENCE_MODEL_MISSING:{candidate}"
@@ -51,16 +61,10 @@ def validate_paired_prediction_keys(
                 f"{candidate}:candidate_only={len(candidate_only)}:reference_only={len(reference_only)}"
             )
         candidate_truth_order = candidate_frame.sort_values([firm, year], kind="stable")[
-            [
-                firm,
-                year,
-            ]
+            [firm, year]
         ]
         reference_truth_order = reference_frame.sort_values([firm, year], kind="stable")[
-            [
-                firm,
-                year,
-            ]
+            [firm, year]
         ]
         if not candidate_truth_order.reset_index(drop=True).equals(
             reference_truth_order.reset_index(drop=True)
@@ -78,13 +82,13 @@ def validate_paired_prediction_keys(
                 "key_contract": "exact_firm_id_fiscal_year_match",
             }
         )
-    if not pair_rows:
-        raise RuntimeError("P12_PAIRED_COMPARISON_BLOCKED: NO_FULL_VS_OBSERVABILITY_PAIRS")
     return {
         "status": "PASS",
         "pair_count": len(pair_rows),
         "pairs": pair_rows,
         "duplicate_model_firm_year_count": 0,
+        "pair_scope": "evaluation.gate2.reference_by_candidate",
+        "unpaired_models_ignored": sorted(model_ids - set(reference_by_candidate) - set(reference_by_candidate.values())),
     }
 
 
