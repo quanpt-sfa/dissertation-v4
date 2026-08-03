@@ -70,6 +70,27 @@ def main() -> int:
         raise RuntimeError("channel measurement selection hash mismatch")
     if freeze.get("nested_selection_receipt_hash") != stable_hash(nested_receipt):
         raise RuntimeError("nested selection receipt hash mismatch")
+
+    oof = loaded.context.read("development_oof_predictions", coordinates)
+    predictions = loaded.context.read("raw_outer_predictions", coordinates)
+    if not isinstance(oof, pd.DataFrame) or not isinstance(predictions, pd.DataFrame):
+        raise ValueError("P12 prediction inputs must be DataFrames")
+    columns = physical_columns(loaded.registry)
+    evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
+    review_budget = mapping(evaluation.get("review_budget"), "evaluation.review_budget")
+    gate2 = mapping(evaluation.get("gate2"), "evaluation.gate2")
+    reference_by_candidate = {
+        str(key): str(value)
+        for key, value in mapping(
+            gate2.get("reference_by_candidate"), "evaluation.gate2.reference_by_candidate"
+        ).items()
+    }
+    pairing_audit = validate_paired_prediction_keys(
+        predictions,
+        columns,
+        reference_by_candidate,
+    )
+
     open_receipt: dict[str, object] = {
         "status": "PASS",
         "protocol_hash": loaded.protocol_hash,
@@ -80,6 +101,8 @@ def main() -> int:
         "measurement_selection_hash": measurement_selection_hash,
         "channel_measurement_selection_hash": stable_hash(channel_selection),
         "nested_selection_receipt_hash": stable_hash(nested_receipt),
+        "pairing_scope": pairing_audit["pair_scope"],
+        "pair_count": pairing_audit["pair_count"],
         "opened_at_state": "FROZEN",
         OUTER_FOLD: args.outer_fold,
     }
@@ -93,22 +116,10 @@ def main() -> int:
             }
         )
     loaded.context.write("outer_open_receipt", open_receipt, coordinates)
-    oof = loaded.context.read("development_oof_predictions", coordinates)
-    predictions = loaded.context.read("raw_outer_predictions", coordinates)
+
     outcomes = loaded.context.read("sealed_outcome_store", {})
-    if not all(isinstance(value, pd.DataFrame) for value in (oof, predictions, outcomes)):
-        raise ValueError("P12 prediction and outcome inputs must be DataFrames")
-    columns = physical_columns(loaded.registry)
-    pairing_audit = validate_paired_prediction_keys(cast(pd.DataFrame, predictions), columns)
-    evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
-    review_budget = mapping(evaluation.get("review_budget"), "evaluation.review_budget")
-    gate2 = mapping(evaluation.get("gate2"), "evaluation.gate2")
-    reference_by_candidate = {
-        str(key): str(value)
-        for key, value in mapping(
-            gate2.get("reference_by_candidate"), "evaluation.gate2.reference_by_candidate"
-        ).items()
-    }
+    if not isinstance(outcomes, pd.DataFrame):
+        raise ValueError("P12 outcome input must be a DataFrame")
     calibration = mapping(loaded.registry.get("calibration"), "calibration")
     platt = mapping(calibration.get("platt"), "calibration.platt")
     utility = mapping(loaded.registry.get("utility"), "utility")
@@ -129,9 +140,9 @@ def main() -> int:
     s3_taxonomy = mapping(loaded.registry.get("s3_taxonomy"), "s3_taxonomy")
     bootstrap = mapping(inference.get("bootstrap"), "inference.bootstrap")
     result = evaluate_outer_fold(
-        oof_predictions=cast(pd.DataFrame, oof),
-        outer_predictions=cast(pd.DataFrame, predictions),
-        outcomes=cast(pd.DataFrame, outcomes),
+        oof_predictions=oof,
+        outer_predictions=predictions,
+        outcomes=outcomes,
         outer_year=int(args.outer_fold),
         review_fraction=float(review_budget["primary_fraction"]),
         utility_scenarios=scenarios,
