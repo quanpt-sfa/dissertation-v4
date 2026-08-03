@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -40,10 +40,7 @@ def parallel_shape_bootstrap(
     # Generate every resample on the caller thread, in the same order as the
     # former sequential loop. Worker scheduling therefore cannot alter RNG use.
     resamples = [
-        cast(
-            NDArray[np.int64],
-            rng.integers(0, len(frame), size=len(frame), dtype=np.int64),
-        )
+        rng.integers(0, len(frame), size=len(frame), dtype=np.int64)
         for _ in range(replications)
     ]
 
