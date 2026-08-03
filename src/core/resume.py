@@ -8,18 +8,22 @@ import subprocess
 from pathlib import Path
 from typing import cast
 
-P12_COMPATIBILITY_PATCH_ID = "P12_SELECTION_HASH_READ_V1"
+P12_SELECTION_COMPATIBILITY_PATCH_ID = "P12_SELECTION_HASH_READ_V1"
+P12_SELECTION_COMPATIBILITY_COMMIT = "3c261c5a387d83582b9cc3becbad59a6c1a7cae8"
+P12_COMPATIBILITY_PATCH_ID = "P12_PAIRED_SCOPE_V2"
 P12_COMPATIBILITY_BASE_COMMIT = "09116ea5dea68236f46b2466eb50fbfff5c2bd0a"
 P12_COMPATIBILITY_REQUIRED_PATHS = frozenset(
     {
         "scripts/p12_evaluate.py",
         "src/core/resume.py",
+        "src/evaluation/pairing.py",
     }
 )
 P12_COMPATIBILITY_ALLOWED_PATHS = frozenset(
     {
         *P12_COMPATIBILITY_REQUIRED_PATHS,
         "tests/runtime/test_p12_compatible_resume.py",
+        "tests/stages/test_pipeline_audit_remediation.py",
     }
 )
 
@@ -39,13 +43,12 @@ def json_object(path: Path, context: str) -> dict[str, object]:
     return cast(dict[str, object], raw)
 
 
-def artifact_complete(
+def _artifact_target(
     registry: dict[str, object],
     run_root: Path,
-    protocol_hash: str,
     artifact_id: str,
     coordinates: dict[str, str],
-) -> bool:
+) -> Path:
     raw_artifacts = registry.get("artifacts")
     if not isinstance(raw_artifacts, dict):
         raise ValueError("locked artifact catalog is unavailable")
@@ -61,10 +64,22 @@ def artifact_complete(
     template = artifact.get("path_template")
     if not isinstance(template, str):
         raise ValueError(f"artifact={artifact_id}: path template required")
-    target = run_root / template.format(**coordinates)
+    return run_root / template.format(**coordinates)
+
+
+def artifact_complete(
+    registry: dict[str, object],
+    run_root: Path,
+    protocol_hash: str,
+    artifact_id: str,
+    coordinates: dict[str, str],
+) -> bool:
+    target = _artifact_target(registry, run_root, artifact_id, coordinates)
     manifest_path = target.with_name(target.name + ".manifest.json")
     if not target.is_file() or not manifest_path.is_file():
         return False
+    raw_artifacts = cast(dict[str, object], registry["artifacts"])
+    artifact = cast(dict[str, object], raw_artifacts[artifact_id])
     manifest = json_object(manifest_path, f"artifact={artifact_id} manifest")
     expected = {
         "artifact_id": artifact_id,
@@ -138,17 +153,20 @@ def verify_resume_inputs(
 
 
 def verify_p12_implementation(run_root: Path, project_root: Path) -> dict[str, object] | None:
-    """Require a valid compatibility receipt when P12 differs from the locked source tree."""
+    """Require a current compatibility receipt when P12-related code differs from the lock."""
     manifest = json_object(run_root / "P00" / "source_config_manifest.json", "source manifest")
     hashes_raw = manifest.get("source_code_hashes")
     if not isinstance(hashes_raw, dict):
         raise RuntimeError("P12 source manifest code hashes are unavailable")
-    hashes = cast(dict[object, object], hashes_raw)
-    expected_raw = hashes.get("scripts/p12_evaluate.py")
-    if not isinstance(expected_raw, str):
-        raise RuntimeError("P12 locked implementation hash is unavailable")
-    current_hash = hash_file(project_root / "scripts" / "p12_evaluate.py")
-    if current_hash == expected_raw:
+    hashes = {str(key): str(value) for key, value in cast(dict[object, object], hashes_raw).items()}
+    drifted = [
+        relative
+        for relative in P12_COMPATIBILITY_REQUIRED_PATHS
+        if relative not in hashes
+        or not (project_root / relative).is_file()
+        or hash_file(project_root / relative) != hashes[relative]
+    ]
+    if not drifted:
         return None
 
     receipt = read_compatibility_receipt(run_root)
@@ -161,21 +179,30 @@ def verify_p12_implementation(run_root: Path, project_root: Path) -> dict[str, o
     if not isinstance(drift_raw, dict):
         raise RuntimeError("P12 compatibility receipt source drift is unavailable")
     drift = cast(dict[object, object], drift_raw)
-    p12_raw = drift.get("scripts/p12_evaluate.py")
-    if not isinstance(p12_raw, dict):
-        raise RuntimeError("P12 compatibility receipt does not bind the evaluation script")
-    p12 = cast(dict[object, object], p12_raw)
-    if p12.get("locked_sha256") != expected_raw or p12.get("current_sha256") != current_hash:
-        raise RuntimeError("P12 compatibility receipt implementation hash mismatch")
+    if set(str(key) for key in drift) != set(P12_COMPATIBILITY_REQUIRED_PATHS):
+        raise RuntimeError("P12 compatibility receipt drift scope mismatch")
+    for relative in P12_COMPATIBILITY_REQUIRED_PATHS:
+        entry_raw = drift.get(relative)
+        if not isinstance(entry_raw, dict):
+            raise RuntimeError(f"P12 compatibility receipt does not bind {relative}")
+        entry = cast(dict[object, object], entry_raw)
+        current_hash = hash_file(project_root / relative)
+        if entry.get("locked_sha256") != hashes.get(relative) or entry.get(
+            "current_sha256"
+        ) != current_hash:
+            raise RuntimeError(f"P12 compatibility receipt implementation hash mismatch: {relative}")
     current_commit = _git_output(project_root, ["rev-parse", "HEAD"])
     if receipt.get("current_git_commit") != current_commit:
         raise RuntimeError("P12 compatibility receipt current commit mismatch")
     return receipt
 
 
-def read_compatibility_receipt(run_root: Path) -> dict[str, object] | None:
+def read_compatibility_receipt(
+    run_root: Path,
+    patch_id: str = P12_COMPATIBILITY_PATCH_ID,
+) -> dict[str, object] | None:
     directory = run_root / "COMPATIBILITY"
-    receipt_path = directory / f"{P12_COMPATIBILITY_PATCH_ID}.json"
+    receipt_path = directory / f"{patch_id}.json"
     hash_path = receipt_path.with_suffix(receipt_path.suffix + ".sha256")
     if not receipt_path.exists() and not hash_path.exists():
         return None
@@ -186,7 +213,7 @@ def read_compatibility_receipt(run_root: Path) -> dict[str, object] | None:
     if expected_hash != observed_hash:
         raise RuntimeError("compatibility receipt hash mismatch")
     receipt = json_object(receipt_path, "compatibility receipt")
-    if receipt.get("patch_id") != P12_COMPATIBILITY_PATCH_ID:
+    if receipt.get("patch_id") != patch_id:
         raise RuntimeError("compatibility receipt patch id mismatch")
     protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
     if receipt.get("protocol_hash") != protocol_hash:
@@ -233,6 +260,17 @@ def _authorize_p12_compatibility_resume(
             "to be complete and hash-verified"
         )
 
+    previous = read_compatibility_receipt(run_root, P12_SELECTION_COMPATIBILITY_PATCH_ID)
+    previous_hash: str | None = None
+    if previous is not None:
+        if (
+            previous.get("locked_git_commit") != P12_COMPATIBILITY_BASE_COMMIT
+            or previous.get("current_git_commit") != P12_SELECTION_COMPATIBILITY_COMMIT
+        ):
+            raise RuntimeError("resume refused: prior P12 compatibility receipt does not match its lock")
+        previous_hash = str(previous["receipt_hash"])
+
+    quarantined = quarantine_partial_p12_outputs(run_root, previous)
     drift: dict[str, object] = {}
     for relative in drifted_source_paths:
         current_path = project_root / relative
@@ -241,10 +279,10 @@ def _authorize_p12_compatibility_resume(
             "current_sha256": hash_file(current_path),
         }
     receipt: dict[str, object] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "patch_id": P12_COMPATIBILITY_PATCH_ID,
         "resume_from": "P12",
-        "reason_code": "REDUNDANT_UNDECLARED_MEASUREMENT_SELECTION_READ",
+        "reason_code": "PAIRING_SCOPE_INFERRED_FROM_SUFFIX_INSTEAD_OF_LOCKED_GATE2_PAIRS",
         "protocol_hash": (run_root / "P00" / "protocol_hash.txt")
         .read_text(encoding="utf-8")
         .strip(),
@@ -252,7 +290,12 @@ def _authorize_p12_compatibility_resume(
         "current_git_commit": current_commit,
         "changed_paths": changed_paths,
         "source_code_drift": drift,
+        "previous_patch_id": P12_SELECTION_COMPATIBILITY_PATCH_ID if previous else None,
+        "previous_receipt_hash": previous_hash,
+        "quarantined_partial_outputs": quarantined,
         "p11_boundary_verified": True,
+        "pairing_scope_source": "evaluation.gate2.reference_by_candidate",
+        "pu_branch_preserved_separate": True,
         "analytical_contract_change": False,
         "access_matrix_relaxation": False,
         "registry_lock_modified": False,
@@ -261,37 +304,167 @@ def _authorize_p12_compatibility_resume(
     receipt["receipt_hash"] = receipt_hash
     print(
         "Compatibility resume authorized "
-        f"patch={P12_COMPATIBILITY_PATCH_ID} resume_from=P12 commit={current_commit}",
+        f"patch={P12_COMPATIBILITY_PATCH_ID} resume_from=P12 commit={current_commit} "
+        f"quarantined={len(quarantined)}",
         flush=True,
     )
     return receipt
 
 
-def p11_boundary_complete(run_root: Path) -> bool:
-    registry = json_object(run_root / "P00" / "registry.lock.json", "locked registry")
-    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
+def _confirmatory_folds(registry: dict[str, object]) -> list[str]:
     folds_raw = registry.get("folds")
-    steps_raw = registry.get("steps")
-    artifacts_raw = registry.get("artifacts")
-    if (
-        not isinstance(folds_raw, dict)
-        or not isinstance(steps_raw, dict)
-        or not isinstance(artifacts_raw, dict)
-    ):
-        return False
+    if not isinstance(folds_raw, dict):
+        raise ValueError("locked fold registry is unavailable")
     folds = cast(dict[object, object], folds_raw)
     nested_raw = folds.get("fully_nested_outer_years")
     if not isinstance(nested_raw, list):
-        return False
-    confirmatory_folds = [str(value) for value in cast(list[object], nested_raw)]
+        raise ValueError("fully nested outer years are unavailable")
+    result = [str(value) for value in cast(list[object], nested_raw)]
     if folds.get("initial_in_confirmatory_pool") is True:
         initial = folds.get("initial_outer_year")
         if initial is None or isinstance(initial, bool):
-            return False
-        confirmatory_folds.insert(0, str(initial))
-    if not confirmatory_folds:
-        return False
+            raise ValueError("initial outer year is unavailable")
+        result.insert(0, str(initial))
+    if not result:
+        raise ValueError("confirmatory folds are unavailable")
+    return result
 
+
+def quarantine_partial_p12_outputs(
+    run_root: Path,
+    previous_receipt: dict[str, object] | None,
+) -> list[dict[str, object]]:
+    """Quarantine only the known receipt-only residue from the failed P12 preflight."""
+    registry = json_object(run_root / "P00" / "registry.lock.json", "locked registry")
+    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
+    steps_raw = registry.get("steps")
+    if not isinstance(steps_raw, dict):
+        raise RuntimeError("P12 quarantine requires the locked step registry")
+    p12_raw = cast(dict[str, object], steps_raw).get("P12")
+    if not isinstance(p12_raw, dict):
+        raise RuntimeError("P12 quarantine requires the locked P12 contract")
+    writes_raw = cast(dict[str, object], p12_raw).get("writes")
+    if not isinstance(writes_raw, list):
+        raise RuntimeError("P12 quarantine requires the locked P12 writes")
+    writes = [str(value) for value in cast(list[object], writes_raw)]
+    records: list[dict[str, object]] = []
+    quarantine_root = run_root / "COMPATIBILITY" / "quarantine" / P12_COMPATIBILITY_PATCH_ID
+
+    for fold_id in _confirmatory_folds(registry):
+        coordinates = {"outer_fold": fold_id}
+        present: list[str] = []
+        complete: list[str] = []
+        for artifact_id in writes:
+            target = _artifact_target(registry, run_root, artifact_id, coordinates)
+            manifest_path = target.with_name(target.name + ".manifest.json")
+            if target.exists() or manifest_path.exists():
+                present.append(artifact_id)
+            if artifact_complete(
+                registry,
+                run_root,
+                protocol_hash,
+                artifact_id,
+                coordinates,
+            ):
+                complete.append(artifact_id)
+        if len(complete) == len(writes):
+            continue
+        if not present:
+            existing = _existing_quarantine_record(
+                run_root,
+                quarantine_root,
+                registry,
+                fold_id,
+                protocol_hash,
+            )
+            if existing is not None:
+                records.append(existing)
+            continue
+        if present != ["outer_open_receipt"] or complete != ["outer_open_receipt"]:
+            raise RuntimeError(
+                "resume refused: P12 has an unknown partial-output state: "
+                f"fold={fold_id}, present={present}, complete={complete}"
+            )
+
+        target = _artifact_target(registry, run_root, "outer_open_receipt", coordinates)
+        manifest_path = target.with_name(target.name + ".manifest.json")
+        value = json_object(target, f"fold={fold_id} partial outer-open receipt")
+        if previous_receipt is not None:
+            if (
+                value.get("compatibility_patch_id") != P12_SELECTION_COMPATIBILITY_PATCH_ID
+                or value.get("compatibility_receipt_hash") != previous_receipt.get("receipt_hash")
+                or value.get("evaluation_git_commit") != P12_SELECTION_COMPATIBILITY_COMMIT
+            ):
+                raise RuntimeError(
+                    f"resume refused: fold={fold_id} partial P12 receipt is not from the known failure"
+                )
+        destination = quarantine_root / target.relative_to(run_root)
+        destination_manifest = quarantine_root / manifest_path.relative_to(run_root)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination_manifest.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists() or destination_manifest.exists():
+            raise RuntimeError(f"resume refused: fold={fold_id} P12 quarantine destination exists")
+        target_hash = hash_file(target)
+        manifest_hash = hash_file(manifest_path)
+        target.replace(destination)
+        manifest_path.replace(destination_manifest)
+        records.append(
+            {
+                "outer_fold": fold_id,
+                "artifact_id": "outer_open_receipt",
+                "original_path": target.relative_to(run_root).as_posix(),
+                "quarantine_path": destination.relative_to(run_root).as_posix(),
+                "content_hash": target_hash,
+                "manifest_hash": manifest_hash,
+                "reason_code": "P12_PREFLIGHT_FAILED_AFTER_PREMATURE_OUTER_OPEN_RECEIPT",
+            }
+        )
+    return records
+
+
+def _existing_quarantine_record(
+    run_root: Path,
+    quarantine_root: Path,
+    registry: dict[str, object],
+    fold_id: str,
+    protocol_hash: str,
+) -> dict[str, object] | None:
+    coordinates = {"outer_fold": fold_id}
+    original = _artifact_target(registry, run_root, "outer_open_receipt", coordinates)
+    original_manifest = original.with_name(original.name + ".manifest.json")
+    target = quarantine_root / original.relative_to(run_root)
+    manifest_path = quarantine_root / original_manifest.relative_to(run_root)
+    if not target.exists() and not manifest_path.exists():
+        return None
+    if not target.is_file() or not manifest_path.is_file():
+        raise RuntimeError(f"resume refused: fold={fold_id} P12 quarantine is incomplete")
+    manifest = json_object(manifest_path, f"fold={fold_id} quarantined manifest")
+    if (
+        manifest.get("artifact_id") != "outer_open_receipt"
+        or manifest.get("producer_step") != "P12"
+        or manifest.get("coordinates") != coordinates
+        or manifest.get("protocol_hash") != protocol_hash
+        or manifest.get("content_hash") != hash_file(target)
+    ):
+        raise RuntimeError(f"resume refused: fold={fold_id} quarantined P12 receipt is invalid")
+    return {
+        "outer_fold": fold_id,
+        "artifact_id": "outer_open_receipt",
+        "original_path": original.relative_to(run_root).as_posix(),
+        "quarantine_path": target.relative_to(run_root).as_posix(),
+        "content_hash": hash_file(target),
+        "manifest_hash": hash_file(manifest_path),
+        "reason_code": "P12_PREFLIGHT_FAILED_AFTER_PREMATURE_OUTER_OPEN_RECEIPT",
+    }
+
+
+def p11_boundary_complete(run_root: Path) -> bool:
+    registry = json_object(run_root / "P00" / "registry.lock.json", "locked registry")
+    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
+    steps_raw = registry.get("steps")
+    artifacts_raw = registry.get("artifacts")
+    if not isinstance(steps_raw, dict) or not isinstance(artifacts_raw, dict):
+        return False
     p11_raw = cast(dict[object, object], steps_raw).get("P11")
     if not isinstance(p11_raw, dict):
         return False
@@ -306,7 +479,7 @@ def p11_boundary_complete(run_root: Path) -> bool:
             return False
         coordinates_raw = cast(dict[object, object], spec_raw).get("coordinates")
         if coordinates_raw == ["outer_fold"]:
-            for fold_id in confirmatory_folds:
+            for fold_id in _confirmatory_folds(registry):
                 if not artifact_complete(
                     registry,
                     run_root,
@@ -324,9 +497,12 @@ def p11_boundary_complete(run_root: Path) -> bool:
 
 
 def write_compatibility_receipt(run_root: Path, receipt: dict[str, object]) -> str:
+    patch_id = receipt.get("patch_id")
+    if not isinstance(patch_id, str) or not patch_id:
+        raise ValueError("compatibility receipt patch_id is required")
     directory = run_root / "COMPATIBILITY"
     directory.mkdir(parents=True, exist_ok=True)
-    target = directory / f"{P12_COMPATIBILITY_PATCH_ID}.json"
+    target = directory / f"{patch_id}.json"
     hash_target = target.with_suffix(target.suffix + ".sha256")
     rendered = json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     encoded = rendered.encode("utf-8")
