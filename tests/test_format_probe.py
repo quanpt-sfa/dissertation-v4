@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import base64
+import difflib
 import subprocess
 import sys
 from pathlib import Path
@@ -10,8 +10,18 @@ TARGETS = [
     ROOT / "src" / "sensitivity" / "parallel_refits.py",
     ROOT / "tests" / "stages" / "test_p13_parallel_refits.py",
 ]
+original = {target: target.read_text(encoding="utf-8") for target in TARGETS}
 subprocess.run([sys.executable, "-m", "ruff", "format", *map(str, TARGETS)], check=True)
+parts: list[str] = []
 for target in TARGETS:
-    payload = base64.b64encode(target.read_bytes()).decode("ascii")
-    print(f"FORMAT_PROBE::{target.relative_to(ROOT).as_posix()}::{payload}")
-raise RuntimeError("FORMAT_PROBE_COMPLETE")
+    formatted = target.read_text(encoding="utf-8")
+    parts.extend(
+        difflib.unified_diff(
+            original[target].splitlines(),
+            formatted.splitlines(),
+            fromfile=f"a/{target.relative_to(ROOT).as_posix()}",
+            tofile=f"b/{target.relative_to(ROOT).as_posix()}",
+            lineterm="",
+        )
+    )
+raise RuntimeError("\n".join(parts))
