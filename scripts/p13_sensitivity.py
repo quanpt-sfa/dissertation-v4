@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pandas as pd
 
+from core.fold_control import require_primary_target
 from core.pipeline import load_run, mapping, outer_fold_ids, physical_columns, sequence
 from core.rng import derive_seed
 from core.semantic_keys import OUTCOME, OUTER_FOLD, TARGET_ID
@@ -34,6 +35,9 @@ def main() -> int:
         registry_path=args.registry, run_id=args.run_id, step_id="P13", state="EVALUATED"
     )
     fold_ids = outer_fold_ids(loaded.registry, include_initial=False)
+    columns = physical_columns(loaded.registry)
+    measurement = mapping(loaded.registry.get("measurement"), "measurement")
+    primary_target_id = require_primary_target(measurement, "P13")
     evaluations: list[dict[str, Any]] = []
     predictions: list[pd.DataFrame] = []
     for fold_id in fold_ids:
@@ -82,13 +86,14 @@ def main() -> int:
         feature_registry=[mapping(item, "feature registry item") for item in registry],
         noninferiority_margin=float(common["noninferiority_relative_ap_margin"]),
         support_fraction_minimum=float(common["support_fraction_min"]),
-        columns=physical_columns(loaded.registry),
+        evaluation_target_id=primary_target_id,
+        columns=columns,
     )
     loaded.context.write("domain_transfer_outputs", domain, {})
     source_summary = source_sensitivity_summary(
         cast(pd.DataFrame, evidence_ledger),
         lag,
-        physical_columns(loaded.registry),
+        columns,
     )
     learners = mapping(loaded.registry.get("learners"), "learners")
     learner_ids = [
@@ -119,7 +124,8 @@ def main() -> int:
         learner_settings=mapping(learners.get("settings"), "learners.settings"),
         learner_search_spaces=search_spaces,
         maximum_valid_configurations=int(tuning["max_valid_configurations_per_learner_inner_fold"]),
-        columns=physical_columns(loaded.registry),
+        evaluation_target_id=primary_target_id,
+        columns=columns,
         seed_by_fold_and_exclusion={
             (fold_id, exclusion_id): derive_seed(
                 loaded.protocol_hash,
@@ -134,18 +140,11 @@ def main() -> int:
     )
     source_refits["registered_summary"] = source_summary
 
-    measurement = mapping(loaded.registry.get("measurement"), "measurement")
-    columns = physical_columns(loaded.registry)
     target_column = columns[TARGET_ID]
     outcome_column = columns[OUTCOME]
-    primary_target_id = measurement.get("primary_target_id")
     observed_positive_rate: float | None = None
     outcome_frame = cast(pd.DataFrame, outcomes)
-    if (
-        isinstance(primary_target_id, str)
-        and target_column in outcome_frame.columns
-        and outcome_column in outcome_frame.columns
-    ):
+    if target_column in outcome_frame.columns and outcome_column in outcome_frame.columns:
         primary_rows = outcome_frame.loc[
             outcome_frame[target_column].astype(str) == primary_target_id,
             outcome_column,
