@@ -13,9 +13,9 @@ from core.resume import (
     P12_COMPATIBILITY_PATCH_ID,
     P12_COMPATIBILITY_REQUIRED_PATHS,
     p11_boundary_complete,
-    write_compatibility_receipt,
     read_compatibility_receipt,
     verify_p12_implementation,
+    write_compatibility_receipt,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
