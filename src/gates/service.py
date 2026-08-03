@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 from typing import Any, cast
 
@@ -12,6 +11,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 
 from core.semantic_keys import FIRM_ID, FISCAL_YEAR, LEARNER_ID, OUTCOME, OUTER_FOLD
+from gates.parallel_bootstrap import parallel_shape_bootstrap
 
 
 def gate2_verdict(
@@ -206,7 +206,10 @@ def gate3_verdict(
     measurement_stability_minimum: int = 3,
     measurement_stability_denominator: int = 4,
     rng: np.random.Generator | None = None,
+    workers: int = 1,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    if workers < 1:
+        raise ValueError("P16 workers must be positive")
     if gate2.get("verdict") != "PASS":
         threshold: dict[str, Any] = {
             "status": "SKIPPED",
@@ -302,6 +305,7 @@ def gate3_verdict(
                 replications=bootstrap_replications,
                 alpha=familywise_alpha / 3.0,
                 rng=rng,
+                workers=workers,
             )
             direction_intervals.append(direction_interval)
     direction_count = (
@@ -323,6 +327,7 @@ def gate3_verdict(
             bootstrap_replications=bootstrap_replications,
             familywise_alpha=familywise_alpha,
             rng=rng,
+            workers=workers,
         )
         for feature_id in threshold_features
     ]
@@ -399,6 +404,7 @@ def _threshold_claim(
     bootstrap_replications: int,
     familywise_alpha: float,
     rng: np.random.Generator | None,
+    workers: int,
 ) -> dict[str, Any]:
     """Evaluate one prespecified threshold claim over outer folds and domains."""
     frame = data.copy()
@@ -434,6 +440,7 @@ def _threshold_claim(
                 replications=bootstrap_replications,
                 alpha=familywise_alpha / 3.0,
                 rng=rng,
+                workers=workers,
             )
             breakpoint_intervals.append(interval)
     domain_points: dict[str, float] = {}
@@ -574,35 +581,20 @@ def _shape_bootstrap(
     replications: int,
     alpha: float,
     rng: np.random.Generator,
+    workers: int,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
-    coefficients: list[float] = []
-    breakpoints: list[float] = []
-    for _ in range(replications):
-        sample = frame.iloc[rng.integers(0, len(frame), size=len(frame))]
-        if sample[outcome].nunique() < 2:
-            continue
-        coefficients.append(_interaction_coefficient(sample, monitoring, outcome, gate))
-        point, _ = _breakpoint(sample, monitoring, outcome, gate)
-        if point is not None:
-            breakpoints.append(point)
-    quantiles = (alpha / 2.0, 1.0 - alpha / 2.0)
-    coefficient_interval = (
-        (
-            float(np.quantile(coefficients, quantiles[0])),
-            float(np.quantile(coefficients, quantiles[1])),
-        )
-        if coefficients
-        else (-math.inf, math.inf)
+    return parallel_shape_bootstrap(
+        frame=frame,
+        monitoring=monitoring,
+        outcome=outcome,
+        gate=gate,
+        replications=replications,
+        alpha=alpha,
+        rng=rng,
+        workers=workers,
+        interaction_coefficient=_interaction_coefficient,
+        breakpoint_estimator=_breakpoint,
     )
-    breakpoint_interval = (
-        (
-            float(np.quantile(breakpoints, quantiles[0])),
-            float(np.quantile(breakpoints, quantiles[1])),
-        )
-        if breakpoints
-        else (-math.inf, math.inf)
-    )
-    return coefficient_interval, breakpoint_interval
 
 
 def _gate3_receipt(verdict: str, threshold: dict[str, Any]) -> dict[str, Any]:
