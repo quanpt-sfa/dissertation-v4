@@ -12,9 +12,12 @@ from core.resume import (
     P12_COMPATIBILITY_BASE_COMMIT,
     P12_COMPATIBILITY_PATCH_ID,
     P12_COMPATIBILITY_REQUIRED_PATHS,
+    P12_PAIRED_COMPATIBILITY_COMMIT,
+    P12_PAIRED_COMPATIBILITY_PATCH_ID,
     P12_SELECTION_COMPATIBILITY_COMMIT,
     P12_SELECTION_COMPATIBILITY_PATCH_ID,
     p11_boundary_complete,
+    p12_boundary_complete,
     quarantine_partial_p12_outputs,
     read_compatibility_receipt,
     verify_p12_implementation,
@@ -131,7 +134,9 @@ def test_p12_uses_locked_pairs_before_outer_open() -> None:
 
 
 def test_registered_patch_scope_is_exact_and_nonanalytical() -> None:
-    assert P12_COMPATIBILITY_PATCH_ID == "P12_PAIRED_SCOPE_V2"
+    assert P12_COMPATIBILITY_PATCH_ID == "P13_CONFIRMATORY_SCOPE_V3"
+    assert P12_PAIRED_COMPATIBILITY_PATCH_ID == "P12_PAIRED_SCOPE_V2"
+    assert P12_PAIRED_COMPATIBILITY_COMMIT == "67857db9751e9005168c33ee49c956bc7e1340ef"
     assert P12_SELECTION_COMPATIBILITY_PATCH_ID == "P12_SELECTION_HASH_READ_V1"
     assert P12_SELECTION_COMPATIBILITY_COMMIT == "3c261c5a387d83582b9cc3becbad59a6c1a7cae8"
     assert P12_COMPATIBILITY_BASE_COMMIT == "09116ea5dea68236f46b2466eb50fbfff5c2bd0a"
@@ -139,6 +144,10 @@ def test_registered_patch_scope_is_exact_and_nonanalytical() -> None:
         "scripts/p12_evaluate.py",
         "src/core/resume.py",
         "src/evaluation/pairing.py",
+        "scripts/p13_sensitivity.py",
+        "scripts/p15_open_known_cases.py",
+        "scripts/p16_gate3.py",
+        "scripts/p17_build_outputs.py",
     }
     assert P12_COMPATIBILITY_REQUIRED_PATHS.issubset(P12_COMPATIBILITY_ALLOWED_PATHS)
     assert "config/foundation/steps.yaml" not in P12_COMPATIBILITY_ALLOWED_PATHS
@@ -174,6 +183,31 @@ def test_p11_boundary_requires_every_fold_artifact(tmp_path: Path) -> None:
     assert not p11_boundary_complete(run_root)
 
 
+def test_p12_boundary_requires_every_confirmatory_output(tmp_path: Path) -> None:
+    run_root, protocol_hash = _p12_fixture(tmp_path)
+    writes = [
+        "outer_open_receipt",
+        "calibration_outputs",
+        "evaluation_metrics",
+        "bootstrap_batches",
+        "utility_scenarios",
+    ]
+    for fold_id in ("2021", "2022"):
+        for artifact_id in writes:
+            _write_artifact(
+                run_root,
+                target=run_root / "P12" / artifact_id / f"{fold_id}.json",
+                artifact_id=artifact_id,
+                producer_step="P12",
+                coordinates={"outer_fold": fold_id},
+                protocol_hash=protocol_hash,
+            )
+    assert p12_boundary_complete(run_root)
+
+    (run_root / "P12" / "evaluation_metrics" / "2022.json").unlink()
+    assert not p12_boundary_complete(run_root)
+
+
 def test_compatibility_receipt_round_trip_and_tamper_detection(tmp_path: Path) -> None:
     run_root = tmp_path / "run"
     (run_root / "P00").mkdir(parents=True)
@@ -186,6 +220,7 @@ def test_compatibility_receipt_round_trip_and_tamper_detection(tmp_path: Path) -
         "current_git_commit": "new-commit",
     }
     receipt_hash = write_compatibility_receipt(run_root, receipt)
+    assert write_compatibility_receipt(run_root, receipt) == receipt_hash
     observed = read_compatibility_receipt(run_root)
     assert observed is not None
     assert observed["receipt_hash"] == receipt_hash
