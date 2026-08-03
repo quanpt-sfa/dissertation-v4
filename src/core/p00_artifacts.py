@@ -48,13 +48,15 @@ def read_p00_artifact(
         raise ConfigurationError("P00 detached manifest hash mismatch")
 
     content_hash = _hash_file(target)
-    output_hashes = job_manifest.get("output_hashes")
-    if not isinstance(output_hashes, dict):
+    output_hashes_raw = job_manifest.get("output_hashes")
+    if not isinstance(output_hashes_raw, dict):
         raise ConfigurationError("P00 job manifest output_hashes must be an object")
+    output_hashes = cast(dict[str, object], output_hashes_raw)
     relative = target.relative_to(job_manifest_path.parent)
-    expected_hash = output_hashes.get(relative.as_posix())
-    if expected_hash is None:
-        expected_hash = output_hashes.get(str(relative))
+    expected_raw = output_hashes.get(relative.as_posix())
+    if expected_raw is None:
+        expected_raw = output_hashes.get(str(relative))
+    expected_hash = expected_raw if isinstance(expected_raw, str) else None
     if expected_hash != content_hash:
         raise ConfigurationError(f"artifact={artifact_id}: P00 content hash mismatch")
 
