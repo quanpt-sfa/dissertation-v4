@@ -187,10 +187,13 @@ def verify_p12_implementation(run_root: Path, project_root: Path) -> dict[str, o
             raise RuntimeError(f"P12 compatibility receipt does not bind {relative}")
         entry = cast(dict[object, object], entry_raw)
         current_hash = hash_file(project_root / relative)
-        if entry.get("locked_sha256") != hashes.get(relative) or entry.get(
-            "current_sha256"
-        ) != current_hash:
-            raise RuntimeError(f"P12 compatibility receipt implementation hash mismatch: {relative}")
+        if (
+            entry.get("locked_sha256") != hashes.get(relative)
+            or entry.get("current_sha256") != current_hash
+        ):
+            raise RuntimeError(
+                f"P12 compatibility receipt implementation hash mismatch: {relative}"
+            )
     current_commit = _git_output(project_root, ["rev-parse", "HEAD"])
     if receipt.get("current_git_commit") != current_commit:
         raise RuntimeError("P12 compatibility receipt current commit mismatch")
@@ -267,7 +270,9 @@ def _authorize_p12_compatibility_resume(
             previous.get("locked_git_commit") != P12_COMPATIBILITY_BASE_COMMIT
             or previous.get("current_git_commit") != P12_SELECTION_COMPATIBILITY_COMMIT
         ):
-            raise RuntimeError("resume refused: prior P12 compatibility receipt does not match its lock")
+            raise RuntimeError(
+                "resume refused: prior P12 compatibility receipt does not match its lock"
+            )
         previous_hash = str(previous["receipt_hash"])
 
     quarantined = quarantine_partial_p12_outputs(run_root, previous)

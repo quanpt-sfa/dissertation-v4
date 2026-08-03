@@ -34,9 +34,7 @@ def validate_paired_prediction_keys(
     pair_rows: list[dict[str, Any]] = []
     for candidate, reference in sorted(reference_by_candidate.items()):
         if candidate == reference:
-            raise RuntimeError(
-                f"P12_PAIRED_COMPARISON_BLOCKED: SELF_REFERENCE_MODEL:{candidate}"
-            )
+            raise RuntimeError(f"P12_PAIRED_COMPARISON_BLOCKED: SELF_REFERENCE_MODEL:{candidate}")
         if candidate not in model_ids:
             raise RuntimeError(
                 f"P12_PAIRED_COMPARISON_BLOCKED: CANDIDATE_MODEL_MISSING:{candidate}"
@@ -88,7 +86,9 @@ def validate_paired_prediction_keys(
         "pairs": pair_rows,
         "duplicate_model_firm_year_count": 0,
         "pair_scope": "evaluation.gate2.reference_by_candidate",
-        "unpaired_models_ignored": sorted(model_ids - set(reference_by_candidate) - set(reference_by_candidate.values())),
+        "unpaired_models_ignored": sorted(
+            model_ids - set(reference_by_candidate) - set(reference_by_candidate.values())
+        ),
     }
 
 
