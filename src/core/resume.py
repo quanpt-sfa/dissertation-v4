@@ -132,7 +132,9 @@ def verify_resume_inputs(
         project_root=project_root,
         run_root=run_root,
         manifest=manifest,
-        source_code_hashes={str(key): str(value) for key, value in source_code_hashes.items()},
+        source_code_hashes={
+            str(key): str(value) for key, value in source_code_hashes.items()
+        },
         drifted_source_paths=sorted(drifted_source_paths),
     )
 
@@ -190,7 +192,9 @@ def read_compatibility_receipt(run_root: Path) -> dict[str, object] | None:
     receipt = json_object(receipt_path, "compatibility receipt")
     if receipt.get("patch_id") != P12_COMPATIBILITY_PATCH_ID:
         raise RuntimeError("compatibility receipt patch id mismatch")
-    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
+    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(
+        encoding="utf-8"
+    ).strip()
     if receipt.get("protocol_hash") != protocol_hash:
         raise RuntimeError("compatibility receipt protocol hash mismatch")
     receipt["receipt_hash"] = observed_hash
@@ -271,12 +275,16 @@ def _authorize_p12_compatibility_resume(
 
 def _p11_boundary_complete(run_root: Path) -> bool:
     registry = json_object(run_root / "P00" / "registry.lock.json", "locked registry")
-    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
+    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(
+        encoding="utf-8"
+    ).strip()
     folds_raw = registry.get("folds")
     steps_raw = registry.get("steps")
     artifacts_raw = registry.get("artifacts")
-    if not isinstance(folds_raw, dict) or not isinstance(steps_raw, dict) or not isinstance(
-        artifacts_raw, dict
+    if (
+        not isinstance(folds_raw, dict)
+        or not isinstance(steps_raw, dict)
+        or not isinstance(artifacts_raw, dict)
     ):
         return False
     folds = cast(dict[object, object], folds_raw)
@@ -334,7 +342,10 @@ def _write_compatibility_receipt(run_root: Path, receipt: dict[str, object]) -> 
     if target.exists() or hash_target.exists():
         if not target.is_file() or not hash_target.is_file():
             raise RuntimeError("compatibility receipt publication is incomplete")
-        if target.read_bytes() != encoded or hash_target.read_text(encoding="utf-8").strip() != receipt_hash:
+        if (
+            target.read_bytes() != encoded
+            or hash_target.read_text(encoding="utf-8").strip() != receipt_hash
+        ):
             raise RuntimeError("compatibility receipt already exists with different content")
         return receipt_hash
     temporary = target.with_suffix(target.suffix + ".tmp")
