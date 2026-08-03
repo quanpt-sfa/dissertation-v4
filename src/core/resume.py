@@ -12,7 +12,9 @@ P12_SELECTION_COMPATIBILITY_PATCH_ID = "P12_SELECTION_HASH_READ_V1"
 P12_SELECTION_COMPATIBILITY_COMMIT = "3c261c5a387d83582b9cc3becbad59a6c1a7cae8"
 P12_PAIRED_COMPATIBILITY_PATCH_ID = "P12_PAIRED_SCOPE_V2"
 P12_PAIRED_COMPATIBILITY_COMMIT = "67857db9751e9005168c33ee49c956bc7e1340ef"
-P12_COMPATIBILITY_PATCH_ID = "P13_CONFIRMATORY_SCOPE_V3"
+P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID = "P13_CONFIRMATORY_SCOPE_V3"
+P13_CONFIRMATORY_COMPATIBILITY_COMMIT = "42c9fa7549002c361464b6cb1285c8a4793c9615"
+P12_COMPATIBILITY_PATCH_ID = "P13_PRIMARY_TARGET_OUTCOME_V4"
 P12_COMPATIBILITY_BASE_COMMIT = "09116ea5dea68236f46b2466eb50fbfff5c2bd0a"
 P12_COMPATIBILITY_REQUIRED_PATHS = frozenset(
     {
@@ -23,6 +25,7 @@ P12_COMPATIBILITY_REQUIRED_PATHS = frozenset(
         "scripts/p15_open_known_cases.py",
         "scripts/p16_gate3.py",
         "scripts/p17_build_outputs.py",
+        "src/sensitivity/service.py",
     }
 )
 P12_COMPATIBILITY_ALLOWED_PATHS = frozenset(
@@ -30,6 +33,7 @@ P12_COMPATIBILITY_ALLOWED_PATHS = frozenset(
         *P12_COMPATIBILITY_REQUIRED_PATHS,
         "tests/runtime/test_p12_compatible_resume.py",
         "tests/stages/test_pipeline_audit_remediation.py",
+        "tests/stages/test_p13_target_outcome_scope.py",
     }
 )
 
@@ -246,7 +250,7 @@ def _authorize_p12_compatibility_resume(
         )
     if set(drifted_source_paths) != set(P12_COMPATIBILITY_REQUIRED_PATHS):
         raise RuntimeError(
-            "resume refused: source drift exceeds the registered downstream compatibility patch: "
+            "resume refused: source drift exceeds the registered P13 target-scope patch: "
             f"{drifted_source_paths}"
         )
 
@@ -260,26 +264,30 @@ def _authorize_p12_compatibility_resume(
         P12_COMPATIBILITY_ALLOWED_PATHS
     ):
         raise RuntimeError(
-            "resume refused: repository diff exceeds the registered downstream patch: "
+            "resume refused: repository diff exceeds the registered P13 target-scope patch: "
             f"{changed_paths}"
         )
     if not p11_boundary_complete(run_root):
         raise RuntimeError(
-            "resume refused: downstream compatibility requires complete hash-verified P11 outputs"
+            "resume refused: P13 target-scope compatibility requires complete hash-verified P11 outputs"
         )
     if not p12_boundary_complete(run_root):
         raise RuntimeError(
-            "resume refused: downstream compatibility requires complete hash-verified P12 outputs"
+            "resume refused: P13 target-scope compatibility requires complete hash-verified P12 outputs"
+        )
+    if not p13_resume_boundary_ready(run_root):
+        raise RuntimeError(
+            "resume refused: P13 outputs exceed the registered pre-refit partial state"
         )
 
-    previous = read_compatibility_receipt(run_root, P12_PAIRED_COMPATIBILITY_PATCH_ID)
+    previous = read_compatibility_receipt(run_root, P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID)
     if previous is None:
-        raise RuntimeError("resume refused: the P12 paired-scope compatibility receipt is required")
+        raise RuntimeError("resume refused: the P13 confirmatory-scope receipt is required")
     if (
         previous.get("locked_git_commit") != P12_COMPATIBILITY_BASE_COMMIT
-        or previous.get("current_git_commit") != P12_PAIRED_COMPATIBILITY_COMMIT
+        or previous.get("current_git_commit") != P13_CONFIRMATORY_COMPATIBILITY_COMMIT
     ):
-        raise RuntimeError("resume refused: prior P12 paired-scope receipt does not match its lock")
+        raise RuntimeError("resume refused: prior P13 confirmatory-scope receipt does not match its lock")
     previous_hash = str(previous["receipt_hash"])
 
     drift: dict[str, object] = {}
@@ -296,14 +304,15 @@ def _authorize_p12_compatibility_resume(
             existing.get("locked_git_commit") != locked_commit
             or existing.get("current_git_commit") != current_commit
             or existing.get("changed_paths") != changed_paths
-            or existing.get("previous_patch_id") != P12_PAIRED_COMPATIBILITY_PATCH_ID
+            or existing.get("previous_patch_id") != P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID
             or existing.get("previous_receipt_hash") != previous_hash
             or existing.get("source_code_drift") != drift
             or existing.get("resume_from") != "P13"
             or existing.get("p12_boundary_verified") is not True
+            or existing.get("p13_partial_boundary_verified") is not True
         ):
             raise RuntimeError(
-                "resume refused: existing downstream compatibility receipt does not match current state"
+                "resume refused: existing P13 target-scope receipt does not match current state"
             )
         print(
             "Compatibility resume reused "
@@ -313,10 +322,10 @@ def _authorize_p12_compatibility_resume(
         return existing
 
     receipt: dict[str, object] = {
-        "schema_version": 3,
+        "schema_version": 4,
         "patch_id": P12_COMPATIBILITY_PATCH_ID,
         "resume_from": "P13",
-        "reason_code": "DOWNSTREAM_EVALUATION_INCLUDED_NONCONFIRMATORY_INITIAL_FOLD",
+        "reason_code": "TARGET_AWARE_SEALED_OUTCOMES_MERGED_WITHOUT_PRIMARY_TARGET_FILTER",
         "protocol_hash": (run_root / "P00" / "protocol_hash.txt")
         .read_text(encoding="utf-8")
         .strip(),
@@ -324,12 +333,15 @@ def _authorize_p12_compatibility_resume(
         "current_git_commit": current_commit,
         "changed_paths": changed_paths,
         "source_code_drift": drift,
-        "previous_patch_id": P12_PAIRED_COMPATIBILITY_PATCH_ID,
+        "previous_patch_id": P13_CONFIRMATORY_COMPATIBILITY_PATCH_ID,
         "previous_receipt_hash": previous_hash,
         "p11_boundary_verified": True,
         "p12_boundary_verified": True,
-        "downstream_fold_scope_source": "folds.fully_nested_outer_years",
-        "initial_fold_excluded_from_confirmatory_downstream": True,
+        "p13_partial_boundary_verified": True,
+        "evaluation_target_source": "measurement.primary_target_id",
+        "target_filter_applied_before_many_to_one_merge": True,
+        "unknown_outcomes_excluded_before_scoring": True,
+        "gate3_target_scope_aligned": True,
         "analytical_contract_change": False,
         "access_matrix_relaxation": False,
         "registry_lock_modified": False,
@@ -381,7 +393,9 @@ def quarantine_partial_p12_outputs(
         raise RuntimeError("P12 quarantine requires the locked P12 writes")
     writes = [str(value) for value in cast(list[object], writes_raw)]
     records: list[dict[str, object]] = []
-    quarantine_root = run_root / "COMPATIBILITY" / "quarantine" / P12_COMPATIBILITY_PATCH_ID
+    quarantine_root = (
+        run_root / "COMPATIBILITY" / "quarantine" / P12_PAIRED_COMPATIBILITY_PATCH_ID
+    )
 
     for fold_id in _confirmatory_folds(registry):
         coordinates = {"outer_fold": fold_id}
@@ -516,6 +530,34 @@ def p12_boundary_complete(run_root: Path) -> bool:
             ):
                 return False
     return True
+
+
+def p13_resume_boundary_ready(run_root: Path) -> bool:
+    """Allow only no P13 outputs or the known complete domain-transfer prefix."""
+    registry = json_object(run_root / "P00" / "registry.lock.json", "locked registry")
+    protocol_hash = (run_root / "P00" / "protocol_hash.txt").read_text(encoding="utf-8").strip()
+    steps_raw = registry.get("steps")
+    if not isinstance(steps_raw, dict):
+        return False
+    p13_raw = cast(dict[object, object], steps_raw).get("P13")
+    if not isinstance(p13_raw, dict):
+        return False
+    writes_raw = cast(dict[object, object], p13_raw).get("writes")
+    if not isinstance(writes_raw, list):
+        return False
+    present: set[str] = set()
+    complete: set[str] = set()
+    for artifact_raw in cast(list[object], writes_raw):
+        artifact_id = str(artifact_raw)
+        target = _artifact_target(registry, run_root, artifact_id, {})
+        manifest_path = target.with_name(target.name + ".manifest.json")
+        if target.exists() or manifest_path.exists():
+            present.add(artifact_id)
+        if artifact_complete(registry, run_root, protocol_hash, artifact_id, {}):
+            complete.add(artifact_id)
+    return (not present and not complete) or (
+        present == {"domain_transfer_outputs"} and complete == present
+    )
 
 
 def p11_boundary_complete(run_root: Path) -> bool:
