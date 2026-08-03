@@ -50,7 +50,7 @@ def main() -> int:
         print("P15 status=SKIPPED reason=KNOWN_CASES_UNAVAILABLE")
         return 0
     predictions: list[pd.DataFrame] = []
-    for fold_id in outer_fold_ids(loaded.registry):
+    for fold_id in outer_fold_ids(loaded.registry, include_initial=False):
         freeze = mapping(
             loaded.context.read("model_freeze_receipt", {OUTER_FOLD: fold_id}),
             "freeze receipt",
