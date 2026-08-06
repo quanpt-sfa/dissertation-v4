@@ -11,10 +11,7 @@ from core.resume_p13_v5 import (
 
 def test_p13_process_compatibility_scope_is_exact_and_nonanalytical() -> None:
     assert P13_PROCESS_COMPATIBILITY_PATCH_ID == "P13_PROCESS_CHECKPOINT_EXECUTION_V5"
-    assert (
-        P13_PROCESS_COMPATIBILITY_BASE_COMMIT
-        == "3510eae3681381c655e0b3501f7700e5aa10a5fa"
-    )
+    assert P13_PROCESS_COMPATIBILITY_BASE_COMMIT == "3510eae3681381c655e0b3501f7700e5aa10a5fa"
     assert P13_PROCESS_REQUIRED_SOURCE_DRIFT == {
         "scripts/p13_sensitivity.py",
         "src/sensitivity/parallel_refits.py",
