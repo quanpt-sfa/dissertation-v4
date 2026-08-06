@@ -1,4 +1,4 @@
-"""The production catalog must resolve the columns emitted by the final data build."""
+"""Each production source profile must resolve against its actual physical schema."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ import yaml
 from snapshot.inspector import resolve_semantics
 
 ROOT = Path(__file__).resolve().parents[2]
+FINAL_PATH = "data/source/vn_pipeline_final_firm_year_2015_2025.parquet"
+KNOWN_CASE_PATH = "data/source/known_case_registry.csv"
 
 ACTUAL_FINAL_COLUMNS = (
     "firm_master_id",
@@ -39,12 +41,29 @@ ACTUAL_FINAL_COLUMNS = (
     "s3_timeliness_source_opportunity",
     "s3_timeliness_observation_opportunity",
     "s3_timeliness_provenance_json",
-    "known_case_id",
-    "known_case_construct",
+)
+ACTUAL_KNOWN_CASE_COLUMNS = (
+    "case_id",
+    "firm_id",
+    "fiscal_year",
+    "case_construct",
+    "role",
+    "training_include_flag",
+    "calibration_include_flag",
+    "model_selection_include_flag",
+    "external_validation_include_flag",
+    "case_group_id",
+    "user_case_label",
+    "confirmation_status",
+    "known_case_positive",
     "known_case_role",
-    "known_case_external_validation_include_flag",
-    "known_case_seal_status",
-    "known_case_opens_at_step",
+    "source_presence_status",
+    "source_row_count",
+    "source_document_ids",
+    "source_firm_event_ids",
+    "source_row_numbers",
+    "source_datasets",
+    "move_reason",
 )
 
 
@@ -62,7 +81,19 @@ def _profiles() -> dict[str, dict[str, object]]:
     }
 
 
-def test_actual_final_build_columns_resolve_all_required_semantics() -> None:
+def _physical_columns(profile: dict[str, object]) -> tuple[str, ...]:
+    discovery = cast(dict[str, object], profile["discovery"])
+    globs = cast(list[object], discovery["globs"])
+    assert len(globs) == 1
+    path = str(globs[0])
+    if path == FINAL_PATH:
+        return ACTUAL_FINAL_COLUMNS
+    if path == KNOWN_CASE_PATH:
+        return ACTUAL_KNOWN_CASE_COLUMNS
+    raise AssertionError(f"unregistered physical schema fixture: {path}")
+
+
+def test_actual_source_columns_resolve_all_required_semantics() -> None:
     for profile_id, profile in _profiles().items():
         raw_semantics = profile["semantic_fields"]
         assert isinstance(raw_semantics, dict)
@@ -71,8 +102,12 @@ def test_actual_final_build_columns_resolve_all_required_semantics() -> None:
             for name, options in cast(dict[object, object], raw_semantics).items()
         }
         required = {str(value) for value in cast(list[object], profile["required_semantic_fields"])}
-        resolved = resolve_semantics(ACTUAL_FINAL_COLUMNS, candidates)
+        resolved = resolve_semantics(_physical_columns(profile), candidates)
         assert required <= set(resolved), (
             profile_id,
             sorted(required - set(resolved)),
         )
+
+
+def test_final_modeling_parquet_contains_no_known_case_identifiers() -> None:
+    assert not any(column.startswith("known_case_") for column in ACTUAL_FINAL_COLUMNS)
