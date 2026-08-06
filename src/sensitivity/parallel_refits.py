@@ -26,7 +26,7 @@ from modeling.service import fit_fold_models
 from sensitivity.service import select_observed_target_outcomes
 
 P13_CHECKPOINT_IMPLEMENTATION_ID = "P13_PROCESS_REFITS_V1"
-_WORKER_STATE: dict[str, Any] | None = None
+_worker_state: dict[str, Any] | None = None
 
 
 def _alternative_l1_labels(
@@ -129,15 +129,18 @@ def _read_checkpoint(
     mismatched = [key for key, value in expected.items() if checkpoint.get(key) != value]
     if mismatched:
         raise RuntimeError(f"P13 checkpoint contract mismatch at {path}; mismatched={mismatched}")
-    results = checkpoint.get("results")
-    if not isinstance(results, list) or not all(isinstance(item, dict) for item in results):
+    results_raw = checkpoint.get("results")
+    if not isinstance(results_raw, list):
         raise RuntimeError(f"P13 checkpoint results are invalid: {path}")
-    return [cast(dict[str, object], item) for item in cast(list[object], results)]
+    results = cast(list[object], results_raw)
+    if not all(isinstance(result, dict) for result in results):
+        raise RuntimeError(f"P13 checkpoint results are invalid: {path}")
+    return [cast(dict[str, object], result) for result in results]
 
 
 def _initialize_worker(state: dict[str, Any]) -> None:
-    global _WORKER_STATE
-    _WORKER_STATE = state
+    global _worker_state
+    _worker_state = state
 
 
 def _run_unit_with_state(
@@ -204,9 +207,9 @@ def _run_unit_with_state(
 
 
 def _run_worker_unit(task: tuple[str, str]) -> list[dict[str, object]]:
-    if _WORKER_STATE is None:
+    if _worker_state is None:
         raise RuntimeError("P13 process worker was not initialized")
-    return _run_unit_with_state(task, _WORKER_STATE)
+    return _run_unit_with_state(task, _worker_state)
 
 
 def parallel_source_exclusion_refits(
