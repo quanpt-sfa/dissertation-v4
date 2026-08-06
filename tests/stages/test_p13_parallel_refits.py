@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from concurrent.futures import Future
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 import pandas as pd
 import pytest
