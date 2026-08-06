@@ -1,5 +1,7 @@
 """Run the immutable pipeline with the registered P13 process compatibility verifier."""
 
+# ruff: noqa: I001
+
 from __future__ import annotations
 
 import sys
