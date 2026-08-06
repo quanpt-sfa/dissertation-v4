@@ -157,4 +157,7 @@ class RunContext:
             }
             if set(coordinates) != required_names:
                 raise AccessPolicyError(f"receipt={receipt_id}: coordinates unavailable")
-            self.store.read(receipt_id, coordinates)
+            if receipt_spec.get("producer_step") == "P00":
+                read_p00_artifact(self.store, receipt_id, coordinates)
+            else:
+                self.store.read(receipt_id, coordinates)
