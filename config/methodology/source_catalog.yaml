@@ -340,51 +340,65 @@ source_catalog:
       required: true
       discovery:
         globs:
-        - data/source/vn_pipeline_final_firm_year_2015_2025.parquet
+        - data/source/known_case_registry.csv
         excludes: []
         cardinality: one
-      format: parquet
-      reader: {}
+      format: csv
+      reader:
+        encoding: utf-8-sig
+        delimiter: ','
       channel_id: S3
-      source_type: final_firm_year_master
-      source_agency: curated_final_input_builder
-      original_unit: firm-year
+      source_type: sealed_known_case_ledger
+      source_agency: independent_case_review
+      original_unit: case-firm-year
       role: known_case
       verification_status: externally_reviewed_positive_case
       measurement_process_role: external_falsification_positive_evidence
       high_specificity_assumed: false
       coverage_dimensions:
       - fiscal_year
+      - case_group_id
       data_risks:
-      - embedded_case_metadata_missing
+      - identity_disclosure
       - eligibility_mismatch
+      - stale_case_registry
       semantic_fields:
         firm_id:
+        - firm_id
         - firm_master_id
+        - issuer_ticker
         fiscal_year:
         - fiscal_year
+        - year
         case_id:
+        - case_id
         - known_case_id
         case_construct:
+        - case_construct
         - known_case_construct
         case_role:
+        - role
         - known_case_role
         training_include_flag:
-        - known_case_training_include_flag
+        - training_include_flag
         calibration_include_flag:
-        - known_case_calibration_include_flag
+        - calibration_include_flag
         model_selection_include_flag:
-        - known_case_model_selection_include_flag
+        - model_selection_include_flag
         external_validation_include_flag:
-        - known_case_external_validation_include_flag
-        case_seal_status:
-        - known_case_seal_status
-        case_opens_at_step:
-        - known_case_opens_at_step
+        - external_validation_include_flag
       required_semantic_fields:
+      - case_id
       - firm_id
       - fiscal_year
+      - case_construct
+      - case_role
+      - training_include_flag
+      - calibration_include_flag
+      - model_selection_include_flag
+      - external_validation_include_flag
       key_semantics:
+      - case_id
       - firm_id
       - fiscal_year
       date_semantics: []
