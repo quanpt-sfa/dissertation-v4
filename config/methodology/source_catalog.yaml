@@ -378,7 +378,6 @@ source_catalog:
         - known_case_construct
         case_role:
         - role
-        - known_case_role
         training_include_flag:
         - training_include_flag
         calibration_include_flag:
