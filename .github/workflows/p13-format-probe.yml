@@ -1,0 +1,31 @@
+name: p13-format-probe
+
+on:
+  push:
+    branches:
+      - fix/p07-raw-computation-report-contract
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --all-extras
+      - name: Format P13 files
+        run: |
+          uv run ruff format \
+            src/core/resume_p13_v5.py \
+            src/sensitivity/parallel_refits.py \
+            tests/runtime/test_p13_process_resume.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: p13-formatted-files
+          path: |
+            src/core/resume_p13_v5.py
+            src/sensitivity/parallel_refits.py
+            tests/runtime/test_p13_process_resume.py
+          if-no-files-found: error
