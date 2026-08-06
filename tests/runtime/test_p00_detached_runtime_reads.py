@@ -20,9 +20,16 @@ def _published_p00(tmp_path: Path) -> tuple[ArtifactStore, dict[str, Any]]:
     compiled = compile_registry(ROOT / "config" / "pipeline.yaml")
     registry = dict(compiled.registry)
     contracts = contract_registry(registry)
+    vocabulary = cast(dict[str, Any], registry["vocabulary"])
+    seal_states = cast(dict[str, Any], vocabulary["seal_states"])
     files: dict[str, object] = {
         "source_config_manifest.json": source_manifest(compiled, ROOT),
         "environment_observation.json": environment_observation(ROOT),
+        "known_cases_seal.json": {
+            "status": seal_states["sealed"],
+            "protocol_hash": compiled.protocol_hash,
+            "opens_at_step": "P15",
+        },
         "job_manifest.json": {
             "run_id": "detached-runtime-test",
             "protocol_hash": compiled.protocol_hash,
@@ -32,6 +39,7 @@ def _published_p00(tmp_path: Path) -> tuple[ArtifactStore, dict[str, Any]]:
     artifact_ids = {
         "source_config_manifest.json": "source_config_manifest",
         "environment_observation.json": "environment_observation",
+        "known_cases_seal.json": "known_cases_seal",
         "job_manifest.json": "job_manifest",
     }
 
@@ -39,7 +47,6 @@ def _published_p00(tmp_path: Path) -> tuple[ArtifactStore, dict[str, Any]]:
         artifact_id = "success_receipt" if path == "_SUCCESS.json" else artifact_ids[path]
         contracts.validate(artifact_id, value)
 
-    vocabulary = cast(dict[str, Any], registry["vocabulary"])
     publication_statuses = cast(dict[str, Any], vocabulary["publication_statuses"])
     publish_p00(
         tmp_path / "P00",
@@ -70,6 +77,31 @@ def _p11_context(store: ArtifactStore, registry: dict[str, Any]) -> RunContext:
     )
 
 
+def _p15_context(store: ArtifactStore, registry: dict[str, Any]) -> RunContext:
+    return RunContext(
+        "P15",
+        "GATE2",
+        store.protocol_hash,
+        registry,
+        store,
+        {},
+    )
+
+
+def _write_gate2_receipt(store: ArtifactStore) -> None:
+    store.write(
+        "gate2_verdict",
+        {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "protocol_hash": store.protocol_hash,
+            "gate_id": "GATE2",
+            "verdict": "INSUFFICIENT_EVIDENCE",
+        },
+        {},
+        "P14",
+    )
+
+
 def test_runtime_reads_p00_artifacts_under_detached_manifest(tmp_path: Path) -> None:
     store, registry = _published_p00(tmp_path)
     context = _p11_context(store, registry)
@@ -82,6 +114,29 @@ def test_runtime_reads_p00_artifacts_under_detached_manifest(tmp_path: Path) -> 
     dependencies = {str(item["artifact_id"]): item for item in context.dependency_records()}
     assert dependencies["source_config_manifest"]["producer_step"] == "P00"
     assert dependencies["environment_observation"]["protocol_hash"] == store.protocol_hash
+
+
+def test_required_p00_receipt_uses_detached_manifest(tmp_path: Path) -> None:
+    store, registry = _published_p00(tmp_path)
+    _write_gate2_receipt(store)
+    seal_path = store.path("known_cases_seal", {})
+
+    assert seal_path.is_file()
+    assert not seal_path.with_name(seal_path.name + ".manifest.json").exists()
+
+    gate2 = _p15_context(store, registry).read("gate2_verdict", {})
+
+    assert isinstance(gate2, dict)
+    assert gate2["verdict"] == "INSUFFICIENT_EVIDENCE"
+
+
+def test_required_p00_receipt_tampering_fails_closed(tmp_path: Path) -> None:
+    store, registry = _published_p00(tmp_path)
+    _write_gate2_receipt(store)
+    store.path("known_cases_seal", {}).write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="P00 content hash mismatch"):
+        _p15_context(store, registry).read("gate2_verdict", {})
 
 
 def test_p00_artifact_tampering_fails_closed(tmp_path: Path) -> None:
