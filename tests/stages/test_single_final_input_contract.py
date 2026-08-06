@@ -1,4 +1,4 @@
-"""Production input is one physical Parquet exposed through semantic views."""
+"""Production uses one modeling Parquet plus one sealed validation registry."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 FINAL_PATH = "data/source/vn_pipeline_final_firm_year_2015_2025.parquet"
+KNOWN_CASE_PATH = "data/source/known_case_registry.csv"
 
 
 def _profiles() -> dict[str, dict[str, object]]:
@@ -25,7 +26,7 @@ def _profiles() -> dict[str, dict[str, object]]:
     }
 
 
-def test_all_enabled_views_resolve_to_one_physical_parquet() -> None:
+def test_modeling_views_share_one_parquet_and_known_cases_remain_separate() -> None:
     profiles = _profiles()
     enabled = {name: value for name, value in profiles.items() if value.get("enabled") is True}
 
@@ -35,20 +36,26 @@ def test_all_enabled_views_resolve_to_one_physical_parquet() -> None:
         "sanction_evidence",
         "known_cases",
     }
-    paths: set[str] = set()
-    for profile in enabled.values():
-        discovery = profile["discovery"]
-        assert isinstance(discovery, dict)
-        globs = cast(dict[str, object], discovery)["globs"]
-        assert globs == [FINAL_PATH]
+    for source_id in (
+        "financial_statement_core_long",
+        "audit_annual_long",
+        "sanction_evidence",
+    ):
+        profile = enabled[source_id]
+        discovery = cast(dict[str, object], profile["discovery"])
+        assert discovery["globs"] == [FINAL_PATH]
         assert profile["format"] == "parquet"
         assert profile["required"] is True
-        paths.update(cast(list[str], globs))
 
-    assert paths == {FINAL_PATH}
+    known = enabled["known_cases"]
+    known_discovery = cast(dict[str, object], known["discovery"])
+    assert known_discovery["globs"] == [KNOWN_CASE_PATH]
+    assert known["format"] == "csv"
+    assert known["required"] is True
+    assert known["role"] == "known_case"
 
 
-def test_single_file_preserves_separate_measurement_roles() -> None:
+def test_physical_separation_preserves_measurement_and_validation_roles() -> None:
     profiles = _profiles()
     processors: dict[str, str] = {}
     panel_sources: list[str] = []
@@ -68,4 +75,6 @@ def test_single_file_preserves_separate_measurement_roles() -> None:
         "sanction_evidence": "sanction_calendar_year",
     }
     assert panel_sources == ["financial_statement_core_long"]
-    assert profiles["known_cases"]["role"] == "known_case"
+    assert profiles["known_cases"]["measurement_process_role"] == (
+        "external_falsification_positive_evidence"
+    )
