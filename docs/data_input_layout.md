@@ -2,31 +2,33 @@
 
 ## Hợp đồng vật lý
 
-Production pipeline chỉ nhận **một file dữ liệu vật lý**:
+Production sử dụng **một file Parquet cho modeling** và **một CSV tách biệt cho sealed external validation**:
 
 ```text
 <RAW_ROOT>/
 |-- extract_provenance.json
 `-- data/
     `-- source/
-        `-- vn_pipeline_final_firm_year_2015_2025.parquet
+        |-- vn_pipeline_final_firm_year_2015_2025.parquet
+        `-- known_case_registry.csv
 ```
 
-`extract_provenance.json` là manifest nguồn, không phải dataset thứ hai. File Parquet là dataset duy
-nhất được snapshot, audit và đọc trong P01–P15. `--raw-root` và biến
+`extract_provenance.json` là manifest nguồn, không phải dataset phân tích. `--raw-root` và biến
 `DISSERTATION_RAW_ROOT` phải cùng trỏ tới `<RAW_ROOT>`.
 
-Bốn source ID logic vẫn được giữ để bảo toàn contract của S1, S2, S3 và known-case validation:
+Ba source ID phục vụ measurement và modeling cùng resolve tới Parquet và cùng một SHA-256:
 
 - `financial_statement_core_long`;
 - `audit_annual_long`;
-- `sanction_evidence`;
-- `known_cases`.
+- `sanction_evidence`.
 
-Cả bốn source ID cùng resolve tới đúng một đường dẫn Parquet và cùng một SHA-256. Đây là bốn
-semantic views của một file, không phải bốn file đầu vào.
+`known_cases` resolve riêng tới `known_case_registry.csv`. Registry này được snapshot-lock tại P00,
+không phải panel source, không tham gia training, calibration, model selection hoặc Gate 2, và chỉ
+được mở tại P15 sau khi Gate 2 đã đóng. Tách vật lý registry tránh hai rủi ro: data-build bỏ quên phép
+merge làm mất external validation, và known-case identifiers xuất hiện trong bytes mà các stage mô
+hình hóa trước P15 có thể đọc.
 
-## Grain và phạm vi
+## Grain và phạm vi của final Parquet
 
 File final phải có đúng một dòng cho mỗi:
 
@@ -45,7 +47,7 @@ Phạm vi production hiện hành:
 Trùng `firm_master_id x fiscal_year`, thiếu key, lệch prediction anchor hoặc khác tập firm-year giữa
 P02 và P07 đều làm pipeline dừng fail-closed.
 
-## Nhóm cột bắt buộc
+## Nhóm cột bắt buộc trong final Parquet
 
 ### Key, mẫu và provenance
 
@@ -104,23 +106,6 @@ Quy tắc ba trạng thái:
 
 False ở đây chỉ là observed endpoint zero trong source-year hoàn chỉnh; không phải latent non-fraud.
 
-### Known cases nhúng trong firm-year
-
-Các cột sau phải tồn tại để P15 chạy, nhưng được để null cho firm-year không thuộc known cases:
-
-```text
-known_case_id
-known_case_construct
-known_case_role
-known_case_training_include_flag
-known_case_calibration_include_flag
-known_case_model_selection_include_flag
-known_case_external_validation_include_flag
-```
-
-Known case hợp lệ phải có role `SIMULATION_EXTERNAL_VALIDATION`, không đi vào training,
-calibration hoặc model selection và chỉ được mở ở P15.
-
 ### Predictors
 
 File final phải chứa các predictor columns đã được data-build job tính. Tên cột vật lý phải khớp
@@ -133,8 +118,37 @@ P07 không tính lại feature từ BCTC long. P07 chỉ:
 - áp leakage firewall và model eligibility;
 - tạo feature views và model matrix manifest.
 
-Direct S1/S2/S3 components và known-case columns không được tự động đưa vào model matrix chỉ vì có
-mặt trong file final.
+Direct S1/S2/S3 components không được tự động đưa vào model matrix chỉ vì có mặt trong file final.
+Known-case columns không được nhúng trong Parquet.
+
+## Hợp đồng `known_case_registry.csv`
+
+Registry có grain `case_id x firm_id x fiscal_year` và phải có các cột semantic sau:
+
+```text
+case_id
+firm_id
+fiscal_year
+case_construct
+role
+training_include_flag
+calibration_include_flag
+model_selection_include_flag
+external_validation_include_flag
+```
+
+P15 fail-closed khi:
+
+- registry không khớp SHA-256 đã khóa tại P00;
+- `case_construct` khác `CONFIRMED_FINANCIAL_REPORTING_CASE`;
+- `role` khác `SIMULATION_EXTERNAL_VALIDATION`;
+- training, calibration hoặc model-selection flag không phải false;
+- external-validation flag không phải true;
+- trùng `case_id x firm_id x fiscal_year`;
+- registry không được cấu hình sealed trước development hoặc opening step khác P15.
+
+Các cột review bổ sung như `confirmation_status`, `source_document_ids`, `source_datasets` và
+`move_reason` có thể được giữ trong CSV để audit nhưng không thay đổi inclusion contract của P15.
 
 ## `extract_provenance.json`
 
@@ -154,47 +168,64 @@ Manifest phải nằm trực tiếp dưới `<RAW_ROOT>` và có đủ:
 
 Không ghi password, connection string hoặc secret vào manifest.
 
-## Trách nhiệm của data-build job
+## Trách nhiệm của data-build và case-review jobs
 
-Việc nối SQL Server, listing, audit, enforcement, ownership và known-case sources diễn ra **ngoài
-production modeling pipeline**. Data-build job phải xuất:
+Việc nối SQL Server, listing, audit, enforcement và ownership diễn ra **ngoài production modeling
+pipeline**. Data-build job phải xuất:
 
 ```text
 data/source/vn_pipeline_final_firm_year_2015_2025.parquet
 ```
 
-Nó phải fail khi:
+Case-review job phải xuất riêng:
+
+```text
+data/source/known_case_registry.csv
+```
+
+Data-build job phải fail khi:
 
 - grain firm-year bị trùng;
 - population hoặc annual scope sai;
 - source components xung đột;
 - feature crosswalk chưa được phê duyệt;
 - missing evidence bị chuyển thành negative;
-- known cases bị đưa vào modeling roles;
 - S3 endpoint không nhất quán với source opportunity;
 - row provenance hoặc source snapshot hash bị thiếu.
 
+Case-review job phải fail khi role hoặc inclusion flags không đúng external-validation contract.
+Không job nào được merge known-case identifiers vào final modeling Parquet.
+
 ## Tính bất biến
 
-- Parquet final là bất biến trong một run và bị khóa SHA-256 tại snapshot.
-- Bốn semantic views phải cùng trỏ tới một relative path và cùng hash.
-- Đổi bytes, schema, semantic binding, feature set hoặc evidence construction tạo run mới.
+- Final Parquet và known-case registry đều bất biến trong một run và bị khóa SHA-256 tại P00.
+- Ba semantic measurement views phải cùng trỏ tới một relative Parquet path và cùng hash.
+- Known cases phải trỏ tới CSV riêng và chỉ được mở ở P15.
+- Đổi bytes, schema, semantic binding, feature set, evidence construction hoặc known-case registry tạo run mới.
 - Artifact chính thức nằm trong `artifacts/runs/<run-id>/` và không vào Git.
-- `--resume` chỉ hợp lệ khi code, config, snapshot và Parquet không đổi.
+- `--resume` chỉ hợp lệ khi code, config, snapshot và cả hai physical inputs không đổi.
 
-## Lệnh chạy
+## Chuẩn bị raw root và chạy
 
 ```powershell
+$rawRoot = "D:\Works\dissertation\final-input"
+
+Copy-Item `
+  "D:\Works\dissertation\dissertation-v4\data\source\known_case_registry.csv" `
+  "$rawRoot\data\source\known_case_registry.csv" `
+  -Force
+
 uv run python scripts/run_pipeline.py `
-  --run-id final-firm-year-2015-2025-v1 `
-  --raw-root "D:\Works\dissertation\final-input" `
+  --run-id final-firm-year-2015-2025-v2 `
+  --raw-root $rawRoot `
   --output-root "D:\Works\dissertation\artifacts\runs" `
   --through P17 `
   --workers 12
 ```
 
-Trước khi chạy, file phải nằm tại:
+Trước khi chạy, cả hai file phải tồn tại:
 
 ```text
 D:\Works\dissertation\final-input\data\source\vn_pipeline_final_firm_year_2015_2025.parquet
+D:\Works\dissertation\final-input\data\source\known_case_registry.csv
 ```
