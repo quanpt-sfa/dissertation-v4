@@ -132,8 +132,11 @@ def main() -> int:
         *[f"channel:{value}" for value in channel_ids],
     ]
     task_count = len(exclusion_ids) * len(fold_ids)
+    checkpoint_dir = loaded.run_root / "P13" / "_source_refit_checkpoints"
     print(
-        f"P13 source refits tasks={task_count} workers={min(args.workers, task_count or 1)}",
+        f"P13 source refits tasks={task_count} "
+        f"workers={min(args.workers, task_count or 1)} "
+        f"backend=process checkpoint_dir={checkpoint_dir}",
         flush=True,
     )
     source_refits = parallel_source_exclusion_refits(
@@ -160,6 +163,8 @@ def main() -> int:
             for fold_id in fold_ids
             for exclusion_id in exclusion_ids
         },
+        protocol_hash=loaded.protocol_hash,
+        checkpoint_dir=checkpoint_dir,
         workers=args.workers,
     )
     source_refits["registered_summary"] = source_summary
@@ -193,7 +198,9 @@ def main() -> int:
         "P13 status=PASS "
         f"domain_status={domain['status']} "
         f"identification_status={identification_summary['status']} "
-        f"workers={args.workers}"
+        f"workers={args.workers} backend=process "
+        f"checkpoint_reused={source_refits['checkpoint_tasks_reused']} "
+        f"checkpoint_computed={source_refits['checkpoint_tasks_computed']}"
     )
     return 0
 
