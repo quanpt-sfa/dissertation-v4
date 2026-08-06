@@ -16,6 +16,21 @@ jobs:
       - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
       - run: uv run pytest --collect-only -q
       - run: uv run ruff check .
+      - name: Format P13 probe files
+        run: |
+          uv run ruff format \
+            src/core/resume_p13_v5.py \
+            src/sensitivity/parallel_refits.py \
+            tests/runtime/test_p13_process_resume.py
+      - name: Upload formatted P13 files
+        uses: actions/upload-artifact@v4
+        with:
+          name: p13-formatted-files
+          path: |
+            src/core/resume_p13_v5.py
+            src/sensitivity/parallel_refits.py
+            tests/runtime/test_p13_process_resume.py
+          if-no-files-found: error
       - run: uv run ruff format --check .
       - name: Pyright ratchet for pull requests
         if: github.event_name == 'pull_request'
