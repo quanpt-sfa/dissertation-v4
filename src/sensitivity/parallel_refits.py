@@ -128,9 +128,7 @@ def _read_checkpoint(
     }
     mismatched = [key for key, value in expected.items() if checkpoint.get(key) != value]
     if mismatched:
-        raise RuntimeError(
-            f"P13 checkpoint contract mismatch at {path}; mismatched={mismatched}"
-        )
+        raise RuntimeError(f"P13 checkpoint contract mismatch at {path}; mismatched={mismatched}")
     results = checkpoint.get("results")
     if not isinstance(results, list) or not all(isinstance(item, dict) for item in results):
         raise RuntimeError(f"P13 checkpoint results are invalid: {path}")
