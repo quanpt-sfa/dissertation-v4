@@ -1,4 +1,4 @@
-"""P15 CLI: open known cases embedded in the final firm-year input."""
+"""P15 CLI: open the snapshot-locked, validation-only known-case registry."""
 
 from __future__ import annotations
 
@@ -18,6 +18,15 @@ from p01.readers import hash_file, iter_rows
 from p01.registry import resolve_source
 from p02.builder import normalize_entity_field, resolve_entity_link
 from p02.models import EntityResolutionSpec
+
+_EXPECTED_CASE_CONSTRUCT = "CONFIRMED_FINANCIAL_REPORTING_CASE"
+_EXPECTED_CASE_ROLE = "SIMULATION_EXTERNAL_VALIDATION"
+_EXPECTED_INCLUSION_FLAGS = {
+    "training_include_flag": False,
+    "calibration_include_flag": False,
+    "model_selection_include_flag": False,
+    "external_validation_include_flag": True,
+}
 
 
 def main() -> int:
@@ -92,6 +101,12 @@ def main() -> int:
 
 
 def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
+    known_config = mapping(registry.get("known_cases"), "known_cases")
+    if known_config.get("opening_step") != "P15":
+        raise ValueError("known-case registry must open only at P15")
+    if known_config.get("sealed_before_development") is not True:
+        raise ValueError("known-case registry must be sealed before development")
+
     sources = mapping(
         mapping(
             mapping(registry.get("data_sources"), "data_sources").get("source_registry"),
@@ -108,11 +123,11 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
     if not matches:
         return []
     if len(matches) != 1:
-        raise ValueError("exactly one snapshot-locked known-case semantic view is allowed")
+        raise ValueError("exactly one snapshot-locked known-case registry is allowed")
     source_id, source = matches[0]
     spec, path = resolve_source(registry, source_id)
     if hash_file(path) != spec.locked_sha256:
-        raise ValueError("final firm-year file does not match its P00 snapshot hash")
+        raise ValueError("known-case registry does not match its P00 snapshot hash")
     semantics = mapping(source.get("resolved_semantics"), "known-case resolved semantics")
     required = {
         "case_id",
@@ -120,51 +135,48 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
         FISCAL_YEAR,
         "case_construct",
         "case_role",
-        "external_validation_include_flag",
-        "case_seal_status",
-        "case_opens_at_step",
+        *_EXPECTED_INCLUSION_FLAGS,
     }
     if not required.issubset(semantics):
         raise ValueError(
-            f"embedded known-case semantics are incomplete: {sorted(required - set(semantics))}"
+            f"known-case registry semantics are incomplete: {sorted(required - set(semantics))}"
         )
     entity = EntityResolutionSpec.from_mapping(registry.get("entity_resolution"))
     columns = physical_columns(registry)
     rows: list[dict[str, Any]] = []
     seen: set[tuple[str, str, int]] = set()
-    for row in iter_rows(path, spec):
-        raw_case_id = row.get(str(semantics["case_id"]))
-        if raw_case_id is None or not str(raw_case_id).strip():
-            continue
-        raw_firm_value = row.get(str(semantics[FIRM_ID]))
-        if raw_firm_value is None or not str(raw_firm_value).strip():
-            raise ValueError("known-case row requires firm_id")
-        raw_firm = str(raw_firm_value)
+    for source_row, row in enumerate(iter_rows(path, spec), start=1):
+        case_id = _required_text(row.get(str(semantics["case_id"])), "case_id", source_row)
+        raw_firm = _required_text(row.get(str(semantics[FIRM_ID])), FIRM_ID, source_row)
         normalized = normalize_entity_field(raw_firm, entity)
         canonical, _ = resolve_entity_link(source_id, raw_firm, normalized, entity)
-        case_id = str(raw_case_id).strip()
         fiscal_year = _parse_year(row.get(str(semantics[FISCAL_YEAR])))
-        case_construct = str(row.get(str(semantics["case_construct"]), "")).strip()
-        case_role = str(row.get(str(semantics["case_role"]), "")).strip()
-        external_flag = _parse_bool(
-            row.get(str(semantics["external_validation_include_flag"])),
-            "external_validation_include_flag",
+        case_construct = _required_text(
+            row.get(str(semantics["case_construct"])), "case_construct", source_row
         )
-        seal_status = str(row.get(str(semantics["case_seal_status"]), "")).strip()
-        opens_at_step = str(row.get(str(semantics["case_opens_at_step"]), "")).strip()
-        if case_construct != "CONFIRMED_FINANCIAL_REPORTING_CASE":
-            raise ValueError("known case construct must be CONFIRMED_FINANCIAL_REPORTING_CASE")
-        if case_role != "SIMULATION_EXTERNAL_VALIDATION":
-            raise ValueError("known case role must be SIMULATION_EXTERNAL_VALIDATION")
-        if external_flag is not True:
-            raise ValueError("known case must be included only for external validation")
-        if opens_at_step.upper() != "P15":
-            raise ValueError("known case may open only at P15")
-        if not _is_sealed_status(seal_status):
-            raise ValueError("known case seal status must explicitly indicate sealed or locked")
+        case_role = _required_text(
+            row.get(str(semantics["case_role"])), "case_role", source_row
+        )
+        flags = {
+            field: _parse_bool(row.get(str(semantics[field])), field)
+            for field in _EXPECTED_INCLUSION_FLAGS
+        }
+        if case_construct != _EXPECTED_CASE_CONSTRUCT:
+            raise ValueError(
+                f"known case row={source_row}: case_construct must be {_EXPECTED_CASE_CONSTRUCT}"
+            )
+        if case_role != _EXPECTED_CASE_ROLE:
+            raise ValueError(
+                f"known case row={source_row}: case_role must be {_EXPECTED_CASE_ROLE}"
+            )
+        if flags != _EXPECTED_INCLUSION_FLAGS:
+            raise ValueError(
+                f"known case row={source_row}: inclusion flags violate the sealed "
+                "external-validation role"
+            )
         key = (case_id, canonical, fiscal_year)
         if key in seen:
-            raise ValueError(f"duplicate embedded known-case row={key}")
+            raise ValueError(f"duplicate known-case row={key}")
         seen.add(key)
         rows.append(
             {
@@ -174,6 +186,15 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def _required_text(value: object, field: str, source_row: int) -> str:
+    if value is None:
+        raise ValueError(f"known case row={source_row}: {field} is required")
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"known case row={source_row}: {field} is required")
+    return text
 
 
 def _parse_year(value: object) -> int:
@@ -200,13 +221,6 @@ def _parse_bool(value: object, field: str) -> bool:
     if normalized in {"false", "0", "no", "n"}:
         return False
     raise ValueError(f"known case field={field}: boolean value required")
-
-
-def _is_sealed_status(value: str) -> bool:
-    normalized = value.strip().casefold().replace("-", "_").replace(" ", "_")
-    if not normalized or "unseal" in normalized or normalized.startswith("open"):
-        return False
-    return "seal" in normalized or "lock" in normalized
 
 
 if __name__ == "__main__":
