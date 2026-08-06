@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-FINAL_INPUT = "data/source/vn_pipeline_final_firm_year_2015_2025.parquet"
+KNOWN_CASE_INPUT = "data/source/known_case_registry.csv"
 
 
 def test_primary_source_set_excludes_next_year_s3_enforcement() -> None:
@@ -28,20 +28,20 @@ def test_known_case_registry_contract_is_external_validation_only() -> None:
         Path("config/methodology/source_catalog.yaml").read_text(encoding="utf-8")
     )
     known = config["source_catalog"]["profiles"]["known_cases"]
-    assert known["discovery"]["globs"] == [FINAL_INPUT]
-    assert known["format"] == "parquet"
+    assert known["discovery"]["globs"] == [KNOWN_CASE_INPUT]
+    assert known["format"] == "csv"
     assert known["role"] == "known_case"
+    assert known["panel_mapping"]["enabled"] is False
 
-    # Case fields must exist in the file schema, but they are nullable on all
-    # ordinary firm-years and therefore must not be row-level required values.
-    semantics = set(known["semantic_fields"])
-    assert {
+    required = set(known["required_semantic_fields"])
+    assert required == {
         "case_id",
+        "firm_id",
+        "fiscal_year",
         "case_construct",
         "case_role",
         "training_include_flag",
         "calibration_include_flag",
         "model_selection_include_flag",
         "external_validation_include_flag",
-    }.issubset(semantics)
-    assert set(known["required_semantic_fields"]) == {"firm_id", "fiscal_year"}
+    }
