@@ -134,8 +134,7 @@ def verify_resume_inputs_v5(
     drifted_source_paths = sorted(
         relative
         for relative, expected in source_code_hashes.items()
-        if not (project_root / relative).is_file()
-        or hash_file(project_root / relative) != expected
+        if not (project_root / relative).is_file() or hash_file(project_root / relative) != expected
     )
     if not drifted_source_paths:
         return None
