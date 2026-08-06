@@ -22,11 +22,11 @@ Ba source ID phục vụ measurement và modeling cùng resolve tới Parquet v�
 - `audit_annual_long`;
 - `sanction_evidence`.
 
-`known_cases` resolve riêng tới `known_case_registry.csv`. Registry này được snapshot-lock tại P00,
-không phải panel source, không tham gia training, calibration, model selection hoặc Gate 2, và chỉ
-được mở tại P15 sau khi Gate 2 đã đóng. Tách vật lý registry tránh hai rủi ro: data-build bỏ quên phép
-merge làm mất external validation, và known-case identifiers xuất hiện trong bytes mà các stage mô
-hình hóa trước P15 có thể đọc.
+`known_cases` resolve riêng tới `known_case_registry.csv`. Registry này được snapshot-lock tại P00
+và được P01 audit về hash, schema, key và coverage, nhưng không phải panel source và không tham gia
+training, calibration, model selection hoặc Gate 2. Nội dung case chỉ được diễn giải và chấm tại P15
+sau khi Gate 2 đã đóng. Tách vật lý registry tránh hai rủi ro: data-build bỏ quên phép merge làm mất
+external validation, và known-case identifiers xuất hiện trong modeling Parquet.
 
 ## Grain và phạm vi của final Parquet
 
@@ -147,8 +147,10 @@ P15 fail-closed khi:
 - trùng `case_id x firm_id x fiscal_year`;
 - registry không được cấu hình sealed trước development hoặc opening step khác P15.
 
-Các cột review bổ sung như `confirmation_status`, `source_document_ids`, `source_datasets` và
-`move_reason` có thể được giữ trong CSV để audit nhưng không thay đổi inclusion contract của P15.
+Các cột review bổ sung như `confirmation_status`, `known_case_role`, `source_document_ids`,
+`source_datasets` và `move_reason` có thể được giữ trong CSV để audit nhưng không thay đổi inclusion
+contract của P15. Cột canonical dùng để bind role là `role`; việc cùng tồn tại `known_case_role` không
+tạo semantic ambiguity.
 
 ## `extract_provenance.json`
 
@@ -200,7 +202,7 @@ Không job nào được merge known-case identifiers vào final modeling Parque
 
 - Final Parquet và known-case registry đều bất biến trong một run và bị khóa SHA-256 tại P00.
 - Ba semantic measurement views phải cùng trỏ tới một relative Parquet path và cùng hash.
-- Known cases phải trỏ tới CSV riêng và chỉ được mở ở P15.
+- Known-case rows chỉ được diễn giải tại P15; các stage trước chỉ được dùng metadata audit đã khóa.
 - Đổi bytes, schema, semantic binding, feature set, evidence construction hoặc known-case registry tạo run mới.
 - Artifact chính thức nằm trong `artifacts/runs/<run-id>/` và không vào Git.
 - `--resume` chỉ hợp lệ khi code, config, snapshot và cả hai physical inputs không đổi.
