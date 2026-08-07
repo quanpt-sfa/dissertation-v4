@@ -165,7 +165,9 @@ def _discover(raw_root: Path, profile: SourceProfile) -> list[Path]:
             pattern,
             context=f"profile={profile.profile_id}, discovery glob",
         )
-        included.update(path.resolve(strict=True) for path in raw_root.glob(pattern) if path.is_file())
+        included.update(
+            path.resolve(strict=True) for path in raw_root.glob(pattern) if path.is_file()
+        )
     excluded: set[Path] = set()
     for pattern in profile.discovery.excludes:
         resolve_relative_path(
@@ -173,7 +175,9 @@ def _discover(raw_root: Path, profile: SourceProfile) -> list[Path]:
             pattern,
             context=f"profile={profile.profile_id}, discovery exclude",
         )
-        excluded.update(path.resolve(strict=True) for path in raw_root.glob(pattern) if path.is_file())
+        excluded.update(
+            path.resolve(strict=True) for path in raw_root.glob(pattern) if path.is_file()
+        )
     return sorted(included - excluded, key=lambda path: path.relative_to(raw_root).as_posix())
 
 
