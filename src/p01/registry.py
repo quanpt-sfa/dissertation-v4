@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from core.hashing import protocol_hash
+from core.path_policy import resolve_relative_path
 
 from .models import SourceSpec
 
@@ -19,7 +20,7 @@ def _mapping(value: object, context: str) -> dict[str, Any]:
 
 
 def load_locked_registry(registry_path: Path) -> tuple[dict[str, Any], str, Path]:
-    registry_path = registry_path.resolve()
+    registry_path = registry_path.expanduser().resolve(strict=True)
     if not registry_path.is_file():
         raise FileNotFoundError(registry_path)
     raw: object = json.loads(registry_path.read_text(encoding="utf-8"))
@@ -58,10 +59,12 @@ def resolve_source(
     root_value = os.environ.get(root_env)
     if not root_value:
         raise OSError(f"environment variable {root_env} is not set")
-    root = Path(root_value).expanduser().resolve()
-    path = (root / spec.relative_path).resolve()
-    if path == root or root not in path.parents:
-        raise ValueError(f"source_id={resolved_id}: relative_path escapes source root")
+    root = Path(root_value).expanduser().resolve(strict=False)
+    path = resolve_relative_path(
+        root,
+        spec.relative_path,
+        context=f"source_id={resolved_id}",
+    )
     if not path.is_file():
         raise FileNotFoundError(path)
     return spec, path
