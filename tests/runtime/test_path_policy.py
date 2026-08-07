@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -31,7 +30,8 @@ def test_nonexistent_p01_partition_path_stays_beneath_run_root(tmp_path: Path) -
         context="raw_audit",
     )
 
-    assert target == run_root.resolve() / "P01" / "raw_audit" / "financial_statement_core_long.json"
+    expected = run_root.resolve() / "P01" / "raw_audit" / "financial_statement_core_long.json"
+    assert target == expected
     assert not target.exists()
 
 
@@ -57,9 +57,10 @@ def test_artifact_store_formats_safe_coordinates_without_resolving_missing_leaf(
 
     target = store.path("raw_audit", {"source_id": "financial_statement_core_long"})
 
-    assert target == tmp_path.resolve() / "run" / "P01" / "raw_audit" / (
+    expected = tmp_path.resolve() / "run" / "P01" / "raw_audit" / (
         "financial_statement_core_long.json"
     )
+    assert target == expected
 
 
 @pytest.mark.parametrize(
