@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+from core.path_policy import resolve_relative_path
+
 from .inspector import file_sha256, inspect_file, resolve_semantics
 from .models import SourceCatalog, SourceProfile
 
@@ -26,7 +28,7 @@ def build_snapshot(
     raw_root: Path,
     snapshot_id: str,
 ) -> dict[str, object]:
-    raw_root = raw_root.expanduser().resolve()
+    raw_root = raw_root.expanduser().resolve(strict=True)
     if not raw_root.is_dir():
         raise NotADirectoryError(raw_root)
     catalog = SourceCatalog.from_mapping(registry.get("source_catalog"))
@@ -107,11 +109,11 @@ def _load_extract_provenance(registry: dict[str, object], raw_root: Path) -> dic
     relative = typed.get("manifest_relative_path")
     if not isinstance(relative, str) or not relative:
         raise ValueError("data source provenance manifest path must be registered")
-    path = (raw_root / relative).resolve()
-    try:
-        path.relative_to(raw_root)
-    except ValueError as exc:
-        raise ValueError("data source provenance manifest escapes raw root") from exc
+    path = resolve_relative_path(
+        raw_root,
+        relative,
+        context="data source provenance manifest",
+    )
     required = typed.get("required") is True
     if not path.is_file():
         if required:
@@ -136,7 +138,7 @@ def _load_extract_provenance(registry: dict[str, object], raw_root: Path) -> dic
 
 
 def write_snapshot(path: Path, snapshot: dict[str, object]) -> None:
-    path = path.resolve()
+    path = path.expanduser().resolve(strict=False)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         raise FileExistsError(f"snapshot already exists and is immutable: {path}")
@@ -158,10 +160,20 @@ def load_snapshot(path: Path) -> dict[str, object]:
 def _discover(raw_root: Path, profile: SourceProfile) -> list[Path]:
     included: set[Path] = set()
     for pattern in profile.discovery.globs:
-        included.update(path.resolve() for path in raw_root.glob(pattern) if path.is_file())
+        resolve_relative_path(
+            raw_root,
+            pattern,
+            context=f"profile={profile.profile_id}, discovery glob",
+        )
+        included.update(path.resolve(strict=True) for path in raw_root.glob(pattern) if path.is_file())
     excluded: set[Path] = set()
     for pattern in profile.discovery.excludes:
-        excluded.update(path.resolve() for path in raw_root.glob(pattern) if path.is_file())
+        resolve_relative_path(
+            raw_root,
+            pattern,
+            context=f"profile={profile.profile_id}, discovery exclude",
+        )
+        excluded.update(path.resolve(strict=True) for path in raw_root.glob(pattern) if path.is_file())
     return sorted(included - excluded, key=lambda path: path.relative_to(raw_root).as_posix())
 
 
