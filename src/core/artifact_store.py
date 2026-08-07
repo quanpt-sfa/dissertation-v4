@@ -42,10 +42,14 @@ class ArtifactStore:
         item = self._artifact(artifact_id)
         expected = item.get("coordinates")
         if not isinstance(expected, list):
-            raise ConfigurationError(f"artifact={artifact_id}: coordinates do not match catalog")
+            raise ConfigurationError(
+                f"artifact={artifact_id}: coordinates do not match catalog"
+            )
         expected_coordinates = cast(list[object], expected)
         if set(coordinates) != {str(name) for name in expected_coordinates}:
-            raise ConfigurationError(f"artifact={artifact_id}: coordinates do not match catalog")
+            raise ConfigurationError(
+                f"artifact={artifact_id}: coordinates do not match catalog"
+            )
         try:
             rendered = str(item["path_template"]).format(**coordinates)
             return resolve_relative_path(
@@ -54,7 +58,9 @@ class ArtifactStore:
                 context=f"artifact={artifact_id}",
             )
         except (KeyError, RelativePathError) as exc:
-            raise ConfigurationError(f"artifact={artifact_id}: invalid relative path contract: {exc}") from exc
+            raise ConfigurationError(
+                f"artifact={artifact_id}: invalid relative path contract: {exc}"
+            ) from exc
 
     def write(
         self,
