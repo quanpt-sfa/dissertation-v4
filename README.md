@@ -14,16 +14,23 @@ Các tài liệu trong `docs/generated/` được sinh từ `config/pipeline.yam
 
 ## Lệnh vận hành chuẩn
 
+Chạy từ root repo. Raw input có thể nằm ngoài repo nhưng phải được truyền rõ qua
+`--raw-root`; output mặc định bên dưới repo và không dùng địa chỉ máy cá nhân.
+
 ```powershell
+$projectRoot = (Resolve-Path ".").Path
+$rawRoot = (Resolve-Path (Join-Path $projectRoot "..\final-input")).Path
+$outputRoot = Join-Path $projectRoot "artifacts\runs"
+
 uv run python scripts/run_pipeline.py `
   --run-id dissertation-2015-2026-start-v1 `
-  --raw-root "D:\Works\dissertation\dissertation-v4" `
-  --output-root "D:\Works\dissertation\dissertation-v4\artifacts\runs" `
+  --raw-root $rawRoot `
+  --output-root $outputRoot `
   --through P17
 ```
 
-Pipeline chỉ quét các đường dẫn được khai báo trong source catalog. Nó không tìm dữ
-liệu ở repo khác và không tự chọn file thay thế.
+Pipeline chỉ quét các đường dẫn tương đối được khai báo trong source catalog. Nó
+không tìm dữ liệu ở repo khác và không tự chọn file thay thế.
 
 ## Quality gates
 
