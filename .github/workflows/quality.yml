@@ -16,7 +16,11 @@ jobs:
       - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
       - run: uv run pytest --collect-only -q
       - run: uv run ruff check .
-      - run: uv run ruff format --check .
+      - id: ruff-format
+        run: uv run ruff format --check .
+      - name: Show Ruff formatting diff
+        if: failure() && steps.ruff-format.outcome == 'failure'
+        run: uv run ruff format --diff .
       - name: Pyright ratchet for pull requests
         if: github.event_name == 'pull_request'
         run: |
