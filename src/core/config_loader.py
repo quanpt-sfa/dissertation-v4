@@ -15,6 +15,7 @@ from .errors import (
     UndeclaredConfigurationFileError,
 )
 from .hashing import file_hash
+from .path_policy import RelativePathError, resolve_relative_path
 
 
 def _mapping(value: object, context: str) -> dict[str, Any]:
@@ -36,6 +37,7 @@ def _read_yaml(path: Path) -> dict[str, Any]:
 
 def load_manifest(path: Path) -> Manifest:
     """Load and validate the intentionally small entry-point manifest."""
+    path = path.expanduser().resolve(strict=True)
     raw = _read_yaml(path)
     permitted = {"config_format_version", "modules", "schema_modules"}
     extras = set(raw) - permitted
@@ -68,25 +70,46 @@ def load_manifest(path: Path) -> Manifest:
 
 def load_modules(manifest: Manifest) -> tuple[dict[str, Any], dict[str, str]]:
     """Load every declared module into its own namespace and reject stray YAML."""
-    root = manifest.path.parent.resolve()
-    declared = {manifest.path.resolve()}
-    expected = {manifest.path.resolve()}
-    for relative in [*manifest.modules.values(), *manifest.schema_modules]:
-        expected.add((root / relative).resolve())
-    actual = {item.resolve() for item in root.rglob("*.yaml")}
+    root = manifest.path.parent.resolve(strict=True)
+    declared = {manifest.path.resolve(strict=True)}
+    expected = {manifest.path.resolve(strict=True)}
+    try:
+        for module_id, relative in manifest.modules.items():
+            expected.add(
+                resolve_relative_path(
+                    root,
+                    relative,
+                    context=f"module={module_id}",
+                )
+            )
+        for relative in manifest.schema_modules:
+            expected.add(
+                resolve_relative_path(
+                    root,
+                    relative,
+                    context="schema_module",
+                )
+            )
+    except RelativePathError as exc:
+        raise ConfigurationError(str(exc)) from exc
+
+    actual = {item.resolve(strict=True) for item in root.rglob("*.yaml")}
     undeclared = actual - expected
     if undeclared:
         raise UndeclaredConfigurationFileError(
             f"source={root}: undeclared YAML files {sorted(str(item.relative_to(root)) for item in undeclared)}; list them in pipeline.yaml"
         )
     registry: dict[str, Any] = {}
-    hashes: dict[str, str] = capture_hash({}, root, manifest.path.resolve())
+    hashes: dict[str, str] = capture_hash({}, root, manifest.path.resolve(strict=True))
     for module_id, relative in manifest.modules.items():
-        candidate = (root / relative).resolve()
-        if root not in candidate.parents:
-            raise ConfigurationError(
-                f"module={module_id}, source={relative}: path escapes config root"
+        try:
+            candidate = resolve_relative_path(
+                root,
+                relative,
+                context=f"module={module_id}",
             )
+        except RelativePathError as exc:
+            raise ConfigurationError(str(exc)) from exc
         if not candidate.is_file():
             raise MissingModuleError(
                 f"module={module_id}, source={candidate}: create the declared module"
@@ -101,7 +124,10 @@ def load_modules(manifest: Manifest) -> tuple[dict[str, Any], dict[str, str]]:
         hashes = capture_hash(hashes, root, candidate)
     schemas: dict[str, object] = {}
     for relative in manifest.schema_modules:
-        candidate = (root / relative).resolve()
+        try:
+            candidate = resolve_relative_path(root, relative, context="schema_module")
+        except RelativePathError as exc:
+            raise ConfigurationError(str(exc)) from exc
         if not candidate.is_file():
             raise MissingModuleError(
                 f"schema source={candidate}: create the declared schema module"
