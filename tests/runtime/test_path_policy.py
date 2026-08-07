@@ -57,8 +57,8 @@ def test_artifact_store_formats_safe_coordinates_without_resolving_missing_leaf(
 
     target = store.path("raw_audit", {"source_id": "financial_statement_core_long"})
 
-    expected = tmp_path.resolve() / "run" / "P01" / "raw_audit" / (
-        "financial_statement_core_long.json"
+    expected = (
+        tmp_path.resolve() / "run" / "P01" / "raw_audit" / ("financial_statement_core_long.json")
     )
     assert target == expected
 
