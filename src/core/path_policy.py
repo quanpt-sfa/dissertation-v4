@@ -19,10 +19,7 @@ def portable_relative_path(value: str | os.PathLike[str], *, context: str) -> Pa
     filesystem lookup occurs.
     """
 
-    raw = os.fspath(value)
-    if not isinstance(raw, str):
-        raise RelativePathError(f"{context}: text path required")
-    text = raw.strip()
+    text = os.fspath(value).strip()
     if not text or "\x00" in text:
         raise RelativePathError(f"{context}: non-empty relative path required")
 
