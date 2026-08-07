@@ -15,10 +15,13 @@ Those responsibilities begin in P02 or later.
 
 ## Before the final P00 lock
 
-Set the machine-specific raw root:
+Resolve a machine-local raw root from the current repo without committing that
+absolute location into code or configuration:
 
 ```powershell
-$env:DISSERTATION_RAW_ROOT = "D:\Works\dissertation\raw"
+$projectRoot = (Resolve-Path ".").Path
+$rawRoot = (Resolve-Path (Join-Path $projectRoot "..\raw")).Path
+$env:DISSERTATION_RAW_ROOT = $rawRoot
 ```
 
 Create a source profile outside `config/`, then register and hash the source:
@@ -37,9 +40,12 @@ Review the resulting source entry. Then regenerate P0, commit, and create a new 
 ## Run P01
 
 ```powershell
+$runId = "<run_id>"
+$registry = Join-Path "artifacts\runs\$runId" "P00\registry.lock.json"
+
 uv run python scripts/p01_audit_raw.py `
-  --registry "D:\path\to\<run_id>\P00\registry.lock.json" `
-  --run-id "<run_id>" `
+  --registry $registry `
+  --run-id $runId `
   --source-id "financial_panel"
 ```
 
