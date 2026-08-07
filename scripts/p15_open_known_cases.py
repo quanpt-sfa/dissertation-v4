@@ -154,9 +154,7 @@ def _read_cases(registry: dict[str, Any]) -> list[dict[str, Any]]:
         case_construct = _required_text(
             row.get(str(semantics["case_construct"])), "case_construct", source_row
         )
-        case_role = _required_text(
-            row.get(str(semantics["case_role"])), "case_role", source_row
-        )
+        case_role = _required_text(row.get(str(semantics["case_role"])), "case_role", source_row)
         flags = {
             field: _parse_bool(row.get(str(semantics[field])), field)
             for field in _EXPECTED_INCLUSION_FLAGS
