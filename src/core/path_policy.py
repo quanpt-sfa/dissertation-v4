@@ -29,12 +29,16 @@ def portable_relative_path(value: str | os.PathLike[str], *, context: str) -> Pa
     windows = PureWindowsPath(text)
     posix = PurePosixPath(text)
     if windows.is_absolute() or windows.drive or windows.root or posix.is_absolute():
-        raise RelativePathError(f"{context}: absolute or drive-qualified path is forbidden: {text!r}")
+        raise RelativePathError(
+            f"{context}: absolute or drive-qualified path is forbidden: {text!r}"
+        )
 
     normalized = text.replace("\\", "/")
     raw_parts = normalized.split("/")
     if any(part in {"", ".", ".."} for part in raw_parts):
-        raise RelativePathError(f"{context}: normalized child path cannot contain empty, dot, or parent components")
+        raise RelativePathError(
+            f"{context}: normalized child path cannot contain empty, dot, or parent components"
+        )
 
     return Path(*raw_parts)
 
