@@ -4,8 +4,11 @@ This branch adds an explicit four-phase workflow. The scripts do not use outer-f
 
 ## 1. Pull and switch to the branch
 
+Open PowerShell in the repository root, or resolve it from a path relative to your current workspace:
+
 ```powershell
-cd D:\Quan\dissertation-v4
+$projectRoot = (Resolve-Path ".").Path
+Set-Location $projectRoot
 git fetch origin
 git switch agent/s3-content-l3-production-lock
 ```
