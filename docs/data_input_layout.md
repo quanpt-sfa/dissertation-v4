@@ -209,25 +209,30 @@ Không job nào được merge known-case identifiers vào final modeling Parque
 
 ## Chuẩn bị raw root và chạy
 
-```powershell
-$rawRoot = "D:\Works\dissertation\final-input"
+Chạy từ root repo. Ví dụ dưới đây đặt raw input ở thư mục ngang cấp repo và artifact
+bên dưới repo; không có drive hoặc user directory nào được ghi cứng:
 
-Copy-Item `
-  "D:\Works\dissertation\dissertation-v4\data\source\known_case_registry.csv" `
-  "$rawRoot\data\source\known_case_registry.csv" `
-  -Force
+```powershell
+$projectRoot = (Resolve-Path ".").Path
+$rawRoot = (Resolve-Path (Join-Path $projectRoot "..\final-input")).Path
+$outputRoot = Join-Path $projectRoot "artifacts\runs"
+$registrySource = Join-Path $projectRoot "data\source\known_case_registry.csv"
+$registryTarget = Join-Path $rawRoot "data\source\known_case_registry.csv"
+
+New-Item -ItemType Directory -Path (Split-Path $registryTarget) -Force | Out-Null
+Copy-Item $registrySource $registryTarget -Force
 
 uv run python scripts/run_pipeline.py `
   --run-id final-firm-year-2015-2025-v2 `
   --raw-root $rawRoot `
-  --output-root "D:\Works\dissertation\artifacts\runs" `
+  --output-root $outputRoot `
   --through P17 `
   --workers 12
 ```
 
-Trước khi chạy, cả hai file phải tồn tại:
+Trước khi chạy, cả hai file sau phải tồn tại tương đối dưới raw root:
 
 ```text
-D:\Works\dissertation\final-input\data\source\vn_pipeline_final_firm_year_2015_2025.parquet
-D:\Works\dissertation\final-input\data\source\known_case_registry.csv
+<RAW_ROOT>/data/source/vn_pipeline_final_firm_year_2015_2025.parquet
+<RAW_ROOT>/data/source/known_case_registry.csv
 ```
