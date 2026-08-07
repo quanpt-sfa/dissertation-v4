@@ -14,6 +14,7 @@ from typing import Any, cast
 import pandas as pd
 
 from .errors import ConfigurationError
+from .path_policy import RelativePathError, resolve_relative_path
 from .schema_registry import ContractRegistry
 
 
@@ -31,7 +32,7 @@ class ArtifactStore:
         protocol_hash: str,
         recovery_policy: str = "quarantine_incomplete",
     ) -> None:
-        self.root = root.resolve()
+        self.root = root.expanduser().resolve(strict=False)
         self.artifacts = artifacts
         self.contracts = contracts
         self.protocol_hash = protocol_hash
@@ -45,11 +46,15 @@ class ArtifactStore:
         expected_coordinates = cast(list[object], expected)
         if set(coordinates) != {str(name) for name in expected_coordinates}:
             raise ConfigurationError(f"artifact={artifact_id}: coordinates do not match catalog")
-        relative = Path(str(item["path_template"]).format(**coordinates))
-        result = (self.root / relative).resolve()
-        if result == self.root or self.root not in result.parents:
-            raise ConfigurationError(f"artifact={artifact_id}: path escapes run root")
-        return result
+        try:
+            rendered = str(item["path_template"]).format(**coordinates)
+            return resolve_relative_path(
+                self.root,
+                rendered,
+                context=f"artifact={artifact_id}",
+            )
+        except (KeyError, RelativePathError) as exc:
+            raise ConfigurationError(f"artifact={artifact_id}: invalid relative path contract: {exc}") from exc
 
     def write(
         self,
