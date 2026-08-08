@@ -119,6 +119,7 @@ def test_candidate_domain_transfer_excludes_held_board_from_development(monkeypa
         noninferiority_margin=0.05,
         support_fraction_minimum=0.8,
         support_bounds=(0.05, 0.95),
+        support_crossfit_folds=5,
         minimum_domains=2,
         evaluation_target_id="L1_ANNUAL",
         columns=_columns(),
@@ -130,6 +131,12 @@ def test_candidate_domain_transfer_excludes_held_board_from_development(monkeypa
 
     assert set(seen) == {("HOSE", ("HNX",)), ("HNX", ("HOSE",))}
     assert result["status"] == "PASS"
+    assert result["support_method"] == "cross_fitted_balanced_logistic_domain_score_held_test_fraction"
+    assert result["support_score_interpretation"] == (
+        "balanced_domain_membership_score_not_causal_propensity"
+    )
     candidates = cast(list[dict[str, object]], result["candidate_results"])
     assert candidates[0]["evidence_complete"] is True
     assert candidates[0]["robust_scenario_fraction"] == 1.0
+    domain_rows = cast(list[dict[str, object]], result["domains"])
+    assert {row["support_crossfit_folds"] for row in domain_rows} == {4}
