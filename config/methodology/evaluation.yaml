@@ -24,8 +24,11 @@ evaluation:
     - domain_id: exchange_or_board
       column: exchange_or_board
     minimum_domains: 2
+    time_basis: prediction_time
+    migration_policy: row_level_board_as_of_prediction_time
     scenario_unit: domain_level_x_outer_fold
     support_method: balanced_logistic_domain_propensity_held_test_fraction
+    support_population: development_other_domains_vs_held_outer_domain
     weighting_mode: unit_weight_transport_refit
     candidate_specific: true
   gate2:
