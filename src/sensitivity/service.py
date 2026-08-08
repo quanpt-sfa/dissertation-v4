@@ -88,10 +88,7 @@ def domain_transfer(
     domain_columns = {item["column"] for item in bindings}
     overlap = sorted(domain_columns & predictor_ids)
     if overlap:
-        raise ValueError(
-            "P13 domain metadata must not enter predictor blocks: "
-            f"{overlap}"
-        )
+        raise ValueError(f"P13 domain metadata must not enter predictor blocks: {overlap}")
     missing_domain_columns = sorted(domain_columns - set(feature_panel.columns))
     if missing_domain_columns:
         return {
