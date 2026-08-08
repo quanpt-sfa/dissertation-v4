@@ -33,6 +33,10 @@ evaluation:
     scenario_unit: domain_level_x_outer_fold
     support_method: cross_fitted_balanced_logistic_domain_score_held_test_fraction
     support_population: development_other_domains_vs_held_outer_domain
+    support_score_bounds:
+    - 0.05
+    - 0.95
+    support_fraction_minimum: 0.8
     support_crossfit_folds: 5
     support_crossfit_group: firm_id
     support_score_interpretation: balanced_domain_membership_score_not_causal_propensity
