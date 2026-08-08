@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from core.evidence_registry import LogicalEvidenceSource
 from core.fold_control import require_primary_target
@@ -15,26 +15,35 @@ ROOT = Path(__file__).resolve().parents[1]
 S1_PROFILE_ID = "financial_statement_core_long"
 
 
+def _mapping(value: object, context: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise AssertionError(f"{context} must be a mapping")
+    return value
+
+
 def _registry() -> dict[str, Any]:
-    return compile_registry(ROOT / "config" / "pipeline.yaml").registry
+    return dict(compile_registry(ROOT / "config" / "pipeline.yaml").registry)
 
 
 def _s1_catalog_configuration() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     registry = _registry()
-    catalog = cast(dict[str, Any], registry["source_catalog"])
-    profiles = cast(dict[str, Any], catalog["profiles"])
-    profile = cast(dict[str, Any], profiles[S1_PROFILE_ID])
-    evidence = cast(dict[str, Any], profile["evidence_mapping"])
-    logical_sources = {
-        str(item["source_id"]): cast(dict[str, Any], item)
-        for item in cast(list[dict[str, Any]], evidence["logical_sources"])
-    }
+    catalog = _mapping(registry["source_catalog"], "source_catalog")
+    profiles = _mapping(catalog["profiles"], "source_catalog.profiles")
+    profile = _mapping(profiles[S1_PROFILE_ID], S1_PROFILE_ID)
+    evidence = _mapping(profile["evidence_mapping"], f"{S1_PROFILE_ID}.evidence_mapping")
+    raw_logical_sources = evidence["logical_sources"]
+    if not isinstance(raw_logical_sources, list):
+        raise AssertionError("logical_sources must be a list")
+    logical_sources: dict[str, dict[str, Any]] = {}
+    for raw in raw_logical_sources:
+        item = _mapping(raw, "logical_sources item")
+        logical_sources[str(item["source_id"])] = item
     return profile, logical_sources
 
 
 def _logical_s1_source(source_id: str) -> LogicalEvidenceSource:
     profile, logical_sources = _s1_catalog_configuration()
-    evidence = cast(dict[str, Any], profile["evidence_mapping"])
+    evidence = _mapping(profile["evidence_mapping"], f"{S1_PROFILE_ID}.evidence_mapping")
     logical = logical_sources[source_id]
     return LogicalEvidenceSource(
         source_id=source_id,
@@ -75,16 +84,19 @@ def _adjustment_row(
 
 def test_production_primary_target_resolves_to_l1_annual() -> None:
     registry = _registry()
-    measurement = cast(dict[str, Any], registry["measurement"])
+    measurement = _mapping(registry["measurement"], "measurement")
     assert require_primary_target(measurement, "TEST") == "L1_ANNUAL"
 
 
 def test_p13_exchange_domain_methodology_is_locked() -> None:
     registry = _registry()
-    evaluation = cast(dict[str, Any], registry["evaluation"])
-    domain = cast(dict[str, Any], evaluation["domain_transfer"])
-    bindings = cast(list[dict[str, Any]], domain["bindings"])
-    gate2 = cast(dict[str, Any], evaluation["gate2"])
+    evaluation = _mapping(registry["evaluation"], "evaluation")
+    domain = _mapping(evaluation["domain_transfer"], "evaluation.domain_transfer")
+    raw_bindings = domain["bindings"]
+    if not isinstance(raw_bindings, list):
+        raise AssertionError("evaluation.domain_transfer.bindings must be a list")
+    bindings = [_mapping(item, "domain binding") for item in raw_bindings]
+    gate2 = _mapping(evaluation["gate2"], "evaluation.gate2")
 
     assert bindings == [
         {
@@ -104,13 +116,16 @@ def test_p13_exchange_domain_methodology_is_locked() -> None:
     assert domain["support_crossfit_folds"] == 5
     assert domain["support_crossfit_group"] == "firm_id"
     assert domain["candidate_specific"] is True
-    assert len(bindings[0]["allowed_levels"]) * int(gate2["fold_count"]) == 8
+    allowed_levels = bindings[0]["allowed_levels"]
+    if not isinstance(allowed_levels, list):
+        raise AssertionError("domain allowed_levels must be a list")
+    assert len(allowed_levels) * int(gate2["fold_count"]) == 8
 
 
 def test_s1_materiality_rules_are_locked_in_registry() -> None:
     profile, logical_sources = _s1_catalog_configuration()
-    evidence = cast(dict[str, Any], profile["evidence_mapping"])
-    adjustment = cast(dict[str, Any], evidence["audit_adjustment"])
+    evidence = _mapping(profile["evidence_mapping"], f"{S1_PROFILE_ID}.evidence_mapping")
+    adjustment = _mapping(evidence["audit_adjustment"], "audit_adjustment")
 
     assert logical_sources["S1_profit_adjustment"]["materiality_threshold"] == 0.10
     assert logical_sources["S1_revenue_adjustment"]["materiality_threshold"] == 0.01
