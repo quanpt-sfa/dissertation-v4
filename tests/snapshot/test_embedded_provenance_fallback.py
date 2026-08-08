@@ -3,11 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pyarrow as pa
-import pyarrow.parquet as pq
+import pandas as pd
 import pytest
 
-from snapshot.builder import _load_extract_provenance
+from snapshot.builder import _load_extract_provenance  # pyright: ignore[reportPrivateUsage]
 
 
 def _registry() -> dict[str, object]:
@@ -41,7 +40,7 @@ def _write_final_input(raw_root: Path) -> None:
             "sha256": "abc123",
         },
     }
-    table = pa.table(
+    frame = pd.DataFrame(
         {
             "source_provenance_json": [json.dumps(embedded), json.dumps(embedded)],
             "source_protocol_hash": ["old-protocol", "old-protocol"],
@@ -49,7 +48,7 @@ def _write_final_input(raw_root: Path) -> None:
             "source_unified_population_sha256": ["abc123", "abc123"],
         }
     )
-    pq.write_table(table, target)
+    frame.to_parquet(target, index=False)
 
 
 def test_missing_external_manifest_uses_embedded_derived_input_lineage(tmp_path: Path) -> None:
