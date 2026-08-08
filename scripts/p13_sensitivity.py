@@ -97,11 +97,20 @@ def main() -> int:
         raise ValueError("P13 panel inputs must be DataFrames")
     evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
     common = mapping(evaluation.get("gate_common"), "evaluation.gate_common")
+    domain_config = mapping(evaluation.get("domain_transfer"), "evaluation.domain_transfer")
+    domain_bindings = [
+        mapping(item, "evaluation.domain_transfer.bindings item")
+        for item in sequence(
+            domain_config.get("bindings"),
+            "evaluation.domain_transfer.bindings",
+        )
+    ]
     domain = domain_transfer(
         predictions=pd.concat(predictions, ignore_index=True),
         outcomes=cast(pd.DataFrame, outcomes),
         feature_panel=cast(pd.DataFrame, panel),
         feature_registry=[mapping(item, "feature registry item") for item in registry],
+        domain_bindings=domain_bindings,
         noninferiority_margin=float(common["noninferiority_relative_ap_margin"]),
         support_fraction_minimum=float(common["support_fraction_min"]),
         evaluation_target_id=primary_target_id,
