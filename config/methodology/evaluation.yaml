@@ -23,9 +23,13 @@ evaluation:
     bindings:
     - domain_id: exchange_or_board
       column: exchange_or_board
+      source_field_semantic: exchange_at_fye
+      allowed_levels:
+      - HOSE
+      - HNX
     minimum_domains: 2
-    time_basis: prediction_time
-    migration_policy: row_level_board_as_of_prediction_time
+    time_basis: fiscal_year_end
+    migration_policy: row_level_board_at_fiscal_year_end
     scenario_unit: domain_level_x_outer_fold
     support_method: cross_fitted_balanced_logistic_domain_score_held_test_fraction
     support_population: development_other_domains_vs_held_outer_domain
