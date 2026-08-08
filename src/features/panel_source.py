@@ -24,6 +24,7 @@ from p02.models import EntityResolutionSpec
 
 _RATIO_OPERAND = re.compile(r"[A-Za-z_]+_t(?:_minus_1)?\b")
 _DEPENDENCY_LAG = re.compile(r"\[t(?:-1)?\]$")
+_FINAL_DOMAIN_METADATA_COLUMNS = ("exchange_or_board", "industry_code")
 
 
 @dataclass(frozen=True)
@@ -370,10 +371,23 @@ def assemble_from_final(
         ):
             values_by_physical[physical] = computed[feature_id].reset_index(drop=True)
 
+    metadata_columns = [
+        column for column in _FINAL_DOMAIN_METADATA_COLUMNS if column in final_frame.columns
+    ]
+    metadata_feature_overlap = sorted(set(metadata_columns) & set(values_by_physical))
+    if metadata_feature_overlap:
+        raise ValueError(
+            "final domain metadata must remain outside the registered feature matrix: "
+            f"{metadata_feature_overlap}"
+        )
     final_values = pd.DataFrame(
         {
             firm_column: final_frame[firm_column].reset_index(drop=True),
             year_column: final_frame[year_column].reset_index(drop=True),
+            **{
+                column: final_frame[column].reset_index(drop=True)
+                for column in metadata_columns
+            },
             **values_by_physical,
         }
     )
@@ -402,6 +416,7 @@ def assemble_from_final(
         "computed_pass": pass_count,
         "derived_features": derived,
         "unsupported_features": unsupported,
+        "preserved_domain_metadata_columns": metadata_columns,
         "raw_rows": int(len(final_frame)),
         "component_sum_incomplete_dropped": [],
     }
