@@ -54,9 +54,7 @@ def test_candidate_domain_transfer_excludes_held_board_from_development(monkeypa
                         "content_feature": float(outcome),
                     }
                 )
-                outcomes.append(
-                    {FIRM: firm_id, YEAR: year, TARGET: "L1_ANNUAL", Y: outcome}
-                )
+                outcomes.append({FIRM: firm_id, YEAR: year, TARGET: "L1_ANNUAL", Y: outcome})
 
     seen: list[tuple[str, tuple[str, ...]]] = []
 
