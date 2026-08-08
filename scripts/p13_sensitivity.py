@@ -110,10 +110,11 @@ def main() -> int:
         )
     ]
     support_bounds_raw = sequence(
-        common.get("propensity_support"), "evaluation.gate_common.propensity_support"
+        domain_config.get("support_score_bounds"),
+        "evaluation.domain_transfer.support_score_bounds",
     )
     if len(support_bounds_raw) != 2:
-        raise ValueError("P13 domain transfer requires exactly two propensity support bounds")
+        raise ValueError("P13 domain transfer requires exactly two domain-score support bounds")
     support_bounds = (float(support_bounds_raw[0]), float(support_bounds_raw[1]))
 
     learners = mapping(loaded.registry.get("learners"), "learners")
@@ -195,7 +196,7 @@ def main() -> int:
         learner_search_spaces=search_spaces,
         maximum_valid_configurations=int(tuning["max_valid_configurations_per_learner_inner_fold"]),
         noninferiority_margin=float(common["noninferiority_relative_ap_margin"]),
-        support_fraction_minimum=float(common["support_fraction_min"]),
+        support_fraction_minimum=float(domain_config["support_fraction_minimum"]),
         support_bounds=support_bounds,
         support_crossfit_folds=int(domain_config["support_crossfit_folds"]),
         minimum_domains=int(domain_config["minimum_domains"]),
