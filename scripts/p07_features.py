@@ -52,6 +52,16 @@ def main() -> int:
         )
     ]
     domain_columns = [str(binding["column"]) for binding in domain_bindings]
+    domain_allowed_values = {
+        str(binding["column"]): [
+            str(value)
+            for value in sequence(
+                binding.get("allowed_levels"),
+                f"evaluation.domain_transfer.bindings.{binding['domain_id']}.allowed_levels",
+            )
+        ]
+        for binding in domain_bindings
+    }
     if args.dry_run:
         print(
             f"P07 dry-run: registered_features={len(definitions)} domain_columns={domain_columns}"
@@ -112,6 +122,7 @@ def main() -> int:
         domain_columns=domain_columns,
         firm_column=columns[FIRM_ID],
         year_column=columns[FISCAL_YEAR],
+        allowed_values_by_column=domain_allowed_values,
     )
     result = replace(result, panel=restored_panel)
     if args.validate_only:
@@ -126,6 +137,7 @@ def main() -> int:
         **store_result.validation_report,
         "stage_status": result.summary["status"],
         "restored_domain_metadata_columns": domain_columns,
+        "locked_domain_vocabulary": domain_allowed_values,
     }
     summary = {
         **result.summary,
