@@ -1,4 +1,10 @@
-"""Each production source profile must resolve against its actual physical schema."""
+"""Production source profiles must resolve against the locked physical-schema contract.
+
+This fixture describes the schema required from the immutable final-input builder.
+Actual raw files are verified separately by snapshot/P01 audits; CI must not treat
+an out-of-repository historical raw file as evidence that the current contract is
+satisfied.
+"""
 
 from __future__ import annotations
 
@@ -13,10 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 FINAL_PATH = "data/source/vn_pipeline_final_firm_year_2015_2025.parquet"
 KNOWN_CASE_PATH = "data/source/known_case_registry.csv"
 
-ACTUAL_FINAL_COLUMNS = (
+LOCKED_FINAL_COLUMNS = (
     "firm_master_id",
     "fiscal_year",
     "prediction_time",
+    "exchange_or_board",
     "fs_aud_net_revenue",
     "fs_aud_profit_after_tax",
     "fs_unaud_net_revenue",
@@ -42,7 +49,7 @@ ACTUAL_FINAL_COLUMNS = (
     "s3_timeliness_observation_opportunity",
     "s3_timeliness_provenance_json",
 )
-ACTUAL_KNOWN_CASE_COLUMNS = (
+LOCKED_KNOWN_CASE_COLUMNS = (
     "case_id",
     "firm_id",
     "fiscal_year",
@@ -81,19 +88,19 @@ def _profiles() -> dict[str, dict[str, object]]:
     }
 
 
-def _physical_columns(profile: dict[str, object]) -> tuple[str, ...]:
+def _locked_physical_columns(profile: dict[str, object]) -> tuple[str, ...]:
     discovery = cast(dict[str, object], profile["discovery"])
     globs = cast(list[object], discovery["globs"])
     assert len(globs) == 1
     path = str(globs[0])
     if path == FINAL_PATH:
-        return ACTUAL_FINAL_COLUMNS
+        return LOCKED_FINAL_COLUMNS
     if path == KNOWN_CASE_PATH:
-        return ACTUAL_KNOWN_CASE_COLUMNS
+        return LOCKED_KNOWN_CASE_COLUMNS
     raise AssertionError(f"unregistered physical schema fixture: {path}")
 
 
-def test_actual_source_columns_resolve_all_required_semantics() -> None:
+def test_locked_source_columns_resolve_all_required_semantics() -> None:
     for profile_id, profile in _profiles().items():
         raw_semantics = profile["semantic_fields"]
         assert isinstance(raw_semantics, dict)
@@ -102,12 +109,12 @@ def test_actual_source_columns_resolve_all_required_semantics() -> None:
             for name, options in cast(dict[object, object], raw_semantics).items()
         }
         required = {str(value) for value in cast(list[object], profile["required_semantic_fields"])}
-        resolved = resolve_semantics(_physical_columns(profile), candidates)
+        resolved = resolve_semantics(_locked_physical_columns(profile), candidates)
         assert required <= set(resolved), (
             profile_id,
             sorted(required - set(resolved)),
         )
 
 
-def test_final_modeling_parquet_contains_no_known_case_identifiers() -> None:
-    assert not any(column.startswith("known_case_") for column in ACTUAL_FINAL_COLUMNS)
+def test_final_modeling_parquet_contract_contains_no_known_case_identifiers() -> None:
+    assert not any(column.startswith("known_case_") for column in LOCKED_FINAL_COLUMNS)
