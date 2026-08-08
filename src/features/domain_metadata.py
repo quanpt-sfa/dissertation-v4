@@ -38,8 +38,7 @@ def restore_domain_metadata(
     unknown_allowed_columns = sorted(set(allowed_raw) - set(normalized))
     if unknown_allowed_columns:
         raise ValueError(
-            "P07 domain vocabulary was configured for unbound columns: "
-            f"{unknown_allowed_columns}"
+            f"P07 domain vocabulary was configured for unbound columns: {unknown_allowed_columns}"
         )
     allowed: dict[str, set[str]] = {}
     for column, values in allowed_raw.items():
