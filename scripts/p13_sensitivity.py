@@ -169,6 +169,7 @@ def main() -> int:
         noninferiority_margin=float(common["noninferiority_relative_ap_margin"]),
         support_fraction_minimum=float(common["support_fraction_min"]),
         support_bounds=support_bounds,
+        support_crossfit_folds=int(domain_config["support_crossfit_folds"]),
         minimum_domains=int(domain_config["minimum_domains"]),
         evaluation_target_id=primary_target_id,
         columns=columns,
