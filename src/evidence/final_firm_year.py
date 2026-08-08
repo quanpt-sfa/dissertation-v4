@@ -237,6 +237,7 @@ def build_wide_s3_records(
     negative_count = 0
     unknown_count = 0
     opportunity_count = 0
+    undetermined_observed_count = 0
     opportunity_by_endpoint = {logical_id: 0 for logical_id in logical_by_id}
     decision_map: dict[tuple[str, str, int], dict[str, object]] = {}
 
@@ -257,49 +258,48 @@ def build_wide_s3_records(
                 observation_opportunity,
             )
             raw_outcome = _optional_bool(raw.get(binding["outcome_semantic"]))
-            if effective_opportunity is True:
-                if raw_outcome is None:
-                    raise ValueError(
-                        f"complete S3 opportunity has missing endpoint for "
-                        f"{(firm_id, fiscal_year, logical_id)}"
-                    )
-                outcome = raw_outcome
-                opportunity_count += 1
-                opportunity_by_endpoint[logical_id] += 1
-            else:
-                if raw_outcome is True:
-                    raise ValueError(
-                        f"positive S3 endpoint lacks observation opportunity for "
-                        f"{(firm_id, fiscal_year, logical_id)}"
-                    )
-                # A stored zero outside an observed opportunity remains unknown.
-                outcome = None
-
             provenance = _provenance_meta(
                 raw.get(binding["provenance_semantic"]),
                 f"{logical_id} provenance",
             )
+
+            if effective_opportunity is True:
+                opportunity_count += 1
+                opportunity_by_endpoint[logical_id] += 1
+
+            outcome, reason_code = _resolve_wide_s3_outcome(
+                effective_opportunity=effective_opportunity,
+                raw_outcome=raw_outcome,
+                has_provenance=provenance.canonical_json is not None,
+                context=(firm_id, fiscal_year, logical_id),
+            )
+            if reason_code == "S3_ENDPOINT_UNDETERMINED_WITH_OBSERVED_PROVENANCE":
+                undetermined_observed_count += 1
+
             if outcome is True and provenance.canonical_json is None:
                 raise ValueError(
                     f"positive S3 endpoint requires provenance for "
                     f"{(firm_id, fiscal_year, logical_id)}"
                 )
             if outcome is not True and provenance.canonical_json is not None:
-                # Provenance may document coverage, but it must not imply a positive endpoint.
+                # Provenance may document coverage or an observed decision whose
+                # narrower endpoint remains undetermined. It never implies a zero.
                 pass
 
             if outcome is True:
                 positive_count += 1
-                reason_code = "S3_PUBLIC_ENDPOINT_POSITIVE"
             elif outcome is False:
                 negative_count += 1
-                reason_code = "S3_COMPLETE_SOURCE_YEAR_ENDPOINT_ZERO"
             else:
                 unknown_count += 1
-                reason_code = "S3_SOURCE_OR_OBSERVATION_OPPORTUNITY_UNKNOWN"
 
+            retain_decision_metadata = outcome is True or (
+                outcome is None
+                and effective_opportunity is True
+                and provenance.canonical_json is not None
+            )
             document_ids = list(provenance.document_ids)
-            if outcome is True and not document_ids:
+            if retain_decision_metadata and not document_ids:
                 assert provenance.canonical_json is not None
                 document_ids = [_derived_provenance_key(provenance.canonical_json)]
             first_date = min(provenance.dates) if provenance.dates else None
@@ -312,7 +312,7 @@ def build_wide_s3_records(
                     channel_id=source.channel_id,
                     firm_id=firm_id,
                     fiscal_year=fiscal_year,
-                    availability_date=first_date if fully_observed_positive else None,
+                    availability_date=first_date if retain_decision_metadata else None,
                     outcome=outcome,
                     event_id=None,
                     event_cluster_id=None,
@@ -341,7 +341,7 @@ def build_wide_s3_records(
                     duplicate_representative_rule=str(config["duplicate_representative_rule"]),
                     sanction_year=fiscal_year + 1,
                     target_fiscal_year=fiscal_year,
-                    decision_count=len(document_ids) if fully_observed_positive else 0,
+                    decision_count=len(document_ids) if retain_decision_metadata else 0,
                     document_ids=json.dumps(document_ids, ensure_ascii=False),
                     first_label_known_date=first_date,
                     last_label_known_date=last_date,
@@ -413,6 +413,7 @@ def build_wide_s3_records(
             "positive_count": positive_count,
             "explicit_endpoint_zero_count": negative_count,
             "unknown_count": unknown_count,
+            "undetermined_endpoint_with_observed_opportunity_count": undetermined_observed_count,
             "stored_zero_without_opportunity_is_unknown": True,
             "missing_is_negative": False,
             "high_specificity_assumed": False,
@@ -570,6 +571,39 @@ def _effective_opportunity(
     if source_opportunity is True and observation_opportunity is True:
         return True
     return None
+
+
+def _resolve_wide_s3_outcome(
+    *,
+    effective_opportunity: bool | None,
+    raw_outcome: bool | None,
+    has_provenance: bool,
+    context: tuple[str, int, str],
+) -> tuple[bool | None, str]:
+    """Preserve determination uncertainty separately from opportunity.
+
+    The canonical S3 taxonomy permits a complete source-year observation to
+    remain unknown for a narrower endpoint when a public decision cannot be
+    mapped to that endpoint. Such rows must retain provenance and must never be
+    coerced to an observed zero. Missing outcomes without provenance remain a
+    fail-closed data-contract violation.
+    """
+
+    if effective_opportunity is True:
+        if raw_outcome is True:
+            return True, "S3_PUBLIC_ENDPOINT_POSITIVE"
+        if raw_outcome is False:
+            return False, "S3_COMPLETE_SOURCE_YEAR_ENDPOINT_ZERO"
+        if not has_provenance:
+            raise ValueError(
+                f"observed S3 opportunity has missing endpoint without provenance for {context}"
+            )
+        return None, "S3_ENDPOINT_UNDETERMINED_WITH_OBSERVED_PROVENANCE"
+
+    if raw_outcome is True:
+        raise ValueError(f"positive S3 endpoint lacks observation opportunity for {context}")
+    # A stored zero outside an observed opportunity remains unknown.
+    return None, "S3_SOURCE_OR_OBSERVATION_OPPORTUNITY_UNKNOWN"
 
 
 def _provenance_meta(value: object, context: str) -> _ProvenanceMeta:
