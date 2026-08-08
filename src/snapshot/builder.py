@@ -10,10 +10,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
+import pandas as pd
+
 from core.path_policy import resolve_relative_path
 
 from .inspector import file_sha256, inspect_file, resolve_semantics
 from .models import SourceCatalog, SourceProfile
+
+_EMBEDDED_PROVENANCE_INPUT = "data/source/vn_pipeline_final_firm_year_2015_2025.parquet"
+_UNAVAILABLE_DERIVED_METADATA = "UNAVAILABLE_NOT_RETAINED_IN_DERIVED_INPUT"
+_EMBEDDED_LINEAGE_COLUMNS = (
+    "source_provenance_json",
+    "source_protocol_hash",
+    "source_run_id",
+    "source_unified_population_sha256",
+)
 
 
 def _mapping(value: object, context: str) -> dict[str, Any]:
@@ -115,13 +126,29 @@ def _load_extract_provenance(registry: dict[str, object], raw_root: Path) -> dic
         context="data source provenance manifest",
     )
     required = typed.get("required") is True
-    if not path.is_file():
-        if required:
-            raise FileNotFoundError(f"required extract provenance manifest is missing: {path}")
-        return {}
-    raw: object = json.loads(path.read_text(encoding="utf-8"))
-    provenance = _mapping(raw, "extract provenance")
-    raw_fields = typed.get("required_fields")
+    if path.is_file():
+        raw: object = json.loads(path.read_text(encoding="utf-8"))
+        provenance = _mapping(raw, "extract provenance")
+        return _validate_extract_provenance(provenance, typed)
+
+    embedded = _load_embedded_input_provenance(raw_root)
+    if embedded is not None:
+        return _validate_extract_provenance(embedded, typed)
+
+    if required:
+        raise FileNotFoundError(
+            "required provenance evidence is unavailable: external manifest is missing "
+            f"at {path} and {_EMBEDDED_PROVENANCE_INPUT} does not provide the locked "
+            "embedded lineage contract"
+        )
+    return {}
+
+
+def _validate_extract_provenance(
+    provenance: dict[str, Any],
+    contract: dict[str, object],
+) -> dict[str, object]:
+    raw_fields = contract.get("required_fields")
     if not isinstance(raw_fields, list) or not all(
         isinstance(value, str) and value for value in cast(list[object], raw_fields)
     ):
@@ -135,6 +162,75 @@ def _load_extract_provenance(registry: dict[str, object], raw_root: Path) -> dic
     if missing:
         raise ValueError(f"extract provenance is missing required fields: {missing}")
     return {str(key): value for key, value in provenance.items()}
+
+
+def _load_embedded_input_provenance(raw_root: Path) -> dict[str, Any] | None:
+    input_path = resolve_relative_path(
+        raw_root,
+        _EMBEDDED_PROVENANCE_INPUT,
+        context="embedded provenance input",
+    )
+    if not input_path.is_file():
+        return None
+
+    frame = pd.read_parquet(input_path)
+    available = {str(column) for column in frame.columns}
+    if "source_provenance_json" not in available:
+        return None
+
+    columns = [column for column in _EMBEDDED_LINEAGE_COLUMNS if column in available]
+    embedded_text = _single_nonblank_value(frame, "source_provenance_json", required=True)
+    if embedded_text is None:
+        return None
+
+    raw_embedded: object = json.loads(embedded_text)
+    embedded = _mapping(raw_embedded, "embedded source provenance")
+
+    provenance: dict[str, Any] = {
+        "vendor": _UNAVAILABLE_DERIVED_METADATA,
+        "vendor_product": _UNAVAILABLE_DERIVED_METADATA,
+        "pull_date": _UNAVAILABLE_DERIVED_METADATA,
+        "vendor_version": _UNAVAILABLE_DERIVED_METADATA,
+        "extract_query": _UNAVAILABLE_DERIVED_METADATA,
+        "revision_policy": _UNAVAILABLE_DERIVED_METADATA,
+        "point_in_time_vintages_available": False,
+        "provenance_origin": "embedded_derived_input_lineage",
+        "vendor_metadata_status": "not_retained_in_derived_input",
+        "derived_input_relative_path": _EMBEDDED_PROVENANCE_INPUT,
+        "derived_input_sha256": file_sha256(input_path),
+        "embedded_source_provenance": {str(key): value for key, value in embedded.items()},
+    }
+
+    for column in _EMBEDDED_LINEAGE_COLUMNS[1:]:
+        if column not in columns:
+            continue
+        value = _single_nonblank_value(frame, column, required=False)
+        if value is not None:
+            provenance[column] = value
+
+    return provenance
+
+
+def _single_nonblank_value(
+    frame: pd.DataFrame,
+    column: str,
+    *,
+    required: bool,
+) -> str | None:
+    raw_values = cast(list[object], frame[column].tolist())
+    values: set[str] = {
+        str(value).strip() for value in raw_values if value is not None and str(value).strip()
+    }
+    if not values:
+        if required:
+            raise ValueError(f"embedded provenance column={column}: no nonblank value")
+        return None
+    if len(values) != 1:
+        raise ValueError(
+            f"embedded provenance column={column}: expected one immutable value, "
+            f"found {len(values)}"
+        )
+    return next(iter(values))
 
 
 def write_snapshot(path: Path, snapshot: dict[str, object]) -> None:
