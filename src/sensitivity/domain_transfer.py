@@ -19,7 +19,6 @@ from core.semantic_keys import (
     OUTCOME,
     OUTER_FOLD,
     PREDICTION,
-    TARGET_ID,
     WEIGHT,
 )
 from modeling.service import feature_groups, fit_fold_models
@@ -48,10 +47,10 @@ def candidate_domain_transfer(
     """Refit each confirmatory learner outside a held board and test on that board.
 
     The held domain is excluded from model fitting and temporal tuning. Domain
-    support is evaluated without outcomes by a logistic domain-membership model;
-    the reported support fraction is the share of held-domain test rows whose
+    support is evaluated without outcomes by a balanced logistic domain-membership
+    model. The support fraction is the share of held-domain test rows whose
     estimated held-domain propensity lies inside the locked support bounds.
-    Domain refits intentionally use unit weights so no propensity model fitted on
+    Domain refits intentionally use unit weights so no weighting model fitted on
     held-domain development rows can leak information into the transport refit.
     """
 
@@ -70,8 +69,6 @@ def candidate_domain_transfer(
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
     outcome = columns[OUTCOME]
-    learner_column = columns[LEARNER_ID]
-    prediction_column = columns[PREDICTION]
     weight_column = columns[WEIGHT]
 
     groups = feature_groups(feature_registry)
@@ -149,8 +146,6 @@ def candidate_domain_transfer(
                 fit_reason: str | None = None
                 if development.empty:
                     fit_reason = "NO_OTHER_DOMAIN_DEVELOPMENT_ROWS"
-                elif development[outcome].nunique() == 1 if outcome in development.columns else False:
-                    fit_reason = "DEVELOPMENT_OUTCOME_CLASS_UNAVAILABLE"
                 else:
                     restricted_panel = pd.concat([development, held_test], ignore_index=True)
                     unit_weights = development.loc[:, [firm, year]].copy()
@@ -306,7 +301,7 @@ def candidate_domain_transfer(
         "minimum_domains": minimum_domains,
         "expected_scenario_count": expected_count,
         "scenario_unit": "domain_level_x_outer_fold",
-        "support_method": "logistic_domain_propensity_held_test_fraction",
+        "support_method": "balanced_logistic_domain_propensity_held_test_fraction",
         "support_bounds": [lower, upper],
         "support_fraction_minimum": support_fraction_minimum,
         "support_uses_outcomes": False,
@@ -342,13 +337,17 @@ def _held_test_propensity_support(
     lower: float,
     upper: float,
 ) -> dict[str, object]:
+    method = "balanced_logistic_domain_propensity_held_test_fraction"
     if development.empty or held_test.empty:
         return {
-            "method": "logistic_domain_propensity_held_test_fraction",
+            "method": method,
             "support_fraction": None,
             "reason_code": "DOMAIN_SUPPORT_SAMPLE_UNAVAILABLE",
         }
-    missing = sorted(set(feature_ids) - set(development.columns) - set(held_test.columns))
+    missing = sorted(
+        (set(feature_ids) - set(development.columns))
+        | (set(feature_ids) - set(held_test.columns))
+    )
     if missing:
         raise ValueError(f"P13 support features are absent: {missing}")
     combined = pd.concat(
@@ -361,7 +360,7 @@ def _held_test_propensity_support(
     labels = combined.pop("_held_domain").astype(int)
     if labels.nunique() < 2:
         return {
-            "method": "logistic_domain_propensity_held_test_fraction",
+            "method": method,
             "support_fraction": None,
             "reason_code": "DOMAIN_SUPPORT_CLASSES_UNAVAILABLE",
         }
@@ -369,7 +368,15 @@ def _held_test_propensity_support(
         [
             ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
-            ("model", LogisticRegression(C=1.0, solver="lbfgs", max_iter=2000)),
+            (
+                "model",
+                LogisticRegression(
+                    C=1.0,
+                    solver="lbfgs",
+                    max_iter=2000,
+                    class_weight="balanced",
+                ),
+            ),
         ]
     )
     try:
@@ -379,7 +386,7 @@ def _held_test_propensity_support(
         )[:, 1]
     except ValueError:
         return {
-            "method": "logistic_domain_propensity_held_test_fraction",
+            "method": method,
             "support_fraction": None,
             "reason_code": "DOMAIN_PROPENSITY_UNESTIMABLE",
         }
@@ -387,7 +394,7 @@ def _held_test_propensity_support(
         held_probabilities <= upper
     )
     return {
-        "method": "logistic_domain_propensity_held_test_fraction",
+        "method": method,
         "support_fraction": float(np.mean(supported)) if len(supported) else None,
         "reason_code": None,
         "held_propensity_min": float(np.min(held_probabilities)),
