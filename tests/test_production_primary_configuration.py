@@ -62,6 +62,32 @@ def test_production_primary_target_resolves_to_l1_annual() -> None:
     assert require_primary_target(measurement, "TEST") == "L1_ANNUAL"
 
 
+def test_p13_exchange_domain_methodology_is_locked() -> None:
+    registry = _registry()
+    evaluation = cast(dict[str, Any], registry["evaluation"])
+    domain = cast(dict[str, Any], evaluation["domain_transfer"])
+    bindings = cast(list[dict[str, Any]], domain["bindings"])
+    gate2 = cast(dict[str, Any], evaluation["gate2"])
+
+    assert bindings == [
+        {
+            "domain_id": "exchange_or_board",
+            "column": "exchange_or_board",
+            "source_field_semantic": "exchange_at_fye",
+            "allowed_levels": ["HOSE", "HNX"],
+        }
+    ]
+    assert domain["time_basis"] == "fiscal_year_end"
+    assert domain["migration_policy"] == "row_level_board_at_fiscal_year_end"
+    assert domain["support_method"] == (
+        "cross_fitted_balanced_logistic_domain_score_held_test_fraction"
+    )
+    assert domain["support_crossfit_folds"] == 5
+    assert domain["support_crossfit_group"] == "firm_id"
+    assert domain["candidate_specific"] is True
+    assert len(bindings[0]["allowed_levels"]) * int(gate2["fold_count"]) == 8
+
+
 def test_s1_materiality_rules_are_locked_in_registry() -> None:
     profile, logical_sources = _s1_catalog_configuration()
     evidence = cast(dict[str, Any], profile["evidence_mapping"])
