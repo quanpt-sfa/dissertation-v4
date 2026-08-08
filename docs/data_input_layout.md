@@ -2,19 +2,27 @@
 
 ## Hợp đồng vật lý
 
-Production sử dụng **một file Parquet cho modeling** và **một CSV tách biệt cho sealed external validation**:
+Production tối thiểu sử dụng **một file Parquet cho modeling** và **một CSV tách biệt cho sealed external validation**:
 
 ```text
 <RAW_ROOT>/
-|-- extract_provenance.json
 `-- data/
     `-- source/
         |-- vn_pipeline_final_firm_year_2015_2025.parquet
         `-- known_case_registry.csv
 ```
 
-`extract_provenance.json` là manifest nguồn, không phải dataset phân tích. `--raw-root` và biến
-`DISSERTATION_RAW_ROOT` phải cùng trỏ tới `<RAW_ROOT>`.
+`--raw-root` và biến `DISSERTATION_RAW_ROOT` phải cùng trỏ tới `<RAW_ROOT>`.
+
+Một manifest vendor-level `extract_provenance.json` có thể được đặt trực tiếp dưới `<RAW_ROOT>`, nhưng
+không còn là file phải copy thủ công để một production bundle đã materialize có thể chạy. Nếu manifest
+ngoài tồn tại, snapshot dùng nó và kiểm tra đầy đủ các trường đã khóa. Nếu manifest ngoài không tồn tại,
+snapshot yêu cầu final Parquet phải chứa lineage nhúng duy nhất, không rỗng trong
+`source_provenance_json`; pipeline khóa lineage đó cùng SHA-256 của final input và ghi rõ vendor-level
+metadata là `UNAVAILABLE_NOT_RETAINED_IN_DERIVED_INPUT`. Pipeline không tự suy diễn hoặc bịa vendor,
+pull date, query hay revision policy đã không được giữ lại trong derived input.
+
+Nếu cả manifest ngoài lẫn embedded lineage đều không có, snapshot vẫn fail-closed trước P00.
 
 Ba source ID phục vụ measurement và modeling cùng resolve tới Parquet và cùng một SHA-256:
 
@@ -61,7 +69,16 @@ prediction_time
 source_snapshot_hash
 exchange_or_board
 industry_code
+source_provenance_json
+source_protocol_hash
+source_run_id
+source_unified_population_sha256
 ```
+
+`source_provenance_json` là lineage của derived production input. Nó không được diễn giải lại thành
+vendor-level extract metadata. Khi `extract_provenance.json` không có, snapshot chỉ dùng embedded
+lineage này để chứng minh nguồn build và khóa provenance ở mức derived input; các vendor fields không
+được giữ lại sẽ được ghi rõ là unavailable.
 
 `exchange_at_fye` là tên trường ở supplemental unified source của data-build job; nó không phải tên
 cột vật lý cuối cùng. Builder materialize trường này thành `exchange_or_board` trước khi publish final
@@ -161,7 +178,8 @@ tạo semantic ambiguity.
 
 ## `extract_provenance.json`
 
-Manifest phải nằm trực tiếp dưới `<RAW_ROOT>` và có đủ:
+Manifest vendor-level là nguồn provenance ưu tiên khi có sẵn. Nó nằm trực tiếp dưới `<RAW_ROOT>` và
+có đủ:
 
 ```json
 {
@@ -175,7 +193,16 @@ Manifest phải nằm trực tiếp dưới `<RAW_ROOT>` và có đủ:
 }
 ```
 
-Không ghi password, connection string hoặc secret vào manifest.
+Nếu manifest này không được chuyển sang máy mới, snapshot không yêu cầu người chạy tái tạo hoặc đoán
+metadata. Thay vào đó, final Parquet phải cung cấp embedded derived-input lineage. Snapshot ghi:
+
+- `provenance_origin = embedded_derived_input_lineage`;
+- SHA-256 của final Parquet;
+- `source_protocol_hash`, `source_run_id`, `source_unified_population_sha256` nếu có;
+- toàn bộ `source_provenance_json` đã nhúng;
+- trạng thái vendor metadata là không được giữ lại trong derived input.
+
+Không ghi password, connection string hoặc secret vào manifest hay embedded lineage.
 
 ## Trách nhiệm của data-build và case-review jobs
 
@@ -205,7 +232,8 @@ Data-build job phải fail khi:
 - feature crosswalk chưa được phê duyệt;
 - missing evidence bị chuyển thành negative;
 - S3 endpoint không nhất quán với source opportunity;
-- row provenance hoặc source snapshot hash bị thiếu.
+- row provenance hoặc source snapshot hash bị thiếu;
+- `source_provenance_json` không đồng nhất trong final input.
 
 Case-review job phải fail khi role hoặc inclusion flags không đúng external-validation contract.
 Không job nào được merge known-case identifiers vào final modeling Parquet.
@@ -214,37 +242,40 @@ Không job nào được merge known-case identifiers vào final modeling Parque
 
 - Final Parquet và known-case registry đều bất biến trong một run và bị khóa SHA-256 tại P00.
 - Ba semantic measurement views phải cùng trỏ tới một relative Parquet path và cùng hash.
+- External manifest, nếu có, được ưu tiên; nếu không có thì embedded lineage phải duy nhất và được khóa
+  cùng final input hash.
 - Known-case rows chỉ được diễn giải tại P15; các stage trước chỉ được dùng metadata audit đã khóa.
-- Đổi bytes, schema, semantic binding, feature set, evidence construction hoặc known-case registry tạo run mới.
+- Đổi bytes, schema, semantic binding, feature set, evidence construction, embedded lineage hoặc
+  known-case registry tạo run mới.
 - Artifact chính thức nằm trong `artifacts/runs/<run-id>/` và không vào Git.
 - `--resume` chỉ hợp lệ khi code, config, snapshot và cả hai physical inputs không đổi.
 
 ## Chuẩn bị raw root và chạy
 
-Chạy từ root repo. Ví dụ dưới đây đặt raw input ở thư mục ngang cấp repo và artifact
-bên dưới repo; không có drive hoặc user directory nào được ghi cứng:
+Nếu `data/source` nằm ngay trong repo như production bundle hiện hành, không cần tạo một raw-root khác
+hoặc copy manifest thủ công. Chạy từ root repo:
 
 ```powershell
 $projectRoot = (Resolve-Path ".").Path
-$rawRoot = (Resolve-Path (Join-Path $projectRoot "..\final-input")).Path
-$outputRoot = Join-Path $projectRoot "artifacts\runs"
-$registrySource = Join-Path $projectRoot "data\source\known_case_registry.csv"
-$registryTarget = Join-Path $rawRoot "data\source\known_case_registry.csv"
-
-New-Item -ItemType Directory -Path (Split-Path $registryTarget) -Force | Out-Null
-Copy-Item $registrySource $registryTarget -Force
+$workspaceRoot = Split-Path $projectRoot -Parent
+$rawRoot = $projectRoot
+$outputRoot = Join-Path $workspaceRoot "dissertation-artifacts\runs"
+$runId = "full-pipeline-" + (Get-Date -Format "yyyyMMdd-HHmmss")
 
 uv run python scripts/run_pipeline.py `
-  --run-id final-firm-year-2015-2025-v2 `
+  --run-id $runId `
   --raw-root $rawRoot `
   --output-root $outputRoot `
   --through P17 `
-  --workers 12
+  --workers 4
 ```
 
-Trước khi chạy, cả hai file sau phải tồn tại tương đối dưới raw root:
+Trước khi chạy, hai physical inputs sau phải tồn tại tương đối dưới raw root:
 
 ```text
 <RAW_ROOT>/data/source/vn_pipeline_final_firm_year_2015_2025.parquet
 <RAW_ROOT>/data/source/known_case_registry.csv
 ```
+
+Nếu final Parquet không có embedded lineage, khi đó `extract_provenance.json` trở lại thành bắt buộc và
+snapshot sẽ dừng trước P00 thay vì tạo provenance giả.
