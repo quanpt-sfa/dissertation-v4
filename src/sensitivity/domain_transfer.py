@@ -139,7 +139,9 @@ def candidate_domain_transfer(
                     validate="one_to_one",
                 )
                 observed_test = test_outcomes.dropna(subset=[outcome]).copy()
-                positives = int(observed_test[outcome].astype(bool).sum()) if len(observed_test) else 0
+                positives = (
+                    int(observed_test[outcome].astype(bool).sum()) if len(observed_test) else 0
+                )
                 negatives = int(len(observed_test) - positives)
 
                 fit = None
@@ -308,8 +310,12 @@ def candidate_domain_transfer(
         "weighting_mode": "unit_weight_transport_refit",
         "candidate_results": candidate_results,
         "domains": all_rows,
-        "robust_scenario_fraction": min(summary_fractions) if all_complete and summary_fractions else None,
-        "leave_one_domain_out_refit_executed": any(row["refit_executed"] is True for row in all_rows),
+        "robust_scenario_fraction": min(summary_fractions)
+        if all_complete and summary_fractions
+        else None,
+        "leave_one_domain_out_refit_executed": any(
+            row["refit_executed"] is True for row in all_rows
+        ),
     }
 
 
@@ -345,8 +351,7 @@ def _held_test_propensity_support(
             "reason_code": "DOMAIN_SUPPORT_SAMPLE_UNAVAILABLE",
         }
     missing = sorted(
-        (set(feature_ids) - set(development.columns))
-        | (set(feature_ids) - set(held_test.columns))
+        (set(feature_ids) - set(development.columns)) | (set(feature_ids) - set(held_test.columns))
     )
     if missing:
         raise ValueError(f"P13 support features are absent: {missing}")
@@ -390,8 +395,10 @@ def _held_test_propensity_support(
             "support_fraction": None,
             "reason_code": "DOMAIN_PROPENSITY_UNESTIMABLE",
         }
-    supported = np.isfinite(held_probabilities) & (held_probabilities >= lower) & (
-        held_probabilities <= upper
+    supported = (
+        np.isfinite(held_probabilities)
+        & (held_probabilities >= lower)
+        & (held_probabilities <= upper)
     )
     return {
         "method": method,
