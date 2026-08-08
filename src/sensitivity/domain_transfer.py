@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -39,6 +40,7 @@ def candidate_domain_transfer(
     noninferiority_margin: float,
     support_fraction_minimum: float,
     support_bounds: tuple[float, float],
+    support_crossfit_folds: int,
     minimum_domains: int,
     evaluation_target_id: str,
     columns: dict[str, str],
@@ -47,11 +49,12 @@ def candidate_domain_transfer(
     """Refit each confirmatory learner outside a held board and test on that board.
 
     The held domain is excluded from model fitting and temporal tuning. Domain
-    support is evaluated without outcomes by a balanced logistic domain-membership
-    model. The support fraction is the share of held-domain test rows whose
-    estimated held-domain propensity lies inside the locked support bounds.
-    Domain refits intentionally use unit weights so no weighting model fitted on
-    held-domain development rows can leak information into the transport refit.
+    support is evaluated without outcomes using cross-fitted balanced logistic
+    domain-membership scores grouped by firm. The support fraction is the share
+    of held-domain test rows whose out-of-fold domain score lies inside the
+    locked support bounds. Domain refits intentionally use unit weights so no
+    weighting model fitted on held-domain development rows can leak information
+    into the transport refit.
     """
 
     bindings = _normalize_bindings(domain_bindings)
@@ -63,6 +66,8 @@ def candidate_domain_transfer(
         raise ValueError("P13 domain support bounds must satisfy 0 <= lower < upper <= 1")
     if not 0.0 <= support_fraction_minimum <= 1.0:
         raise ValueError("P13 domain support minimum must be in [0, 1]")
+    if support_crossfit_folds < 2:
+        raise ValueError("P13 domain support cross-fit folds must be at least two")
     if minimum_domains < 2:
         raise ValueError("P13 domain transfer requires at least two domains")
 
@@ -125,12 +130,20 @@ def candidate_domain_transfer(
                     & feature_panel[domain_column].notna()
                     & ~feature_panel[domain_column].astype("string").eq(level)
                 ].copy()
-                support = _held_test_propensity_support(
+                seed = seed_by_scenario.get((str(outer_year), domain_id, level))
+                if seed is None:
+                    raise ValueError(
+                        f"P13 domain seed missing for fold={outer_year}, domain={domain_id}, level={level}"
+                    )
+                support = _held_test_domain_score_support(
                     development=development,
                     held_test=held_test,
                     feature_ids=full_features,
+                    firm_column=firm,
                     lower=lower,
                     upper=upper,
+                    crossfit_folds=support_crossfit_folds,
+                    random_state=seed,
                 )
                 test_outcomes = held_test.loc[:, [firm, year]].merge(
                     observed_outcomes,
@@ -152,11 +165,6 @@ def candidate_domain_transfer(
                     restricted_panel = pd.concat([development, held_test], ignore_index=True)
                     unit_weights = development.loc[:, [firm, year]].copy()
                     unit_weights[weight_column] = 1.0
-                    seed = seed_by_scenario.get((str(outer_year), domain_id, level))
-                    if seed is None:
-                        raise ValueError(
-                            f"P13 domain seed missing for fold={outer_year}, domain={domain_id}, level={level}"
-                        )
                     fit = fit_fold_models(
                         feature_panel=restricted_panel,
                         feature_registry=feature_registry,
@@ -250,6 +258,7 @@ def candidate_domain_transfer(
                             "common_support_fraction": support_fraction,
                             "support_method": support.get("method"),
                             "support_bounds": [lower, upper],
+                            "support_crossfit_folds": support.get("crossfit_folds_used"),
                             "candidate_ap": candidate_ap,
                             "reference_ap": reference_ap,
                             "estimable": estimable,
@@ -310,10 +319,12 @@ def candidate_domain_transfer(
         "minimum_domains": minimum_domains,
         "expected_scenario_count": expected_count,
         "scenario_unit": "domain_level_x_outer_fold",
-        "support_method": "balanced_logistic_domain_propensity_held_test_fraction",
+        "support_method": "cross_fitted_balanced_logistic_domain_score_held_test_fraction",
         "support_bounds": [lower, upper],
         "support_fraction_minimum": support_fraction_minimum,
+        "support_crossfit_folds_requested": support_crossfit_folds,
         "support_uses_outcomes": False,
+        "support_score_interpretation": "balanced_domain_membership_score_not_causal_propensity",
         "weighting_mode": "unit_weight_transport_refit",
         "candidate_results": candidate_results,
         "domains": all_rows,
@@ -342,78 +353,144 @@ def _normalize_bindings(raw_bindings: list[dict[str, object]]) -> list[dict[str,
     return bindings
 
 
-def _held_test_propensity_support(
+def _held_test_domain_score_support(
     *,
     development: pd.DataFrame,
     held_test: pd.DataFrame,
     feature_ids: list[str],
+    firm_column: str,
     lower: float,
     upper: float,
+    crossfit_folds: int,
+    random_state: int,
 ) -> dict[str, object]:
-    method = "balanced_logistic_domain_propensity_held_test_fraction"
+    method = "cross_fitted_balanced_logistic_domain_score_held_test_fraction"
     if development.empty or held_test.empty:
         return {
             "method": method,
             "support_fraction": None,
             "reason_code": "DOMAIN_SUPPORT_SAMPLE_UNAVAILABLE",
         }
+    required = {firm_column, *feature_ids}
     missing = sorted(
-        (set(feature_ids) - set(development.columns)) | (set(feature_ids) - set(held_test.columns))
+        (required - set(development.columns)) | (required - set(held_test.columns))
     )
     if missing:
-        raise ValueError(f"P13 support features are absent: {missing}")
+        raise ValueError(f"P13 support fields are absent: {missing}")
+
     combined = pd.concat(
+        [development.loc[:, feature_ids], held_test.loc[:, feature_ids]],
+        ignore_index=True,
+    )
+    labels = pd.Series(
+        np.concatenate(
+            [
+                np.zeros(len(development), dtype=int),
+                np.ones(len(held_test), dtype=int),
+            ]
+        ),
+        dtype="int64",
+    )
+    groups = pd.concat(
         [
-            development.loc[:, feature_ids].assign(_held_domain=0),
-            held_test.loc[:, feature_ids].assign(_held_domain=1),
+            development[firm_column].astype("string"),
+            held_test[firm_column].astype("string"),
         ],
         ignore_index=True,
     )
-    labels = combined.pop("_held_domain").astype(int)
+    if groups.isna().any() or groups.astype(str).str.strip().eq("").any():
+        return {
+            "method": method,
+            "support_fraction": None,
+            "reason_code": "DOMAIN_SUPPORT_GROUP_ID_UNAVAILABLE",
+        }
     if labels.nunique() < 2:
         return {
             "method": method,
             "support_fraction": None,
             "reason_code": "DOMAIN_SUPPORT_CLASSES_UNAVAILABLE",
         }
-    estimator = Pipeline(
-        [
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-            (
-                "model",
-                LogisticRegression(
-                    C=1.0,
-                    solver="lbfgs",
-                    max_iter=2000,
-                    class_weight="balanced",
-                ),
-            ),
-        ]
+
+    held_groups = int(groups.loc[labels.eq(1)].nunique())
+    other_groups = int(groups.loc[labels.eq(0)].nunique())
+    splits = min(crossfit_folds, held_groups, other_groups)
+    if splits < 2:
+        return {
+            "method": method,
+            "support_fraction": None,
+            "reason_code": "DOMAIN_SUPPORT_GROUPS_UNAVAILABLE",
+            "held_group_count": held_groups,
+            "other_group_count": other_groups,
+        }
+
+    splitter = StratifiedGroupKFold(
+        n_splits=splits,
+        shuffle=True,
+        random_state=random_state,
     )
+    out_of_fold = np.full(len(combined), np.nan, dtype=float)
     try:
-        cast(Any, estimator).fit(combined, labels)
-        held_probabilities = np.asarray(
-            cast(Any, estimator).predict_proba(held_test.loc[:, feature_ids]), dtype=float
-        )[:, 1]
+        fold_iterator = splitter.split(combined, labels, groups)
+        for fold_index, (train_index, validation_index) in enumerate(fold_iterator):
+            training_labels = labels.iloc[train_index]
+            if training_labels.nunique() < 2:
+                return {
+                    "method": method,
+                    "support_fraction": None,
+                    "reason_code": "DOMAIN_PROPENSITY_TRAIN_CLASS_UNAVAILABLE",
+                    "crossfit_folds_used": splits,
+                }
+            estimator = Pipeline(
+                [
+                    ("imputer", SimpleImputer(strategy="median")),
+                    ("scaler", StandardScaler()),
+                    (
+                        "model",
+                        LogisticRegression(
+                            C=1.0,
+                            solver="lbfgs",
+                            max_iter=2000,
+                            class_weight="balanced",
+                            random_state=random_state + fold_index,
+                        ),
+                    ),
+                ]
+            )
+            cast(Any, estimator).fit(
+                combined.iloc[train_index],
+                training_labels,
+            )
+            out_of_fold[validation_index] = np.asarray(
+                cast(Any, estimator).predict_proba(combined.iloc[validation_index]),
+                dtype=float,
+            )[:, 1]
     except ValueError:
         return {
             "method": method,
             "support_fraction": None,
             "reason_code": "DOMAIN_PROPENSITY_UNESTIMABLE",
+            "crossfit_folds_used": splits,
         }
-    supported = (
-        np.isfinite(held_probabilities)
-        & (held_probabilities >= lower)
-        & (held_probabilities <= upper)
-    )
+
+    held_probabilities = out_of_fold[labels.to_numpy(dtype=bool)]
+    if len(held_probabilities) != len(held_test) or not np.isfinite(held_probabilities).all():
+        return {
+            "method": method,
+            "support_fraction": None,
+            "reason_code": "DOMAIN_PROPENSITY_OOF_INCOMPLETE",
+            "crossfit_folds_used": splits,
+        }
+    supported = (held_probabilities >= lower) & (held_probabilities <= upper)
     return {
         "method": method,
         "support_fraction": float(np.mean(supported)) if len(supported) else None,
         "reason_code": None,
-        "held_propensity_min": float(np.min(held_probabilities)),
-        "held_propensity_max": float(np.max(held_probabilities)),
-        "held_propensity_mean": float(np.mean(held_probabilities)),
+        "crossfit_folds_used": splits,
+        "held_group_count": held_groups,
+        "other_group_count": other_groups,
+        "held_domain_score_min": float(np.min(held_probabilities)),
+        "held_domain_score_max": float(np.max(held_probabilities)),
+        "held_domain_score_mean": float(np.mean(held_probabilities)),
     }
 
 
