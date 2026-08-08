@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -15,6 +16,7 @@ from core.artifact_store import dataframe_to_csv
 from core.pipeline import load_run, mapping, physical_columns, sequence
 from core.semantic_keys import FIRM_ID, FISCAL_YEAR, PREDICTION_TIME, TARGET_ID
 from features.diagnostics import build_feature_diagnostics
+from features.domain_metadata import restore_domain_metadata
 from features.panel_source import assemble_from_raw
 from features.reporting import build_raw_computation_decision_report
 from features.service import build_feature_panel
@@ -40,8 +42,21 @@ def main() -> int:
     definitions = [mapping(item, "features.registry item") for item in raw_registry]
     raw_intended = sequence(features.get("intended_registry", []), "features.intended_registry")
     intended = [mapping(item, "features.intended_registry item") for item in raw_intended]
+    evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
+    domain_config = mapping(evaluation.get("domain_transfer"), "evaluation.domain_transfer")
+    domain_bindings = [
+        mapping(item, "evaluation.domain_transfer.bindings item")
+        for item in sequence(
+            domain_config.get("bindings"),
+            "evaluation.domain_transfer.bindings",
+        )
+    ]
+    domain_columns = [str(binding["column"]) for binding in domain_bindings]
     if args.dry_run:
-        print(f"P07 dry-run: registered_features={len(definitions)}")
+        print(
+            f"P07 dry-run: registered_features={len(definitions)} "
+            f"domain_columns={domain_columns}"
+        )
         return 0
     panel = loaded.context.read("firm_year_panel", {})
     risk_sets = loaded.context.read("risk_sets", {})
@@ -92,6 +107,14 @@ def main() -> int:
             .keys()
         },
     )
+    restored_panel = restore_domain_metadata(
+        feature_panel=result.panel,
+        source_panel=store_result.panel,
+        domain_columns=domain_columns,
+        firm_column=columns[FIRM_ID],
+        year_column=columns[FISCAL_YEAR],
+    )
+    result = replace(result, panel=restored_panel)
     if args.validate_only:
         return 0
     diagnostics = build_feature_diagnostics(
@@ -103,6 +126,7 @@ def main() -> int:
     store_validation_report = {
         **store_result.validation_report,
         "stage_status": result.summary["status"],
+        "restored_domain_metadata_columns": domain_columns,
     }
     summary = {
         **result.summary,
