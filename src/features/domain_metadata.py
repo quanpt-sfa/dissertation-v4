@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import pandas as pd
 
@@ -14,8 +14,9 @@ def restore_domain_metadata(
     domain_columns: Sequence[str],
     firm_column: str,
     year_column: str,
+    allowed_values_by_column: Mapping[str, Sequence[str]] | None = None,
 ) -> pd.DataFrame:
-    """Restore configured domain columns after P07 feature-panel construction.
+    """Restore and validate configured domain metadata after P07 construction.
 
     Domain fields are metadata used only by post-outer transport analyses. They
     are keyed by the same firm-year spine, remain outside the feature registry,
@@ -32,6 +33,22 @@ def restore_domain_metadata(
         raise ValueError("P07 domain metadata columns must be unique")
     if not normalized:
         return feature_panel.copy()
+
+    allowed_raw = allowed_values_by_column or {}
+    unknown_allowed_columns = sorted(set(allowed_raw) - set(normalized))
+    if unknown_allowed_columns:
+        raise ValueError(
+            "P07 domain vocabulary was configured for unbound columns: "
+            f"{unknown_allowed_columns}"
+        )
+    allowed: dict[str, set[str]] = {}
+    for column, values in allowed_raw.items():
+        normalized_values = [str(value).strip() for value in values]
+        if any(not value for value in normalized_values) or not normalized_values:
+            raise ValueError(f"P07 domain column={column} requires non-empty allowed values")
+        if len(normalized_values) != len(set(normalized_values)):
+            raise ValueError(f"P07 domain column={column} allowed values must be unique")
+        allowed[column] = set(normalized_values)
 
     required = {firm_column, year_column, *normalized}
     missing = sorted(required - set(source_panel.columns))
@@ -61,4 +78,12 @@ def restore_domain_metadata(
                 f"P07 configured domain metadata column={column} is incomplete for "
                 f"{int(missing_values.sum())} feature-panel row(s)"
             )
+        if column in allowed:
+            observed = set(result[column].astype(str))
+            unexpected = sorted(observed - allowed[column])
+            if unexpected:
+                raise ValueError(
+                    f"P07 configured domain metadata column={column} contains values "
+                    f"outside the locked vocabulary: {unexpected}"
+                )
     return result
