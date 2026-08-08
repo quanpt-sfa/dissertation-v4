@@ -19,7 +19,10 @@ def restore_domain_metadata(
 
     Domain fields are metadata used only by post-outer transport analyses. They
     are keyed by the same firm-year spine, remain outside the feature registry,
-    and are never allowed to enter the predictor matrix implicitly.
+    and are never allowed to enter the predictor matrix implicitly. A configured
+    domain is required to be observed for every row that survives into the P07
+    feature panel so leave-one-domain-out refits do not silently change the
+    analysis population for reasons other than the held domain itself.
     """
 
     normalized = [str(column).strip() for column in domain_columns]
@@ -52,4 +55,10 @@ def restore_domain_metadata(
         raise ValueError("P07 domain metadata restoration changed the firm-year row count")
     for column in normalized:
         result[column] = result[column].astype("string")
+        missing_values = result[column].isna() | result[column].str.strip().eq("")
+        if missing_values.any():
+            raise ValueError(
+                f"P07 configured domain metadata column={column} is incomplete for "
+                f"{int(missing_values.sum())} feature-panel row(s)"
+            )
     return result
