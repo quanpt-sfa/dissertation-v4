@@ -34,19 +34,38 @@ def domain_transfer(
     outcomes: pd.DataFrame,
     feature_panel: pd.DataFrame,
     feature_registry: list[dict[str, object]],
+    domain_bindings: list[dict[str, object]],
     noninferiority_margin: float,
     support_fraction_minimum: float,
     evaluation_target_id: str,
     columns: dict[str, str],
 ) -> dict[str, object]:
-    bindings = [item for item in feature_registry if isinstance(item.get("domain_id"), str)]
+    bindings: list[dict[str, str]] = []
+    for raw in domain_bindings:
+        domain_id = raw.get("domain_id")
+        domain_column = raw.get("column")
+        if not isinstance(domain_id, str) or not domain_id.strip():
+            raise ValueError("P13 domain binding requires non-empty domain_id")
+        if not isinstance(domain_column, str) or not domain_column.strip():
+            raise ValueError(f"P13 domain={domain_id}: non-empty column is required")
+        bindings.append(
+            {
+                "domain_id": domain_id.strip(),
+                "column": domain_column.strip(),
+            }
+        )
     if not bindings:
         return {
             "status": "SKIPPED",
             "reason_code": "DOMAIN_BINDINGS_UNAVAILABLE",
             "domains": [],
             "robust_scenario_fraction": None,
+            "leave_one_domain_out_refit_executed": False,
         }
+    binding_keys = [(item["domain_id"], item["column"]) for item in bindings]
+    if len(binding_keys) != len(set(binding_keys)):
+        raise ValueError("P13 domain bindings must be unique by domain_id and column")
+
     firm = columns[FIRM_ID]
     year = columns[FISCAL_YEAR]
     outcome = columns[OUTCOME]
@@ -64,6 +83,27 @@ def domain_transfer(
             "robust_scenario_fraction": None,
             "leave_one_domain_out_refit_executed": False,
         }
+
+    predictor_ids = set(content) | set(observability)
+    domain_columns = {item["column"] for item in bindings}
+    overlap = sorted(domain_columns & predictor_ids)
+    if overlap:
+        raise ValueError(
+            "P13 domain metadata must not enter predictor blocks: "
+            f"{overlap}"
+        )
+    missing_domain_columns = sorted(domain_columns - set(feature_panel.columns))
+    if missing_domain_columns:
+        return {
+            "status": "SKIPPED",
+            "reason_code": "DOMAIN_COLUMN_UNAVAILABLE",
+            "domains": [],
+            "robust_scenario_fraction": None,
+            "leave_one_domain_out_refit_executed": False,
+            "configured_bindings": bindings,
+            "missing_domain_columns": missing_domain_columns,
+        }
+
     observed_outcomes = select_observed_target_outcomes(
         outcomes,
         target_id=evaluation_target_id,
@@ -80,17 +120,15 @@ def domain_transfer(
     rows: list[dict[str, object]] = []
     robust: list[bool] = []
     for binding in bindings:
-        feature_id = str(binding["feature_id"])
-        if feature_id not in feature_panel.columns:
-            raise ValueError(f"domain feature={feature_id}: absent from feature panel")
-        level_values = cast(list[object], data_base[feature_id].dropna().tolist())
+        domain_column = binding["column"]
+        level_values = cast(list[object], data_base[domain_column].dropna().tolist())
         for level in sorted(set(level_values), key=str):
             for outer_year in outer_years:
                 train: pd.DataFrame = data_base.loc[
-                    (data_base[year] < outer_year) & (data_base[feature_id] != level)
+                    (data_base[year] < outer_year) & (data_base[domain_column] != level)
                 ].dropna(subset=[outcome])
                 test: pd.DataFrame = data_base.loc[
-                    (data_base[year] == outer_year) & (data_base[feature_id] == level)
+                    (data_base[year] == outer_year) & (data_base[domain_column] == level)
                 ].dropna(subset=[outcome])
                 if train.empty or test.empty or train[outcome].nunique() < 2:
                     continue
@@ -114,6 +152,7 @@ def domain_transfer(
                 rows.append(
                     {
                         "domain_id": binding["domain_id"],
+                        "domain_column": domain_column,
                         "level": str(level),
                         OUTER_FOLD: str(outer_year),
                         "evaluation_target_id": evaluation_target_id,
@@ -132,6 +171,7 @@ def domain_transfer(
         "status": "PASS" if robust and domain_count >= 2 else "SKIPPED",
         "reason_code": None if robust and domain_count >= 2 else "INSUFFICIENT_DOMAIN_REFITS",
         "evaluation_target_id": evaluation_target_id,
+        "configured_bindings": bindings,
         "domains": rows,
         "robust_scenario_fraction": sum(robust) / len(robust) if robust else None,
         "leave_one_domain_out_refit_executed": bool(robust and domain_count >= 2),
