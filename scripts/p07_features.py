@@ -54,8 +54,7 @@ def main() -> int:
     domain_columns = [str(binding["column"]) for binding in domain_bindings]
     if args.dry_run:
         print(
-            f"P07 dry-run: registered_features={len(definitions)} "
-            f"domain_columns={domain_columns}"
+            f"P07 dry-run: registered_features={len(definitions)} domain_columns={domain_columns}"
         )
         return 0
     panel = loaded.context.read("firm_year_panel", {})
