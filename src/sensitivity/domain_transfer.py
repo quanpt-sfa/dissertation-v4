@@ -208,15 +208,22 @@ def candidate_domain_transfer(
                             else:
                                 reason = None
 
-                    support_fraction = support.get("support_fraction")
+                    support_fraction_raw = support.get("support_fraction")
+                    support_fraction = (
+                        float(support_fraction_raw)
+                        if isinstance(support_fraction_raw, (int, float))
+                        else None
+                    )
                     estimable = bool(
                         reason is None
-                        and isinstance(support_fraction, (int, float))
+                        and support_fraction is not None
                         and candidate_ap is not None
                         and reference_ap is not None
                     )
                     support_pass = bool(
-                        estimable and float(support_fraction) >= support_fraction_minimum
+                        estimable
+                        and support_fraction is not None
+                        and support_fraction >= support_fraction_minimum
                     )
                     noninferior = bool(
                         support_pass
@@ -289,11 +296,11 @@ def candidate_domain_transfer(
     all_complete = bool(candidate_results) and all(
         item["evidence_complete"] is True for item in candidate_results
     )
-    summary_fractions = [
-        float(item["robust_scenario_fraction"])
-        for item in candidate_results
-        if isinstance(item.get("robust_scenario_fraction"), (int, float))
-    ]
+    summary_fractions: list[float] = []
+    for item in candidate_results:
+        fraction_raw = item.get("robust_scenario_fraction")
+        if isinstance(fraction_raw, (int, float)):
+            summary_fractions.append(float(fraction_raw))
     return {
         "status": "PASS" if all_complete else "SKIPPED",
         "reason_code": None if all_complete else "INCOMPLETE_DOMAIN_TRANSFER_GRID",
