@@ -148,6 +148,7 @@ def build_feature_panel(
     operational: list[dict[str, object]] = []
     lineage_rows: list[dict[str, object]] = []
     availability_rows: list[dict[str, object]] = []
+    feature_columns: dict[str, pd.Series] = {}
     for definition in definitions:
         _validate_definition(definition)
         feature_id = str(definition["feature_id"])
@@ -160,7 +161,7 @@ def build_feature_panel(
                 )
             if not bool(definition.get("operational", False)):
                 raise ValueError(f"feature={feature_id}: locked feature must be operational")
-            panel[feature_id] = _coerce_feature(base[column], definition)
+            feature_columns[feature_id] = _coerce_feature(base[column], definition)
             operational.append(definition)
         availability_rows.append(
             {
@@ -175,6 +176,10 @@ def build_feature_panel(
             }
         )
         lineage_rows.extend(_lineage_rows(definition))
+
+    if feature_columns:
+        feature_frame = pd.DataFrame(feature_columns, index=panel.index)
+        panel = pd.concat([panel, feature_frame], axis=1)
 
     panel[firm] = panel[firm].astype("string")
     panel[year] = panel[year].astype("int16")
