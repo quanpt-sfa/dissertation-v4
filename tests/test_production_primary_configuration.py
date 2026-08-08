@@ -16,10 +16,7 @@ S1_PROFILE_ID = "financial_statement_core_long"
 
 
 def _registry() -> dict[str, Any]:
-    return cast(
-        dict[str, Any],
-        compile_registry(ROOT / "config" / "pipeline.yaml").registry,
-    )
+    return compile_registry(ROOT / "config" / "pipeline.yaml").registry
 
 
 def _s1_catalog_configuration() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
@@ -56,6 +53,26 @@ def _logical_s1_source(source_id: str) -> LogicalEvidenceSource:
     )
 
 
+def _adjustment_row(
+    *,
+    audit_status: str,
+    value: float,
+    source_ref: str,
+    canonical_item: str,
+) -> AdjustmentRow:
+    return AdjustmentRow(
+        firm_id="F1",
+        fiscal_year=2020,
+        canonical_item=canonical_item,
+        unit="VND",
+        statement_scope="consolidated",
+        statement_family="income_statement",
+        audit_status=audit_status,
+        value=value,
+        source_ref=source_ref,
+    )
+
+
 def test_production_primary_target_resolves_to_l1_annual() -> None:
     registry = _registry()
     measurement = cast(dict[str, Any], registry["measurement"])
@@ -82,6 +99,8 @@ def test_p13_exchange_domain_methodology_is_locked() -> None:
     assert domain["support_method"] == (
         "cross_fitted_balanced_logistic_domain_score_held_test_fraction"
     )
+    assert domain["support_score_bounds"] == [0.05, 0.95]
+    assert domain["support_fraction_minimum"] == 0.8
     assert domain["support_crossfit_folds"] == 5
     assert domain["support_crossfit_group"] == "firm_id"
     assert domain["candidate_specific"] is True
@@ -101,28 +120,41 @@ def test_s1_materiality_rules_are_locked_in_registry() -> None:
 def test_zero_floor_means_only_zero_denominator_is_invalid() -> None:
     source = _logical_s1_source("S1_profit_adjustment")
     anchor = {("F1", 2020): datetime(2021, 3, 31)}
-    common = {
-        "firm_id": "F1",
-        "fiscal_year": 2020,
-        "canonical_item": source.logical_config["canonical_item"],
-        "unit": "VND",
-        "statement_scope": "consolidated",
-        "statement_family": "income_statement",
-    }
+    canonical_item = str(source.logical_config["canonical_item"])
 
     valid = build_audit_adjustment_records(
         panel_anchors=anchor,
         rows=[
-            AdjustmentRow(audit_status="unaudited", value=120.0, source_ref="pre", **common),
-            AdjustmentRow(audit_status="audited", value=100.0, source_ref="post", **common),
+            _adjustment_row(
+                audit_status="unaudited",
+                value=120.0,
+                source_ref="pre",
+                canonical_item=canonical_item,
+            ),
+            _adjustment_row(
+                audit_status="audited",
+                value=100.0,
+                source_ref="post",
+                canonical_item=canonical_item,
+            ),
         ],
         sources=[source],
     ).records[0]
     zero = build_audit_adjustment_records(
         panel_anchors=anchor,
         rows=[
-            AdjustmentRow(audit_status="unaudited", value=100.0, source_ref="pre", **common),
-            AdjustmentRow(audit_status="audited", value=0.0, source_ref="post", **common),
+            _adjustment_row(
+                audit_status="unaudited",
+                value=100.0,
+                source_ref="pre",
+                canonical_item=canonical_item,
+            ),
+            _adjustment_row(
+                audit_status="audited",
+                value=0.0,
+                source_ref="post",
+                canonical_item=canonical_item,
+            ),
         ],
         sources=[source],
     ).records[0]
