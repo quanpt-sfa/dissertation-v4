@@ -23,6 +23,11 @@ evaluation:
     bindings:
     - domain_id: exchange_or_board
       column: exchange_or_board
+    minimum_domains: 2
+    scenario_unit: domain_level_x_outer_fold
+    support_method: logistic_domain_propensity_held_test_fraction
+    weighting_mode: unit_weight_transport_refit
+    candidate_specific: true
   gate2:
     simultaneous_interval_level: 0.95
     delta_ap_interval_lower_above_zero: true
