@@ -34,6 +34,8 @@ source_catalog:
         - fiscal_year
         availability_date:
         - prediction_time
+        exchange_or_board:
+        - exchange_or_board
         pat_unaudited:
         - fs_unaud_profit_after_tax
         pat_audited:
@@ -48,6 +50,7 @@ source_catalog:
       - firm_id
       - fiscal_year
       - availability_date
+      - exchange_or_board
       - pat_unaudited
       - pat_audited
       - revenue_unaudited

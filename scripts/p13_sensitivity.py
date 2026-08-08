@@ -15,13 +15,13 @@ import pandas as pd
 from core.fold_control import require_primary_target
 from core.pipeline import load_run, mapping, outer_fold_ids, physical_columns, sequence
 from core.rng import derive_seed
-from core.semantic_keys import OUTCOME, OUTER_FOLD, TARGET_ID
+from core.semantic_keys import FISCAL_YEAR, OUTCOME, OUTER_FOLD, TARGET_ID
 from identification.service import build_identification_summary
+from sensitivity.domain_transfer import candidate_domain_transfer
 from sensitivity.parallel_refits import parallel_source_exclusion_refits
 from sensitivity.service import (
     ablation_summary,
     censoring_sensitivity_summary,
-    domain_transfer,
     hierarchical_pi_status,
     source_sensitivity_summary,
 )
@@ -67,6 +67,9 @@ def main() -> int:
         evaluations.append(metric)
         if isinstance(prediction, pd.DataFrame):
             predictions.append(prediction)
+    if not predictions:
+        raise ValueError("P13 requires outer predictions for domain transfer")
+
     outcomes = loaded.context.read("sealed_outcome_store", {})
     panel = loaded.context.read("feature_panel", {})
     registry = sequence(loaded.context.read("feature_registry", {}), "feature registry")
@@ -95,24 +98,25 @@ def main() -> int:
         raise ValueError("P13 fold weights must be DataFrames")
     if not all(isinstance(value, pd.DataFrame) for value in (outcomes, panel, evidence_ledger)):
         raise ValueError("P13 panel inputs must be DataFrames")
+
     evaluation = mapping(loaded.registry.get("evaluation"), "evaluation")
     common = mapping(evaluation.get("gate_common"), "evaluation.gate_common")
-    domain = domain_transfer(
-        predictions=pd.concat(predictions, ignore_index=True),
-        outcomes=cast(pd.DataFrame, outcomes),
-        feature_panel=cast(pd.DataFrame, panel),
-        feature_registry=[mapping(item, "feature registry item") for item in registry],
-        noninferiority_margin=float(common["noninferiority_relative_ap_margin"]),
-        support_fraction_minimum=float(common["support_fraction_min"]),
-        evaluation_target_id=primary_target_id,
-        columns=columns,
+    domain_config = mapping(evaluation.get("domain_transfer"), "evaluation.domain_transfer")
+    domain_bindings = [
+        mapping(item, "evaluation.domain_transfer.bindings item")
+        for item in sequence(
+            domain_config.get("bindings"),
+            "evaluation.domain_transfer.bindings",
+        )
+    ]
+    support_bounds_raw = sequence(
+        domain_config.get("support_score_bounds"),
+        "evaluation.domain_transfer.support_score_bounds",
     )
-    loaded.context.write("domain_transfer_outputs", domain, {})
-    source_summary = source_sensitivity_summary(
-        cast(pd.DataFrame, evidence_ledger),
-        lag,
-        columns,
-    )
+    if len(support_bounds_raw) != 2:
+        raise ValueError("P13 domain transfer requires exactly two domain-score support bounds")
+    support_bounds = (float(support_bounds_raw[0]), float(support_bounds_raw[1]))
+
     learners = mapping(loaded.registry.get("learners"), "learners")
     learner_ids = [
         str(value) for value in sequence(learners.get("confirmatory"), "learners.confirmatory")
@@ -122,9 +126,90 @@ def main() -> int:
     missing_search_spaces = sorted(set(learner_ids) - set(search_spaces))
     if missing_search_spaces:
         raise RuntimeError(
-            "P13 source sensitivity requires the locked P11 tuning search spaces for "
-            f"{missing_search_spaces}"
+            f"P13 requires the locked P11 tuning search spaces for {missing_search_spaces}"
         )
+
+    panel_frame = cast(pd.DataFrame, panel)
+    year_column = columns[FISCAL_YEAR]
+    scenario_seeds: dict[tuple[str, str, str], int] = {}
+    for binding in domain_bindings:
+        domain_id = str(binding["domain_id"])
+        domain_column = str(binding["column"])
+        if domain_column not in panel_frame.columns:
+            continue
+        allowed_levels = [
+            str(value)
+            for value in sequence(
+                binding.get("allowed_levels"),
+                f"evaluation.domain_transfer.bindings.{domain_id}.allowed_levels",
+            )
+        ]
+        if len(allowed_levels) < int(domain_config["minimum_domains"]):
+            raise RuntimeError(
+                f"P13 domain={domain_id}: locked levels do not satisfy minimum_domains"
+            )
+        if len(allowed_levels) != len(set(allowed_levels)):
+            raise RuntimeError(f"P13 domain={domain_id}: locked levels must be unique")
+        observed_levels = {
+            str(value) for value in panel_frame[domain_column].dropna().astype("string").tolist()
+        }
+        unexpected_levels = sorted(observed_levels - set(allowed_levels))
+        if unexpected_levels:
+            raise RuntimeError(
+                f"P13 domain={domain_id}: observed levels outside locked vocabulary: "
+                f"{unexpected_levels}"
+            )
+        for fold_id in fold_ids:
+            fold_levels = {
+                str(value)
+                for value in panel_frame.loc[
+                    panel_frame[year_column].astype(int).eq(int(fold_id)),
+                    domain_column,
+                ]
+                .dropna()
+                .astype("string")
+                .tolist()
+            }
+            missing_levels = sorted(set(allowed_levels) - fold_levels)
+            if missing_levels:
+                raise RuntimeError(
+                    f"P13 domain={domain_id} fold={fold_id}: locked domain grid is incomplete; "
+                    f"missing levels={missing_levels}"
+                )
+            for level in allowed_levels:
+                scenario_seeds[(fold_id, domain_id, level)] = derive_seed(
+                    loaded.protocol_hash,
+                    "P13",
+                    {OUTER_FOLD: fold_id},
+                    f"domain_transfer:{domain_id}:{level}",
+                ) % (2**32 - 1)
+
+    domain = candidate_domain_transfer(
+        predictions=pd.concat(predictions, ignore_index=True),
+        outcomes=cast(pd.DataFrame, outcomes),
+        feature_panel=panel_frame,
+        feature_registry=[mapping(item, "feature registry item") for item in registry],
+        domain_bindings=domain_bindings,
+        learner_ids=learner_ids,
+        learner_settings=mapping(learners.get("settings"), "learners.settings"),
+        learner_search_spaces=search_spaces,
+        maximum_valid_configurations=int(tuning["max_valid_configurations_per_learner_inner_fold"]),
+        noninferiority_margin=float(common["noninferiority_relative_ap_margin"]),
+        support_fraction_minimum=float(domain_config["support_fraction_minimum"]),
+        support_bounds=support_bounds,
+        support_crossfit_folds=int(domain_config["support_crossfit_folds"]),
+        minimum_domains=int(domain_config["minimum_domains"]),
+        evaluation_target_id=primary_target_id,
+        columns=columns,
+        seed_by_scenario=scenario_seeds,
+    )
+    loaded.context.write("domain_transfer_outputs", domain, {})
+
+    source_summary = source_sensitivity_summary(
+        cast(pd.DataFrame, evidence_ledger),
+        lag,
+        columns,
+    )
     source_ids = sequence(source_summary.get("source_ids"), "source sensitivity source_ids")
     channel_ids = sequence(source_summary.get("channel_ids"), "source sensitivity channel_ids")
     exclusion_ids = [
@@ -141,7 +226,7 @@ def main() -> int:
     )
     source_refits = parallel_source_exclusion_refits(
         matrices=matrices,
-        feature_panel=cast(pd.DataFrame, panel),
+        feature_panel=panel_frame,
         feature_registry=[mapping(item, "feature registry item") for item in registry],
         weights_by_fold={key: cast(pd.DataFrame, value) for key, value in weights_by_fold.items()},
         outcomes=cast(pd.DataFrame, outcomes),

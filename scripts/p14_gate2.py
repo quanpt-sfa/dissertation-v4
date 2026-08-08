@@ -11,12 +11,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from core.pipeline import load_run, mapping, sequence
 from core.semantic_keys import OUTER_FOLD
+from gates.domain_transfer import gate2_verdict_with_candidate_domains
 from gates.evidence_contract import (
     baseline_only_gate2_verdict,
     insufficient_gate2_verdict,
     prepare_gate2_inputs,
 )
-from gates.service import gate2_verdict
 
 
 def main() -> int:
@@ -76,7 +76,7 @@ def main() -> int:
     if blockers:
         result = insufficient_gate2_verdict(blockers, candidate_ids)
     else:
-        result = gate2_verdict(
+        result = gate2_verdict_with_candidate_domains(
             evaluations=cast(list[dict[str, Any]], prepared["evaluations"]),
             bootstraps=cast(list[list[dict[str, Any]]], prepared["bootstraps"]),
             domain_transfer=domain,
@@ -85,8 +85,19 @@ def main() -> int:
             confirmatory_folds=confirmatory,
         )
         result["locked_candidate_ids"] = candidate_ids
-        result["evidence_blockers"] = []
-        result["evidence_blocker_details"] = []
+        domain_blockers = result.get("domain_evidence_blockers")
+        result["evidence_blockers"] = (
+            [str(value) for value in cast(list[object], domain_blockers)]
+            if isinstance(domain_blockers, list)
+            else []
+        )
+        result["evidence_blocker_details"] = [
+            {
+                "source": "domain_transfer",
+                "reason_code": blocker,
+            }
+            for blocker in result["evidence_blockers"]
+        ]
     result["protocol_hash"] = loaded.protocol_hash
     loaded.context.write("gate2_verdict", result, {})
     print(f"P14 status={result['status']} verdict={result['verdict']}")

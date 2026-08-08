@@ -42,10 +42,12 @@ Phạm vi production hiện hành:
 - năm tài chính 2015–2025;
 - báo cáo năm hợp nhất;
 - chỉ các firm-year thỏa rule listing overlap đã khóa;
-- `prediction_time` là annual anchor được data-build job materialize và pipeline kiểm tra lại.
+- `prediction_time` là annual anchor được data-build job materialize và pipeline kiểm tra lại;
+- `exchange_or_board` là sàn tại cuối năm tài chính, được data-build job đổi tên từ trường upstream
+  `exchange_at_fye`; vocabulary production được khóa ở `HOSE` và `HNX`.
 
-Trùng `firm_master_id x fiscal_year`, thiếu key, lệch prediction anchor hoặc khác tập firm-year giữa
-P02 và P07 đều làm pipeline dừng fail-closed.
+Trùng `firm_master_id x fiscal_year`, thiếu key, lệch prediction anchor, thiếu board, board ngoài
+vocabulary đã khóa hoặc khác tập firm-year giữa P02 và P07 đều làm pipeline dừng fail-closed.
 
 ## Nhóm cột bắt buộc trong final Parquet
 
@@ -57,9 +59,13 @@ issuer_ticker
 fiscal_year
 prediction_time
 source_snapshot_hash
-exchange_at_fye
+exchange_or_board
 industry_code
 ```
+
+`exchange_at_fye` là tên trường ở supplemental unified source của data-build job; nó không phải tên
+cột vật lý cuối cùng. Builder materialize trường này thành `exchange_or_board` trước khi publish final
+Parquet và kiểm tra toàn bộ giá trị thuộc `HOSE`/`HNX`.
 
 ### Thành phần S1
 
@@ -114,6 +120,7 @@ File final phải chứa các predictor columns đã được data-build job tí
 P07 không tính lại feature từ BCTC long. P07 chỉ:
 
 - bind feature columns đã đăng ký;
+- giữ và kiểm tra domain metadata ngoài predictor matrix;
 - kiểm tra coverage, missingness, scale và redundancy;
 - áp leakage firewall và model eligibility;
 - tạo feature views và model matrix manifest.
@@ -179,6 +186,10 @@ pipeline**. Data-build job phải xuất:
 data/source/vn_pipeline_final_firm_year_2015_2025.parquet
 ```
 
+Data-build boundary dùng supplemental unified source có metadata population, trong đó
+`exchange_at_fye` được đổi tên thành `exchange_or_board` ở final output. Builder phải fail nếu
+metadata firm-year xung đột hoặc board không thuộc HOSE/HNX.
+
 Case-review job phải xuất riêng:
 
 ```text
@@ -189,6 +200,7 @@ Data-build job phải fail khi:
 
 - grain firm-year bị trùng;
 - population hoặc annual scope sai;
+- `exchange_or_board` thiếu hoặc ngoài HOSE/HNX;
 - source components xung đột;
 - feature crosswalk chưa được phê duyệt;
 - missing evidence bị chuyển thành negative;

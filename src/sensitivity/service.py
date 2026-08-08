@@ -1,15 +1,10 @@
-"""Compute registered post-outer domain summaries and model-block ablations."""
+"""Compute registered post-outer sensitivity summaries and model-block ablations."""
 
 from __future__ import annotations
 
 from typing import Any, cast
 
-import numpy as np
 import pandas as pd
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 
 from core.metrics import average_precision
 from core.semantic_keys import (
@@ -26,148 +21,6 @@ from core.semantic_keys import (
 )
 from labels.service import aggregate_l1
 from modeling.service import fit_fold_models
-
-
-def domain_transfer(
-    *,
-    predictions: pd.DataFrame,
-    outcomes: pd.DataFrame,
-    feature_panel: pd.DataFrame,
-    feature_registry: list[dict[str, object]],
-    noninferiority_margin: float,
-    support_fraction_minimum: float,
-    evaluation_target_id: str,
-    columns: dict[str, str],
-) -> dict[str, object]:
-    bindings = [item for item in feature_registry if isinstance(item.get("domain_id"), str)]
-    if not bindings:
-        return {
-            "status": "SKIPPED",
-            "reason_code": "DOMAIN_BINDINGS_UNAVAILABLE",
-            "domains": [],
-            "robust_scenario_fraction": None,
-        }
-    firm = columns[FIRM_ID]
-    year = columns[FISCAL_YEAR]
-    outcome = columns[OUTCOME]
-    content = [
-        str(item["feature_id"]) for item in feature_registry if item.get("role") == "content"
-    ]
-    observability = [
-        str(item["feature_id"]) for item in feature_registry if item.get("role") == "observability"
-    ]
-    if not content or not observability:
-        return {
-            "status": "SKIPPED",
-            "reason_code": "DOMAIN_REFIT_FEATURE_BLOCKS_UNAVAILABLE",
-            "domains": [],
-            "robust_scenario_fraction": None,
-            "leave_one_domain_out_refit_executed": False,
-        }
-    observed_outcomes = select_observed_target_outcomes(
-        outcomes,
-        target_id=evaluation_target_id,
-        columns=columns,
-        context="P13 domain transfer",
-    )
-    data_base = feature_panel.merge(
-        observed_outcomes,
-        on=[firm, year],
-        how="inner",
-        validate="1:1",
-    )
-    outer_years = sorted(int(value) for value in predictions[year].unique())
-    rows: list[dict[str, object]] = []
-    robust: list[bool] = []
-    for binding in bindings:
-        feature_id = str(binding["feature_id"])
-        if feature_id not in feature_panel.columns:
-            raise ValueError(f"domain feature={feature_id}: absent from feature panel")
-        level_values = cast(list[object], data_base[feature_id].dropna().tolist())
-        for level in sorted(set(level_values), key=str):
-            for outer_year in outer_years:
-                train: pd.DataFrame = data_base.loc[
-                    (data_base[year] < outer_year) & (data_base[feature_id] != level)
-                ].dropna(subset=[outcome])
-                test: pd.DataFrame = data_base.loc[
-                    (data_base[year] == outer_year) & (data_base[feature_id] == level)
-                ].dropna(subset=[outcome])
-                if train.empty or test.empty or train[outcome].nunique() < 2:
-                    continue
-                support = _rectangular_common_support(
-                    train, test, sorted(set(observability + content))
-                )
-                reference_scores = _domain_refit_predict(train, test, observability, outcome)
-                candidate_scores = _domain_refit_predict(
-                    train, test, sorted(set(observability + content)), outcome
-                )
-                truth = test[outcome].astype(bool).tolist()
-                reference_ap = average_precision(truth, reference_scores.tolist())
-                candidate_ap = average_precision(truth, candidate_scores.tolist())
-                passed = bool(
-                    support >= support_fraction_minimum
-                    and candidate_ap is not None
-                    and reference_ap is not None
-                    and candidate_ap >= reference_ap * (1.0 - noninferiority_margin)
-                )
-                robust.append(passed)
-                rows.append(
-                    {
-                        "domain_id": binding["domain_id"],
-                        "level": str(level),
-                        OUTER_FOLD: str(outer_year),
-                        "evaluation_target_id": evaluation_target_id,
-                        "train_rows_other_domains": len(train),
-                        "test_rows_held_domain": len(test),
-                        "positives": int(test[outcome].sum()),
-                        "common_support_fraction": support,
-                        "candidate_ap": candidate_ap,
-                        "reference_ap": reference_ap,
-                        "noninferior": passed,
-                        "refit_executed": True,
-                    }
-                )
-    domain_count = len({(str(item["domain_id"]), str(item["level"])) for item in rows})
-    return {
-        "status": "PASS" if robust and domain_count >= 2 else "SKIPPED",
-        "reason_code": None if robust and domain_count >= 2 else "INSUFFICIENT_DOMAIN_REFITS",
-        "evaluation_target_id": evaluation_target_id,
-        "domains": rows,
-        "robust_scenario_fraction": sum(robust) / len(robust) if robust else None,
-        "leave_one_domain_out_refit_executed": bool(robust and domain_count >= 2),
-    }
-
-
-def _domain_refit_predict(
-    train: pd.DataFrame, test: pd.DataFrame, feature_ids: list[str], outcome: str
-) -> np.ndarray:
-    estimator = Pipeline(
-        [
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", StandardScaler()),
-            ("model", LogisticRegression(C=1.0, solver="lbfgs", max_iter=2000)),
-        ]
-    )
-    cast(Any, estimator).fit(train[feature_ids], train[outcome].astype(int))
-    return np.asarray(cast(Any, estimator).predict_proba(test[feature_ids]), dtype=float)[:, 1]
-
-
-def _rectangular_common_support(
-    train: pd.DataFrame, test: pd.DataFrame, feature_ids: list[str]
-) -> float:
-    supported = np.ones(len(test), dtype=bool)
-    for feature_id in feature_ids:
-        train_values = pd.to_numeric(train[feature_id], errors="coerce")
-        test_values = pd.to_numeric(test[feature_id], errors="coerce").to_numpy(dtype=float)
-        finite = train_values.dropna().to_numpy(dtype=float)
-        if len(finite) == 0:
-            return 0.0
-        supported &= (
-            np.isfinite(test_values)
-            & (test_values >= np.min(finite))
-            & (test_values <= np.max(finite))
-        )
-    return float(np.mean(supported)) if len(supported) else 0.0
 
 
 def ablation_summary(evaluations: list[dict[str, Any]]) -> list[dict[str, Any]]:
