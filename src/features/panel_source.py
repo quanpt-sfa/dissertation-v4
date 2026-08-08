@@ -384,10 +384,7 @@ def assemble_from_final(
         {
             firm_column: final_frame[firm_column].reset_index(drop=True),
             year_column: final_frame[year_column].reset_index(drop=True),
-            **{
-                column: final_frame[column].reset_index(drop=True)
-                for column in metadata_columns
-            },
+            **{column: final_frame[column].reset_index(drop=True) for column in metadata_columns},
             **values_by_physical,
         }
     )
