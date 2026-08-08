@@ -64,7 +64,9 @@ def test_p07_preserves_domain_metadata_without_registering_it_as_feature(tmp_pat
         "exchange_or_board",
         "industry_code",
     ]
-    assert all(item["feature_id"] not in {"exchange_or_board", "industry_code"} for item in definitions)
+    assert all(
+        item["feature_id"] not in {"exchange_or_board", "industry_code"} for item in definitions
+    )
 
 
 def test_p07_rejects_domain_metadata_registered_as_feature(tmp_path: Path) -> None:
