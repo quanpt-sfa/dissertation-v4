@@ -231,7 +231,7 @@ def candidate_domain_transfer(
                             "evaluation_target_id": evaluation_target_id,
                             "candidate": candidate_id,
                             "reference": reference_id,
-                            "learner_id": learner_id,
+                            LEARNER_ID: learner_id,
                             "train_rows_other_domains": int(len(development)),
                             "test_rows_held_domain": int(len(held_test)),
                             "observed_test_rows": int(len(observed_test)),
