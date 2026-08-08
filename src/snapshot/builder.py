@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-import pyarrow.parquet as pq
+import pandas as pd
 
 from core.path_policy import resolve_relative_path
 
@@ -173,14 +173,13 @@ def _load_embedded_input_provenance(raw_root: Path) -> dict[str, Any] | None:
     if not input_path.is_file():
         return None
 
-    parquet = pq.ParquetFile(input_path)
-    available = set(parquet.schema_arrow.names)
+    frame = pd.read_parquet(input_path)
+    available = {str(column) for column in frame.columns}
     if "source_provenance_json" not in available:
         return None
 
     columns = [column for column in _EMBEDDED_LINEAGE_COLUMNS if column in available]
-    table = pq.read_table(input_path, columns=columns)
-    embedded_text = _single_nonblank_value(table, "source_provenance_json", required=True)
+    embedded_text = _single_nonblank_value(frame, "source_provenance_json", required=True)
     if embedded_text is None:
         return None
 
@@ -205,17 +204,23 @@ def _load_embedded_input_provenance(raw_root: Path) -> dict[str, Any] | None:
     for column in _EMBEDDED_LINEAGE_COLUMNS[1:]:
         if column not in columns:
             continue
-        value = _single_nonblank_value(table, column, required=False)
+        value = _single_nonblank_value(frame, column, required=False)
         if value is not None:
             provenance[column] = value
 
     return provenance
 
 
-def _single_nonblank_value(table: Any, column: str, *, required: bool) -> str | None:
-    values = {
+def _single_nonblank_value(
+    frame: pd.DataFrame,
+    column: str,
+    *,
+    required: bool,
+) -> str | None:
+    raw_values = cast(list[object], frame[column].tolist())
+    values: set[str] = {
         str(value).strip()
-        for value in cast(list[object], table[column].to_pylist())
+        for value in raw_values
         if value is not None and str(value).strip()
     }
     if not values:
