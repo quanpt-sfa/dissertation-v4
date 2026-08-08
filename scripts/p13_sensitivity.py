@@ -136,19 +136,47 @@ def main() -> int:
         domain_column = str(binding["column"])
         if domain_column not in panel_frame.columns:
             continue
-        levels = sorted(
-            {
+        allowed_levels = [
+            str(value)
+            for value in sequence(
+                binding.get("allowed_levels"),
+                f"evaluation.domain_transfer.bindings.{domain_id}.allowed_levels",
+            )
+        ]
+        if len(allowed_levels) < int(domain_config["minimum_domains"]):
+            raise RuntimeError(
+                f"P13 domain={domain_id}: locked levels do not satisfy minimum_domains"
+            )
+        if len(allowed_levels) != len(set(allowed_levels)):
+            raise RuntimeError(f"P13 domain={domain_id}: locked levels must be unique")
+        observed_levels = {
+            str(value)
+            for value in panel_frame[domain_column].dropna().astype("string").tolist()
+        }
+        unexpected_levels = sorted(observed_levels - set(allowed_levels))
+        if unexpected_levels:
+            raise RuntimeError(
+                f"P13 domain={domain_id}: observed levels outside locked vocabulary: "
+                f"{unexpected_levels}"
+            )
+        for fold_id in fold_ids:
+            fold_levels = {
                 str(value)
                 for value in panel_frame.loc[
-                    panel_frame[year_column].astype(int).isin([int(value) for value in fold_ids]),
+                    panel_frame[year_column].astype(int).eq(int(fold_id)),
                     domain_column,
                 ]
                 .dropna()
+                .astype("string")
                 .tolist()
             }
-        )
-        for fold_id in fold_ids:
-            for level in levels:
+            missing_levels = sorted(set(allowed_levels) - fold_levels)
+            if missing_levels:
+                raise RuntimeError(
+                    f"P13 domain={domain_id} fold={fold_id}: locked domain grid is incomplete; "
+                    f"missing levels={missing_levels}"
+                )
+            for level in allowed_levels:
                 scenario_seeds[(fold_id, domain_id, level)] = derive_seed(
                     loaded.protocol_hash,
                     "P13",
