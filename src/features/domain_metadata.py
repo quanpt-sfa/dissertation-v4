@@ -33,7 +33,9 @@ def restore_domain_metadata(
     required = {firm_column, year_column, *normalized}
     missing = sorted(required - set(source_panel.columns))
     if missing:
-        raise ValueError(f"P07 configured domain metadata is absent from the source panel: {missing}")
+        raise ValueError(
+            f"P07 configured domain metadata is absent from the source panel: {missing}"
+        )
     if source_panel.duplicated([firm_column, year_column]).any():
         raise ValueError("P07 domain metadata source requires unique firm-year keys")
     if feature_panel.duplicated([firm_column, year_column]).any():
