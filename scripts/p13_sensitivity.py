@@ -151,8 +151,7 @@ def main() -> int:
         if len(allowed_levels) != len(set(allowed_levels)):
             raise RuntimeError(f"P13 domain={domain_id}: locked levels must be unique")
         observed_levels = {
-            str(value)
-            for value in panel_frame[domain_column].dropna().astype("string").tolist()
+            str(value) for value in panel_frame[domain_column].dropna().astype("string").tolist()
         }
         unexpected_levels = sorted(observed_levels - set(allowed_levels))
         if unexpected_levels:
