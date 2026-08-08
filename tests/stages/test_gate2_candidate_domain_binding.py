@@ -23,7 +23,7 @@ def test_gate2_requires_domain_robustness_for_same_candidate(monkeypatch: Any) -
         bootstraps=[],
         domain_transfer={
             "status": "PASS",
-            "support_method": "balanced_logistic_domain_propensity_held_test_fraction",
+            "support_method": "cross_fitted_balanced_logistic_domain_score_held_test_fraction",
             "candidate_results": [
                 {
                     "candidate": "track_l1:a:full",
@@ -48,3 +48,7 @@ def test_gate2_requires_domain_robustness_for_same_candidate(monkeypatch: Any) -
     assert candidates[1]["domain_pass"] is True
     assert candidates[1]["pass"] is True
     assert result["verdict"] == "PASS"
+    assert (
+        result["domain_transfer_method"]
+        == "cross_fitted_balanced_logistic_domain_score_held_test_fraction"
+    )
