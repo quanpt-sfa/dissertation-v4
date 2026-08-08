@@ -62,9 +62,7 @@ def gate2_verdict_with_candidate_domains(
         complete = bool(domain and domain.get("evidence_complete") is True)
         fraction_raw = domain.get("robust_scenario_fraction") if domain else None
         fraction = float(fraction_raw) if isinstance(fraction_raw, (int, float)) else None
-        domain_pass = bool(
-            complete and fraction is not None and fraction >= required_fraction
-        )
+        domain_pass = bool(complete and fraction is not None and fraction >= required_fraction)
         fractions[candidate_id] = fraction
         candidate["domain_evidence_complete"] = complete
         candidate["domain_robust_scenario_fraction"] = fraction
