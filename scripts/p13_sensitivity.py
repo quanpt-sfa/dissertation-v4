@@ -125,8 +125,7 @@ def main() -> int:
     missing_search_spaces = sorted(set(learner_ids) - set(search_spaces))
     if missing_search_spaces:
         raise RuntimeError(
-            "P13 requires the locked P11 tuning search spaces for "
-            f"{missing_search_spaces}"
+            f"P13 requires the locked P11 tuning search spaces for {missing_search_spaces}"
         )
 
     panel_frame = cast(pd.DataFrame, panel)
