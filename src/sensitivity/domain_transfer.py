@@ -372,9 +372,7 @@ def _held_test_domain_score_support(
             "reason_code": "DOMAIN_SUPPORT_SAMPLE_UNAVAILABLE",
         }
     required = {firm_column, *feature_ids}
-    missing = sorted(
-        (required - set(development.columns)) | (required - set(held_test.columns))
-    )
+    missing = sorted((required - set(development.columns)) | (required - set(held_test.columns)))
     if missing:
         raise ValueError(f"P13 support fields are absent: {missing}")
 
