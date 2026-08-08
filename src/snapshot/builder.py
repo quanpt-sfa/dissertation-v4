@@ -219,9 +219,7 @@ def _single_nonblank_value(
 ) -> str | None:
     raw_values = cast(list[object], frame[column].tolist())
     values: set[str] = {
-        str(value).strip()
-        for value in raw_values
-        if value is not None and str(value).strip()
+        str(value).strip() for value in raw_values if value is not None and str(value).strip()
     }
     if not values:
         if required:
