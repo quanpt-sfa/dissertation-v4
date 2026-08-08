@@ -19,6 +19,10 @@ evaluation:
     - 0.01
     - 0.1
     fixed_case_count_sensitivity: true
+  domain_transfer:
+    bindings:
+    - domain_id: exchange_or_board
+      column: exchange_or_board
   gate2:
     simultaneous_interval_level: 0.95
     delta_ap_interval_lower_above_zero: true
