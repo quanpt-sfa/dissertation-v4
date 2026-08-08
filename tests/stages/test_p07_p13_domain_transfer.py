@@ -1,6 +1,10 @@
+# ruff: noqa: I001
+"""Regression coverage for P07 domain metadata propagation and P13 domain refits."""
+
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import pytest
@@ -36,7 +40,7 @@ def test_p07_preserves_domain_metadata_without_registering_it_as_feature(tmp_pat
     final_path = tmp_path / "final.parquet"
     final_frame = _write_final_fixture(final_path)
     base_panel = final_frame[[FIRM, YEAR, TIME]].copy()
-    definitions = [
+    definitions: list[dict[str, object]] = [
         {
             "feature_id": "x",
             "physical_column": "x",
@@ -67,7 +71,7 @@ def test_p07_rejects_domain_metadata_registered_as_feature(tmp_path: Path) -> No
     final_path = tmp_path / "final.parquet"
     final_frame = _write_final_fixture(final_path)
     base_panel = final_frame[[FIRM, YEAR, TIME]].copy()
-    definitions = [
+    definitions: list[dict[str, object]] = [
         {
             "feature_id": "board_as_feature",
             "physical_column": "exchange_or_board",
@@ -147,8 +151,9 @@ def test_p13_uses_configured_domain_column_not_feature_registry_domain_id() -> N
     assert result["status"] == "PASS"
     assert result["reason_code"] is None
     assert result["leave_one_domain_out_refit_executed"] is True
-    domains = result["domains"]
-    assert isinstance(domains, list)
+    domains_raw = result["domains"]
+    assert isinstance(domains_raw, list)
+    domains = cast(list[dict[str, object]], domains_raw)
     assert {row["level"] for row in domains} == {"HOSE", "HNX"}
     assert {row["domain_column"] for row in domains} == {"exchange_or_board"}
     assert all(row["refit_executed"] is True for row in domains)
