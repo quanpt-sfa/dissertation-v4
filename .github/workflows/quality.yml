@@ -14,6 +14,18 @@ jobs:
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
+      - name: Align exact simulation imputer guard
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/_agent_runtime_hardening_patch.py")
+          text = path.read_text(encoding="utf-8")
+          old = '        7,\n        context="simulation fold-safe imputers",'
+          new = '        8,\n        context="simulation fold-safe imputers",'
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one simulation guard, found {text.count(old)}")
+          path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+          PY
       - run: python scripts/_agent_runtime_hardening_patch.py
       - run: uv sync --all-extras
       - run: >-
