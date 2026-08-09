@@ -22,8 +22,8 @@ from sklearn.ensemble import (
     HistGradientBoostingClassifier,
     RandomForestClassifier,
 )
-from sklearn.exceptions import ConvergenceWarning
 from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
@@ -42,7 +42,6 @@ from core.semantic_keys import (
     REPLICATION_ID,
     SCENARIO_ID,
 )
-from core.sklearn_support import DropAllMissingColumns, make_logistic_regression
 from labels.service import aggregate_l1, evidence_score_l2
 from simulation.method_contract import (
     IMBALANCE_TREATMENT_ID,
@@ -58,8 +57,6 @@ from simulation.method_contract import (
     threshold_cost_metric_id,
 )
 from simulation.scenario_contract import validate_scenario_target_identity
-
-_MINIMUM_CLASSIFIER_ROWS = 10
 
 _REQUIRED = {
     SCENARIO_ID,
@@ -815,6 +812,10 @@ def _fit_for_subset(
         cost_weights,
         rng,
     )
+    if success == 0.0:
+        import sys
+
+        print(f"Learner fit failure ({learner_id}): {diag}", file=sys.stderr, flush=True)
     success = min(float(success), float(resampling_success))
     stats = _weight_stats(cost_weights)
     return (
@@ -990,7 +991,7 @@ def _fit_and_predict(
 ) -> tuple[np.ndarray, float, dict[str, str]]:
     fallback = float(np.average(y_train, weights=sample_weight)) if len(y_train) else 0.0
     fallback_scores = np.full(len(x_test), fallback, dtype=float)
-    if len(y_train) < _MINIMUM_CLASSIFIER_ROWS or len(np.unique(y_train)) < 2:
+    if len(y_train) < 10 or len(np.unique(y_train)) < 2:
         record_fit_failure("InsufficientData")
         return (
             fallback_scores,
@@ -1014,21 +1015,8 @@ def _fit_and_predict(
         with _w.catch_warnings(record=True) as captured_warnings:
             _w.simplefilter("always")
             _fit_estimator(estimator, fit_x, fit_y, fit_weight)
-        convergence_warning = False
-        for warning in captured_warnings or []:
-            record_model_warning(warning.category.__name__)
-            if issubclass(warning.category, ConvergenceWarning):
-                convergence_warning = True
-        if convergence_warning:
-            record_fit_failure("ConvergenceWarning")
-            return (
-                fallback_scores,
-                0.0,
-                {
-                    "failure_type": "ConvergenceWarning",
-                    "failure_message": "estimator did not converge within the locked iteration budget",
-                },
-            )
+        for w in captured_warnings or []:
+            record_model_warning(w.category.__name__)
         scores = _predict_scores(estimator, x_test)
         if not np.all(np.isfinite(scores)):
             raise ValueError("non-finite predictions")
@@ -1075,10 +1063,6 @@ def _fit_pu_ensemble_cost_sensitive(
         len(unlabeled_indices),
         max(2, int(math.ceil(len(positive_indices) * unlabeled_to_positive_ratio))),
     )
-    if len(positive_indices) + sample_count < _MINIMUM_CLASSIFIER_ROWS:
-        record_resampling_failure("InsufficientPUData")
-        prior = len(positive_indices) / max(1, len(positive_indices) + len(unlabeled_indices))
-        return np.full(len(predict_x), prior, dtype=float), 0.0, (1.0, 1.0)
     for _ in range(bags):
         sampled_unlabeled = rng.choice(
             unlabeled_indices,
@@ -1108,6 +1092,10 @@ def _fit_pu_ensemble_cost_sensitive(
             weights,
             rng,
         )
+        if success == 0.0:
+            import sys
+
+            print(f"PU bag learner fit failure ({learner_id}): {diag}", file=sys.stderr, flush=True)
         if success == 1.0:
             bag_scores.append(scores)
             mean, maximum = _weight_stats(weights)
@@ -1137,13 +1125,12 @@ def _verification_weights(
         return np.ones(len(requested_indices), dtype=float)
     propensity = Pipeline(
         [
-            ("drop_all_missing", DropAllMissingColumns()),
             ("imputer", SimpleImputer(strategy="median")),
             ("scale", StandardScaler()),
             (
                 "model",
-                make_logistic_regression(
-                    penalty_kind="l2",
+                LogisticRegression(
+                    penalty="l2",
                     max_iter=1000,
                     random_state=int(rng.integers(0, 2**31 - 1)),
                 ),
@@ -1343,13 +1330,12 @@ def _learner(learner_id: str, random_state: int) -> object:
     if learner_id == "logistic_regression":
         return Pipeline(
             [
-                ("drop_all_missing", DropAllMissingColumns()),
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scale", StandardScaler()),
                 (
                     "model",
-                    make_logistic_regression(
-                        penalty_kind="l2",
+                    LogisticRegression(
+                        penalty="l2",
                         C=1.0,
                         max_iter=2000,
                         random_state=random_state,
@@ -1360,16 +1346,15 @@ def _learner(learner_id: str, random_state: int) -> object:
     if learner_id == "elastic_net_logistic":
         return Pipeline(
             [
-                ("drop_all_missing", DropAllMissingColumns()),
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scale", StandardScaler()),
                 (
                     "model",
-                    make_logistic_regression(
-                        penalty_kind="elasticnet",
-                        elasticnet_l1_ratio=0.5,
+                    LogisticRegression(
+                        penalty="elasticnet",
                         solver="saga",
                         C=1.0,
+                        l1_ratio=0.5,
                         max_iter=2000,
                         random_state=random_state,
                     ),
@@ -1400,7 +1385,6 @@ def _learner(learner_id: str, random_state: int) -> object:
     if learner_id == "linear_svm":
         return Pipeline(
             [
-                ("drop_all_missing", DropAllMissingColumns()),
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scale", StandardScaler()),
                 (
@@ -1416,7 +1400,6 @@ def _learner(learner_id: str, random_state: int) -> object:
     if learner_id == "rbf_svm":
         return Pipeline(
             [
-                ("drop_all_missing", DropAllMissingColumns()),
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scale", StandardScaler()),
                 (
@@ -1432,7 +1415,6 @@ def _learner(learner_id: str, random_state: int) -> object:
     if learner_id == "k_nearest_neighbors":
         return Pipeline(
             [
-                ("drop_all_missing", DropAllMissingColumns()),
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scale", StandardScaler()),
                 ("model", KNeighborsClassifier(n_neighbors=5, weights="distance")),
@@ -1441,7 +1423,6 @@ def _learner(learner_id: str, random_state: int) -> object:
     if learner_id == "gaussian_naive_bayes":
         return Pipeline(
             [
-                ("drop_all_missing", DropAllMissingColumns()),
                 ("imputer", SimpleImputer(strategy="median")),
                 ("model", GaussianNB()),
             ]
@@ -1498,7 +1479,6 @@ def _learner(learner_id: str, random_state: int) -> object:
     if learner_id == "multilayer_perceptron":
         return Pipeline(
             [
-                ("drop_all_missing", DropAllMissingColumns()),
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scale", StandardScaler()),
                 (

@@ -2,37 +2,43 @@ name: quality
 
 on: [push, pull_request]
 
-permissions:
-  contents: write
-
 jobs:
   p0:
-    if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: agent/runtime-hardening-one-pass
       - uses: astral-sh/setup-uv@v6
-      - name: Restore legacy simulation engine
-        run: git checkout origin/main -- src/simulation/service.py
       - run: uv sync --all-extras
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
+      - run: uv run pytest --collect-only -q
       - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: >-
-          uv run pytest -q
-          tests/test_runtime_hardening.py
-          tests/test_chapter3_v24_identification.py
-          tests/stages/test_remaining_stage_invariants.py
-          tests/stages/test_p13_candidate_domain_transfer.py
-      - name: Restore canonical quality workflow
-        run: git checkout origin/main -- .github/workflows/quality.yml
-      - name: Commit typed runtime boundary
+      - id: ruff-format
+        run: uv run ruff format --check .
+      - name: Show Ruff formatting diff
+        if: failure() && steps.ruff-format.outcome == 'failure'
+        run: uv run ruff format --diff .
+      - name: Pyright ratchet for pull requests
+        if: github.event_name == 'pull_request'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet && exit 0
-          git commit -m "refactor: isolate P08 hardening from legacy simulation engine"
-          git push origin HEAD:agent/runtime-hardening-one-pass
+          uv run python scripts/check_pyright_ratchet.py \
+            --baseline config/quality/pyright_baseline.json \
+            --diff-base "${{ github.event.pull_request.base.sha }}" \
+            --report artifacts/quality/pyright_ratchet_report.json
+      - name: Pyright ratchet for pushes
+        if: github.event_name == 'push'
+        run: |
+          uv run python scripts/check_pyright_ratchet.py \
+            --baseline config/quality/pyright_baseline.json \
+            --report artifacts/quality/pyright_ratchet_report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyright-ratchet-report
+          path: artifacts/quality/pyright_ratchet_report.json
+          if-no-files-found: ignore
+      - run: uv run pytest -q
+      - run: uv run pre-commit run --all-files
