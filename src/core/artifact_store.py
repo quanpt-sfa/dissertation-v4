@@ -181,7 +181,9 @@ class ArtifactStore:
         same immutable artifact a second time.
         """
 
-        requested = None if artifact_ids is None else frozenset(str(value) for value in artifact_ids)
+        requested = (
+            None if artifact_ids is None else frozenset(str(value) for value in artifact_ids)
+        )
         for manifest_path in sorted(self.root.rglob("*.manifest.json")):
             raw = json.loads(manifest_path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
