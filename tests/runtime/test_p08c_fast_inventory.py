@@ -65,4 +65,7 @@ def test_p08c_reuses_verified_batch_values_instead_of_reading_twice() -> None:
     source = (ROOT / "scripts" / "p08c_aggregate_batches.py").read_text(encoding="utf-8")
     assert "iter_verified_inventory(_P08_CONTROL_ARTIFACT_IDS)" in source
     assert 'context.read("simulation_batches"' not in source
-    assert '_P08_CONTROL_ARTIFACT_IDS = frozenset({"simulation_batches", "model_diagnostics"})' in source
+    assert (
+        '_P08_CONTROL_ARTIFACT_IDS = frozenset({"simulation_batches", "model_diagnostics"})'
+        in source
+    )
