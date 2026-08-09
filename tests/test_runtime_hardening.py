@@ -5,27 +5,22 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 from runpy import run_path
-from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
 
 from core.sklearn_support import (
     DropAllMissingColumns,
     capture_fit_warnings,
     make_logistic_regression,
 )
-from simulation.service import (
-    DiagnosticCollector,
-    _fit_pu_ensemble_cost_sensitive,
-    diagnostic_capture,
-)
+from simulation.service import DiagnosticCollector, diagnostic_capture
+from simulation.v24_service import PUFitResult, _fit_pu_ensemble_cost_sensitive_v24
 
 _RUNNER = run_path(str(Path(__file__).resolve().parents[1] / "scripts" / "run_pipeline.py"))
-_auto_p08_workers = cast(Any, _RUNNER["_auto_p08_workers"])
-_resolve_p08_workers = cast(Any, _RUNNER["_resolve_p08_workers"])
+_auto_p08_workers = _RUNNER["_auto_p08_workers"]
+_resolve_p08_workers = _RUNNER["_resolve_p08_workers"]
 
 
 def test_p08_worker_auto_scale_is_independent_of_general_workers() -> None:
@@ -41,20 +36,16 @@ def test_p08_worker_auto_scale_is_independent_of_general_workers() -> None:
 
 def test_drop_all_missing_columns_prevents_median_imputer_warning() -> None:
     frame = pd.DataFrame({"empty": [np.nan, np.nan, np.nan], "usable": [1.0, np.nan, 3.0]})
-    pipeline = Pipeline(
-        [
-            ("drop_all_missing", DropAllMissingColumns()),
-            ("imputer", SimpleImputer(strategy="median")),
-        ]
-    )
+    dropper = DropAllMissingColumns()
+    filtered = dropper.fit(frame).transform(frame)
+    assert isinstance(filtered, pd.DataFrame)
+    imputer = SimpleImputer(strategy="median")
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
-        transformed = pipeline.fit_transform(frame)
-    assert transformed.shape == (3, 1)
+        imputer.fit(filtered)
     assert not any(
         "Skipping features without any observed values" in str(item.message) for item in captured
     )
-    dropper = pipeline.named_steps["drop_all_missing"]
     assert dropper.dropped_feature_names_ == ("empty",)
 
 
@@ -89,8 +80,12 @@ def test_capture_fit_warnings_flags_convergence() -> None:
 def test_pu_precheck_records_one_insufficient_data_event() -> None:
     collector = DiagnosticCollector()
     x = np.arange(60, dtype=float).reshape(20, 3)
+
+    def forbidden_delegate(**_: object) -> PUFitResult:
+        raise AssertionError("non-estimable PU bag must be short-circuited")
+
     with diagnostic_capture(collector, 7):
-        scores, success, _ = _fit_pu_ensemble_cost_sensitive(
+        scores, success, _ = _fit_pu_ensemble_cost_sensitive_v24(
             learner_id="logistic_regression",
             x_train=x,
             predict_x=x[:2],
@@ -105,6 +100,7 @@ def test_pu_precheck_records_one_insufficient_data_event() -> None:
             },
             scenario={"cost_sensitive_settings": {"maximum_cost_weight": 20.0}},
             rng=np.random.default_rng(1),
+            delegate=forbidden_delegate,
         )
     assert success == 0.0
     assert scores.shape == (2,)
