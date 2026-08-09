@@ -20,36 +20,45 @@ jobs:
           from pathlib import Path
 
           path = Path("scripts/_agent_runtime_hardening_patch.py")
-          text = path.read_text(encoding="utf-8")
+          lines = path.read_text(encoding="utf-8").splitlines()
 
-          old = '        7,\n        context="simulation fold-safe imputers",'
-          new = '        8,\n        context="simulation fold-safe imputers",'
-          if text.count(old) != 1:
-              raise SystemExit(f"expected one simulation imputer guard, found {text.count(old)}")
-          text = text.replace(old, new)
+          def unique_index(fragment: str) -> int:
+              matches = [index for index, line in enumerate(lines) if fragment in line]
+              if len(matches) != 1:
+                  raise SystemExit(f"expected one {fragment!r}, found {len(matches)}")
+              return matches[0]
 
-          old = '        2,\n        context="simulation L2 logistic compatibility",'
-          new = '        1,\n        context="simulation L2 logistic compatibility path 1",'
-          if text.count(old) != 1:
-              raise SystemExit(f"expected one simulation L2 count guard, found {text.count(old)}")
-          text = text.replace(old, new)
+          imputer_context = unique_index('context="simulation fold-safe imputers"')
+          if lines[imputer_context - 1].strip() != "7,":
+              raise SystemExit(f"unexpected imputer guard: {lines[imputer_context - 1]!r}")
+          lines[imputer_context - 1] = lines[imputer_context - 1].replace("7,", "8,")
 
-          marker = '''    text = replace_once(
-              text,
-              'LogisticRegression(\\n                        penalty="elasticnet",\\n                        solver="saga",\\n                        C=1.0,\\n                        l1_ratio=0.5,',
-          '''
-          insertion = '''    text = replace_once(
-              text,
-              'LogisticRegression(\\n                        penalty="l2",',
-              'make_logistic_regression(\\n                        penalty_kind="l2",',
-              context="simulation L2 logistic compatibility path 2",
+          l2_context = unique_index('context="simulation L2 logistic compatibility"')
+          if lines[l2_context - 1].strip() != "2,":
+              raise SystemExit(f"unexpected L2 guard: {lines[l2_context - 1]!r}")
+          lines[l2_context - 1] = lines[l2_context - 1].replace("2,", "1,")
+          lines[l2_context] = lines[l2_context].replace(
+              'context="simulation L2 logistic compatibility"',
+              'context="simulation L2 logistic compatibility path 1"',
           )
-          '''
-          if text.count(marker) != 1:
-              raise SystemExit(f"expected one elasticnet marker, found {text.count(marker)}")
-          text = text.replace(marker, insertion + marker)
 
-          path.write_text(text, encoding="utf-8", newline="\n")
+          elastic_context = unique_index('context="simulation elasticnet compatibility"')
+          start = elastic_context
+          while start >= 0 and lines[start].strip() != "text = replace_once(":
+              start -= 1
+          if start < 0:
+              raise SystemExit("could not locate elasticnet replacement block")
+          second_l2 = [
+              "    text = replace_once(",
+              "        text,",
+              "        'LogisticRegression(\\n                        penalty=\"l2\",',",
+              "        'make_logistic_regression(\\n                        penalty_kind=\"l2\",',",
+              '        context="simulation L2 logistic compatibility path 2",',
+              "    )",
+          ]
+          lines[start:start] = second_l2
+
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
           PY
       - run: python scripts/_agent_runtime_hardening_patch.py
       - run: uv sync --all-extras
