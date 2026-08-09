@@ -61,6 +61,25 @@ jobs:
           path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
           PY
       - run: python scripts/_agent_runtime_hardening_patch.py
+      - name: Normalize generated worker test import
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("tests/test_runtime_hardening.py")
+          text = path.read_text(encoding="utf-8")
+          old = "from scripts.run_pipeline import _auto_p08_workers, _resolve_p08_workers\n"
+          new = '''from pathlib import Path
+          from runpy import run_path
+          from typing import Any, cast
+
+          _RUNNER = run_path(str(Path(__file__).resolve().parents[1] / "scripts" / "run_pipeline.py"))
+          _auto_p08_workers = cast(Any, _RUNNER["_auto_p08_workers"])
+          _resolve_p08_workers = cast(Any, _RUNNER["_resolve_p08_workers"])
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one scripts.run_pipeline import, found {text.count(old)}")
+          path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+          PY
       - run: uv sync --all-extras
       - run: uv run ruff check . --fix
       - run: >-
