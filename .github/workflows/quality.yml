@@ -18,6 +18,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+
           path = Path("scripts/_agent_runtime_hardening_patch.py")
           text = path.read_text(encoding="utf-8")
 
@@ -27,30 +28,27 @@ jobs:
               raise SystemExit(f"expected one simulation imputer guard, found {text.count(old)}")
           text = text.replace(old, new)
 
-          old_block = '''    text = replace_count(
+          old = '        2,\n        context="simulation L2 logistic compatibility",'
+          new = '        1,\n        context="simulation L2 logistic compatibility path 1",'
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one simulation L2 count guard, found {text.count(old)}")
+          text = text.replace(old, new)
+
+          marker = '''    text = replace_once(
               text,
-              'LogisticRegression(\\n                    penalty="l2",',
-              'make_logistic_regression(\\n                    penalty_kind="l2",',
-              2,
-              context="simulation L2 logistic compatibility",
-          )
+              'LogisticRegression(\\n                        penalty="elasticnet",\\n                        solver="saga",\\n                        C=1.0,\\n                        l1_ratio=0.5,',
           '''
-          new_block = '''    text = replace_once(
-              text,
-              'LogisticRegression(\\n                    penalty="l2",',
-              'make_logistic_regression(\\n                    penalty_kind="l2",',
-              context="simulation L2 logistic compatibility path 1",
-          )
-              text = replace_once(
+          insertion = '''    text = replace_once(
               text,
               'LogisticRegression(\\n                        penalty="l2",',
               'make_logistic_regression(\\n                        penalty_kind="l2",',
               context="simulation L2 logistic compatibility path 2",
           )
           '''
-          if text.count(old_block) != 1:
-              raise SystemExit(f"expected one L2 replacement block, found {text.count(old_block)}")
-          text = text.replace(old_block, new_block)
+          if text.count(marker) != 1:
+              raise SystemExit(f"expected one elasticnet marker, found {text.count(marker)}")
+          text = text.replace(marker, insertion + marker)
+
           path.write_text(text, encoding="utf-8", newline="\n")
           PY
       - run: python scripts/_agent_runtime_hardening_patch.py
