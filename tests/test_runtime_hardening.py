@@ -29,12 +29,14 @@ _resolve_p08_workers = cast(Any, _RUNNER["_resolve_p08_workers"])
 
 
 def test_p08_worker_auto_scale_is_independent_of_general_workers() -> None:
+    assert _auto_p08_workers(4) == 4
     assert _auto_p08_workers(8) == 6
     assert _auto_p08_workers(32) == 24
     assert _auto_p08_workers(64) == 32
     assert _resolve_p08_workers(None, None, logical_processors=32) == 24
     assert _resolve_p08_workers(12, "20", logical_processors=32) == 12
     assert _resolve_p08_workers(None, "20", logical_processors=32) == 20
+    assert _resolve_p08_workers(7, "20", logical_processors=64) == 7
 
 
 def test_drop_all_missing_columns_prevents_median_imputer_warning() -> None:
