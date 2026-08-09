@@ -62,6 +62,7 @@ jobs:
           PY
       - run: python scripts/_agent_runtime_hardening_patch.py
       - run: uv sync --all-extras
+      - run: uv run ruff check . --fix
       - run: >-
           uv run ruff format
           scripts/run_pipeline.py
