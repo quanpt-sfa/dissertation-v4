@@ -9,6 +9,7 @@ process and the partial-identification estimator used by P08B.
 
 from __future__ import annotations
 
+import math
 import threading
 from collections.abc import Callable, Mapping
 from typing import Any
@@ -22,6 +23,10 @@ from labels.service import aggregate_l1, evidence_score_l2
 from simulation import service as legacy
 
 _PATCH_LOCK = threading.Lock()
+_MINIMUM_PU_CLASSIFIER_ROWS = 10
+
+PUFitResult = tuple[np.ndarray, float, tuple[float, float]]
+PUDelegate = Callable[..., PUFitResult]
 
 
 def run_batch(
@@ -41,8 +46,38 @@ def run_batch(
     with _PATCH_LOCK:
         original_generate = legacy._generate_replication
         original_partial_identification = legacy._partial_identification_bounds
+        original_pu_ensemble = legacy._fit_pu_ensemble_cost_sensitive
         legacy._generate_replication = _generate_replication_v24
         legacy._partial_identification_bounds = _partial_identification_bounds_v24
+
+        def guarded_pu_ensemble(
+            *,
+            learner_id: str,
+            x_train: np.ndarray,
+            predict_x: np.ndarray,
+            positive_indices: np.ndarray,
+            unlabeled_indices: np.ndarray,
+            bags: int,
+            unlabeled_to_positive_ratio: float,
+            training_cost: Mapping[str, object],
+            scenario: Mapping[str, Any],
+            rng: np.random.Generator,
+        ) -> PUFitResult:
+            return _fit_pu_ensemble_cost_sensitive_v24(
+                learner_id=learner_id,
+                x_train=x_train,
+                predict_x=predict_x,
+                positive_indices=positive_indices,
+                unlabeled_indices=unlabeled_indices,
+                bags=bags,
+                unlabeled_to_positive_ratio=unlabeled_to_positive_ratio,
+                training_cost=training_cost,
+                scenario=scenario,
+                rng=rng,
+                delegate=original_pu_ensemble,
+            )
+
+        legacy._fit_pu_ensemble_cost_sensitive = guarded_pu_ensemble
         try:
             return legacy.run_batch(
                 scenario,
@@ -58,6 +93,72 @@ def run_batch(
         finally:
             legacy._generate_replication = original_generate
             legacy._partial_identification_bounds = original_partial_identification
+            legacy._fit_pu_ensemble_cost_sensitive = original_pu_ensemble
+
+
+def _fit_pu_ensemble_cost_sensitive_v24(
+    *,
+    learner_id: str,
+    x_train: np.ndarray,
+    predict_x: np.ndarray,
+    positive_indices: np.ndarray,
+    unlabeled_indices: np.ndarray,
+    bags: int,
+    unlabeled_to_positive_ratio: float,
+    training_cost: Mapping[str, object],
+    scenario: Mapping[str, Any],
+    rng: np.random.Generator,
+    delegate: PUDelegate,
+) -> PUFitResult:
+    """Short-circuit PU bags that cannot satisfy the legacy learner row guard.
+
+    This is behavior-preserving for the affected replication: the legacy engine
+    would attempt every bag, reject each one because the training view has fewer
+    than ten rows, and finally return the same observed-positive prior with
+    ``fit_success=0``. The adapter records one structured resampling diagnostic
+    instead of repeating known-impossible learner fits.
+    """
+
+    if (
+        len(positive_indices) < 2
+        or len(unlabeled_indices) < 2
+        or bags < 1
+        or unlabeled_to_positive_ratio <= 0
+    ):
+        return delegate(
+            learner_id=learner_id,
+            x_train=x_train,
+            predict_x=predict_x,
+            positive_indices=positive_indices,
+            unlabeled_indices=unlabeled_indices,
+            bags=bags,
+            unlabeled_to_positive_ratio=unlabeled_to_positive_ratio,
+            training_cost=training_cost,
+            scenario=scenario,
+            rng=rng,
+        )
+
+    sampled_unlabeled_count = min(
+        len(unlabeled_indices),
+        max(2, int(math.ceil(len(positive_indices) * unlabeled_to_positive_ratio))),
+    )
+    if len(positive_indices) + sampled_unlabeled_count < _MINIMUM_PU_CLASSIFIER_ROWS:
+        legacy.record_resampling_failure("InsufficientPUData")
+        prior = len(positive_indices) / max(1, len(positive_indices) + len(unlabeled_indices))
+        return np.full(len(predict_x), prior, dtype=float), 0.0, (1.0, 1.0)
+
+    return delegate(
+        learner_id=learner_id,
+        x_train=x_train,
+        predict_x=predict_x,
+        positive_indices=positive_indices,
+        unlabeled_indices=unlabeled_indices,
+        bags=bags,
+        unlabeled_to_positive_ratio=unlabeled_to_positive_ratio,
+        training_cost=training_cost,
+        scenario=scenario,
+        rng=rng,
+    )
 
 
 def _generate_replication_v24(
