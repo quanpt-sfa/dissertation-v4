@@ -17,8 +17,9 @@ for _name in (
     "OPENBLAS_NUM_THREADS",
     "MKL_NUM_THREADS",
     "NUMEXPR_NUM_THREADS",
+    "BLIS_NUM_THREADS",
 ):
-    os.environ.setdefault(_name, "1")
+    os.environ[_name] = "1"
 
 from core.pipeline import load_run, mapping, sequence
 from core.rng import generator

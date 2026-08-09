@@ -2,114 +2,43 @@ name: quality
 
 on: [push, pull_request]
 
-permissions:
-  contents: write
-
 jobs:
   p0:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v6
-      - name: Align exact runtime-hardening guards
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("scripts/_agent_runtime_hardening_patch.py")
-          lines = path.read_text(encoding="utf-8").splitlines()
-
-          def unique_index(fragment: str) -> int:
-              matches = [index for index, line in enumerate(lines) if fragment in line]
-              if len(matches) != 1:
-                  raise SystemExit(f"expected one {fragment!r}, found {len(matches)}")
-              return matches[0]
-
-          imputer_context = unique_index('context="simulation fold-safe imputers"')
-          if lines[imputer_context - 1].strip() != "7,":
-              raise SystemExit(f"unexpected imputer guard: {lines[imputer_context - 1]!r}")
-          lines[imputer_context - 1] = lines[imputer_context - 1].replace("7,", "8,")
-
-          l2_context = unique_index('context="simulation L2 logistic compatibility"')
-          if lines[l2_context - 1].strip() != "2,":
-              raise SystemExit(f"unexpected L2 guard: {lines[l2_context - 1]!r}")
-          lines[l2_context - 1] = lines[l2_context - 1].replace("2,", "1,")
-          lines[l2_context] = lines[l2_context].replace(
-              'context="simulation L2 logistic compatibility"',
-              'context="simulation L2 logistic compatibility path 1"',
-          )
-
-          elastic_context = unique_index('context="simulation elasticnet compatibility"')
-          start = elastic_context
-          while start >= 0 and lines[start].strip() != "text = replace_once(":
-              start -= 1
-          if start < 0:
-              raise SystemExit("could not locate elasticnet replacement block")
-          second_l2 = [
-              "    text = replace_once(",
-              "        text,",
-              "        'LogisticRegression(\\n                        penalty=\"l2\",',",
-              "        'make_logistic_regression(\\n                        penalty_kind=\"l2\",',",
-              '        context="simulation L2 logistic compatibility path 2",',
-              "    )",
-          ]
-          lines[start:start] = second_l2
-
-          path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-          PY
-      - run: python scripts/_agent_runtime_hardening_patch.py
-      - name: Normalize generated worker test import
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path("tests/test_runtime_hardening.py")
-          text = path.read_text(encoding="utf-8")
-          old = "from scripts.run_pipeline import _auto_p08_workers, _resolve_p08_workers\n"
-          new = '''from pathlib import Path
-          from runpy import run_path
-          from typing import Any, cast
-          '''
-          if text.count(old) != 1:
-              raise SystemExit(f"expected one scripts.run_pipeline import, found {text.count(old)}")
-          text = text.replace(old, new)
-          marker = "from simulation.service import _fit_pu_ensemble_cost_sensitive, diagnostic_capture, DiagnosticCollector\n"
-          assignments = '''
-          _RUNNER = run_path(str(Path(__file__).resolve().parents[1] / "scripts" / "run_pipeline.py"))
-          _auto_p08_workers = cast(Any, _RUNNER["_auto_p08_workers"])
-          _resolve_p08_workers = cast(Any, _RUNNER["_resolve_p08_workers"])
-          '''
-          if text.count(marker) != 1:
-              raise SystemExit(f"expected one simulation import line, found {text.count(marker)}")
-          path.write_text(text.replace(marker, marker + assignments), encoding="utf-8", newline="\n")
-          PY
       - run: uv sync --all-extras
-      - run: uv run ruff check . --fix
-      - run: >-
-          uv run ruff format
-          scripts/run_pipeline.py
-          scripts/p08b_run_batch.py
-          src/core/sklearn_support.py
-          src/simulation/service.py
-          src/modeling/service.py
-          src/splits/service.py
-          src/sensitivity/domain_transfer.py
-          tests/test_runtime_hardening.py
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --write
+      - run: uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --check
+      - run: uv run pytest --collect-only -q
       - run: uv run ruff check .
-      - run: >-
-          uv run pytest -q
-          tests/test_runtime_hardening.py
-          tests/stages/test_remaining_stage_invariants.py
-          tests/stages/test_p13_candidate_domain_transfer.py
-      - name: Restore canonical quality workflow
-        run: git checkout origin/main -- .github/workflows/quality.yml
-      - name: Commit runtime hardening
+      - id: ruff-format
+        run: uv run ruff format --check .
+      - name: Show Ruff formatting diff
+        if: failure() && steps.ruff-format.outcome == 'failure'
+        run: uv run ruff format --diff .
+      - name: Pyright ratchet for pull requests
+        if: github.event_name == 'pull_request'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet && exit 0
-          git commit -m "fix: harden runtime execution and numerical fitting"
-          git push origin HEAD:agent/runtime-hardening-one-pass
+          uv run python scripts/check_pyright_ratchet.py \
+            --baseline config/quality/pyright_baseline.json \
+            --diff-base "${{ github.event.pull_request.base.sha }}" \
+            --report artifacts/quality/pyright_ratchet_report.json
+      - name: Pyright ratchet for pushes
+        if: github.event_name == 'push'
+        run: |
+          uv run python scripts/check_pyright_ratchet.py \
+            --baseline config/quality/pyright_baseline.json \
+            --report artifacts/quality/pyright_ratchet_report.json
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyright-ratchet-report
+          path: artifacts/quality/pyright_ratchet_report.json
+          if-no-files-found: ignore
+      - run: uv run pytest -q
+      - run: uv run pre-commit run --all-files

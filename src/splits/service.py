@@ -8,7 +8,6 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -20,6 +19,11 @@ from core.semantic_keys import (
     OUTER_FOLD,
     TARGET_ID,
     WEIGHT,
+)
+from core.sklearn_support import (
+    DropAllMissingColumns,
+    capture_fit_warnings,
+    make_logistic_regression,
 )
 
 
@@ -207,12 +211,39 @@ def _fit_verification_propensity(
         )
     estimator = Pipeline(
         [
+            ("drop_all_missing", DropAllMissingColumns()),
             ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
-            ("model", LogisticRegression(C=1.0, solver="lbfgs", max_iter=2000)),
+            (
+                "model",
+                make_logistic_regression(penalty_kind="l2", C=1.0, solver="lbfgs", max_iter=2000),
+            ),
         ]
     )
-    cast(Any, estimator).fit(train[feature_ids], outcome.to_numpy())
+    try:
+        fit_summary = capture_fit_warnings(
+            lambda: cast(Any, estimator).fit(train[feature_ids], outcome.to_numpy())
+        )
+    except ValueError as exc:
+        if "all training features are missing" not in str(exc):
+            raise
+        return (
+            [1.0] * len(train),
+            [],
+            {
+                "status": "SKIPPED",
+                "reason_code": "NO_ESTIMABLE_VERIFICATION_FEATURES",
+            },
+        )
+    if fit_summary.convergence_warning:
+        return (
+            [1.0] * len(train),
+            [],
+            {
+                "status": "SKIPPED",
+                "reason_code": "PROPENSITY_NONCONVERGENCE",
+            },
+        )
     propensities = np.asarray(cast(Any, estimator).predict_proba(train[feature_ids]), dtype=float)[
         :, 1
     ]
@@ -229,6 +260,9 @@ def _fit_verification_propensity(
             "reason_code": None,
             "model": "logistic_with_median_imputation_and_standardization",
             "feature_ids": feature_ids,
+            "dropped_all_missing_feature_ids": list(
+                cast(Any, estimator).named_steps["drop_all_missing"].dropped_feature_names_
+            ),
             "fit_rows": len(train),
             "verified_rows": int(outcome.sum()),
             "predecision_features_only": True,

@@ -16,7 +16,6 @@ import pandas as pd
 from sklearn.base import ClassifierMixin
 from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -32,6 +31,11 @@ from core.semantic_keys import (
     TARGET_ID,
     TARGET_VALUE,
     WEIGHT,
+)
+from core.sklearn_support import (
+    DropAllMissingColumns,
+    capture_fit_warnings,
+    make_logistic_regression,
 )
 from features.service import FIT_MODEL_ELIGIBILITY_VALUES
 
@@ -317,13 +321,26 @@ def fit_fold_models(
             selected_registry = dict(learner_settings)
             selected_registry[learner_id] = selected_settings
             estimator = _estimator(learner_id, selected_registry, random_state)
-            _fit(
+            if not _fit(
                 estimator,
                 development[feature_ids],
                 transformed_target,
                 development[weight],
                 soft_target=soft_target,
-            )
+            ):
+                models.append(
+                    {
+                        "model_id": model_id,
+                        "status": "SKIPPED",
+                        "reason_code": "MODEL_NONCONVERGENCE",
+                        "track_id": track_id,
+                        TARGET_ID: target_id,
+                        "tuning_status": "SKIPPED_FINAL_FIT_NONCONVERGENCE",
+                        "valid_configuration_count": len(valid_candidates),
+                        "tuning_runtime_seconds": tuning_seconds,
+                    }
+                )
+                continue
             predictions = np.asarray(
                 cast(Any, estimator).predict_proba(outer[feature_ids]), dtype=float
             )[:, 1]
@@ -482,13 +499,14 @@ def _temporal_oof(
         if train.empty or validation.empty or not _target_is_estimable(transformed, soft_target):
             continue
         estimator = _estimator(learner_id, settings, random_state + validation_year)
-        _fit(
+        if not _fit(
             estimator,
             train[features],
             transformed,
             train[weight],
             soft_target=soft_target,
-        )
+        ):
+            return {}
         values = np.asarray(cast(Any, estimator).predict_proba(validation[features]), dtype=float)[
             :, 1
         ]
@@ -512,15 +530,16 @@ def _estimator(learner_id: str, settings: dict[str, Any], random_state: int) -> 
         raise ValueError(f"learner={learner_id}: settings required")
     raw = cast(dict[str, Any], raw)
     if learner_id == "elastic_net_logistic":
-        model: ClassifierMixin = LogisticRegression(
+        model: ClassifierMixin = make_logistic_regression(
+            penalty_kind="elasticnet",
+            elasticnet_l1_ratio=float(raw["l1_ratio"]),
             C=float(raw["inverse_regularization"]),
-            penalty="elasticnet",
             solver="saga",
-            l1_ratio=float(raw["l1_ratio"]),
             max_iter=int(raw["maximum_iterations"]),
             random_state=random_state,
         )
         steps: list[tuple[str, Any]] = [
+            ("drop_all_missing", DropAllMissingColumns()),
             ("imputer", SimpleImputer(strategy="median")),
             ("scaler", StandardScaler()),
             ("model", model),
@@ -536,7 +555,11 @@ def _estimator(learner_id: str, settings: dict[str, Any], random_state: int) -> 
             random_state=random_state,
             n_jobs=1,
         )
-        steps = [("imputer", SimpleImputer(strategy="median")), ("model", model)]
+        steps = [
+            ("drop_all_missing", DropAllMissingColumns()),
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", model),
+        ]
     elif learner_id == "main_boosting":
         model = HistGradientBoostingClassifier(
             max_iter=int(raw["maximum_iterations"]),
@@ -544,7 +567,11 @@ def _estimator(learner_id: str, settings: dict[str, Any], random_state: int) -> 
             max_leaf_nodes=int(raw["maximum_leaf_nodes"]),
             random_state=random_state,
         )
-        steps = [("imputer", SimpleImputer(strategy="median")), ("model", model)]
+        steps = [
+            ("drop_all_missing", DropAllMissingColumns()),
+            ("imputer", SimpleImputer(strategy="median")),
+            ("model", model),
+        ]
     else:
         raise ValueError(f"learner={learner_id}: unsupported confirmatory learner")
     return Pipeline(steps)
@@ -557,7 +584,7 @@ def _fit(
     weights: pd.Series,
     *,
     soft_target: bool = False,
-) -> None:
+) -> bool:
     if soft_target:
         probabilities = outcome.to_numpy(dtype=float)
         if np.any((probabilities < 0) | (probabilities > 1)):
@@ -571,17 +598,25 @@ def _fit(
             [base_weights * probabilities, base_weights * (1.0 - probabilities)]
         )
         keep = expanded_weights > 0
-        cast(Any, estimator).fit(
-            expanded_features.loc[keep],
-            expanded_outcome[keep],
-            model__sample_weight=expanded_weights[keep],
-        )
-        return
-    cast(Any, estimator).fit(
-        features,
-        outcome.astype(int),
-        model__sample_weight=weights.to_numpy(dtype=float),
-    )
+
+        def operation() -> object:
+            return cast(Any, estimator).fit(
+                expanded_features.loc[keep],
+                expanded_outcome[keep],
+                model__sample_weight=expanded_weights[keep],
+            )
+
+    else:
+
+        def operation() -> object:
+            return cast(Any, estimator).fit(
+                features,
+                outcome.astype(int),
+                model__sample_weight=weights.to_numpy(dtype=float),
+            )
+
+    summary = capture_fit_warnings(operation)
+    return not summary.convergence_warning
 
 
 def _fit_pu_ensemble(
@@ -616,11 +651,13 @@ def _fit_pu_ensemble(
         )
         model = Pipeline(
             [
+                ("drop_all_missing", DropAllMissingColumns()),
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scaler", StandardScaler()),
                 (
                     "model",
-                    LogisticRegression(
+                    make_logistic_regression(
+                        penalty_kind="l2",
                         C=float(configuration["inverse_regularization"]),
                         solver="lbfgs",
                         max_iter=int(configuration["maximum_iterations"]),
@@ -629,11 +666,15 @@ def _fit_pu_ensemble(
                 ),
             ]
         )
-        cast(Any, model).fit(
-            train.loc[selected, features],
-            labels,
-            model__sample_weight=train.loc[selected, weight].to_numpy(dtype=float),
+        summary = capture_fit_warnings(
+            lambda: cast(Any, model).fit(
+                train.loc[selected, features],
+                labels,
+                model__sample_weight=train.loc[selected, weight].to_numpy(dtype=float),
+            )
         )
+        if summary.convergence_warning:
+            continue
         ensemble.append(model)
     return ensemble
 
