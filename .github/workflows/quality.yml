@@ -71,14 +71,24 @@ jobs:
           new = '''from pathlib import Path
           from runpy import run_path
           from typing import Any, cast
-
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f"expected one scripts.run_pipeline import, found {text.count(old)}")
+          text = text.replace(old, new)
+          marker = '''from simulation.service import (
+              DiagnosticCollector,
+              _fit_pu_ensemble_cost_sensitive,
+              diagnostic_capture,
+          )
+          '''
+          assignments = '''
           _RUNNER = run_path(str(Path(__file__).resolve().parents[1] / "scripts" / "run_pipeline.py"))
           _auto_p08_workers = cast(Any, _RUNNER["_auto_p08_workers"])
           _resolve_p08_workers = cast(Any, _RUNNER["_resolve_p08_workers"])
           '''
-          if text.count(old) != 1:
-              raise SystemExit(f"expected one scripts.run_pipeline import, found {text.count(old)}")
-          path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+          if text.count(marker) != 1:
+              raise SystemExit(f"expected one simulation import block, found {text.count(marker)}")
+          path.write_text(text.replace(marker, marker + assignments), encoding="utf-8", newline="\n")
           PY
       - run: uv sync --all-extras
       - run: uv run ruff check . --fix
