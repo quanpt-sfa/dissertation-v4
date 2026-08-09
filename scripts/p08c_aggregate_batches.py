@@ -91,9 +91,7 @@ def main() -> int:
         raise ValueError(f"unexpected P08 control artifact ids={sorted(set(unexpected))}")
 
     batch_coordinates = {_coordinate_key(_coordinates(item)) for item in batch_items}
-    diagnostics_coordinates = {
-        _coordinate_key(_coordinates(item)) for item in diagnostic_items
-    }
+    diagnostics_coordinates = {_coordinate_key(_coordinates(item)) for item in diagnostic_items}
     missing_diagnostics = batch_coordinates - diagnostics_coordinates
     orphan_diagnostics = diagnostics_coordinates - batch_coordinates
     if missing_diagnostics or orphan_diagnostics:
