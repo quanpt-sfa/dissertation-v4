@@ -7,7 +7,7 @@ import json
 import os
 import shutil
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Collection, Iterator, Mapping
 from pathlib import Path
 from typing import Any, cast
 
@@ -168,17 +168,32 @@ class ArtifactStore:
             raise ConfigurationError(f"artifact={artifact_id}: manifest must be an object")
         return cast(dict[str, Any], raw)
 
-    def inventory(self) -> list[dict[str, object]]:
-        """Return a verified manifest inventory without bypassing the core I/O layer."""
-        rows: list[dict[str, object]] = []
+    def iter_verified_inventory(
+        self,
+        artifact_ids: Collection[str] | None = None,
+    ) -> Iterator[tuple[dict[str, object], object]]:
+        """Yield verified inventory entries and their already-read values.
+
+        When ``artifact_ids`` is supplied, manifests for other artifact types are
+        identified but their payloads are not hashed, deserialized, or schema-
+        validated. Selected artifacts retain the full ``read`` integrity contract.
+        Returning the verified value lets callers avoid immediately reading the
+        same immutable artifact a second time.
+        """
+
+        requested = None if artifact_ids is None else frozenset(str(value) for value in artifact_ids)
         for manifest_path in sorted(self.root.rglob("*.manifest.json")):
             raw = json.loads(manifest_path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
                 raise ConfigurationError(f"manifest={manifest_path}: object required")
             manifest = cast(dict[str, Any], raw)
             artifact_id = manifest.get("artifact_id")
+            if not isinstance(artifact_id, str):
+                raise ConfigurationError(f"manifest={manifest_path}: identity is incomplete")
+            if requested is not None and artifact_id not in requested:
+                continue
             coordinates_raw = manifest.get("coordinates")
-            if not isinstance(artifact_id, str) or not isinstance(coordinates_raw, dict):
+            if not isinstance(coordinates_raw, dict):
                 raise ConfigurationError(f"manifest={manifest_path}: identity is incomplete")
             coordinates = {
                 str(key): str(value)
@@ -189,15 +204,20 @@ class ArtifactStore:
                 raise ConfigurationError(
                     f"manifest={manifest_path}: path does not match artifact catalog"
                 )
-            self.read(artifact_id, coordinates)
-            rows.append(
-                {
-                    **manifest,
-                    "relative_path": target.relative_to(self.root).as_posix(),
-                    "manifest_relative_path": manifest_path.relative_to(self.root).as_posix(),
-                }
-            )
-        return rows
+            value = self.read(artifact_id, coordinates)
+            row: dict[str, object] = {
+                **manifest,
+                "relative_path": target.relative_to(self.root).as_posix(),
+                "manifest_relative_path": manifest_path.relative_to(self.root).as_posix(),
+            }
+            yield row, value
+
+    def inventory(
+        self,
+        artifact_ids: Collection[str] | None = None,
+    ) -> list[dict[str, object]]:
+        """Return a verified manifest inventory without bypassing the core I/O layer."""
+        return [row for row, _ in self.iter_verified_inventory(artifact_ids)]
 
     def _recover_or_reject_existing(
         self, target: Path, manifest_path: Path, item: Mapping[str, object]
