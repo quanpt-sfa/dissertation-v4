@@ -42,6 +42,7 @@ from simulation.replication_contract import replication_plan
 _filter_active_batches = filter_active_batches
 
 CoordinateKey = tuple[tuple[str, str], ...]
+_P08_CONTROL_ARTIFACT_IDS = frozenset({"simulation_batches", "model_diagnostics"})
 
 
 def main() -> int:
@@ -78,13 +79,17 @@ def main() -> int:
     simulation = mapping(loaded.registry.get("simulation"), "simulation")
     batches: list[pd.DataFrame] = []
     coordinates_seen: list[dict[str, str]] = []
+    diagnostics_coordinates: set[CoordinateKey] = set()
     range_audits: list[dict[str, object]] = []
-    inventory = loaded.context.store.inventory()
-    for item in inventory:
-        if item.get("artifact_id") != "simulation_batches":
-            continue
+
+    for item, value in loaded.context.store.iter_verified_inventory(_P08_CONTROL_ARTIFACT_IDS):
+        artifact_id = item.get("artifact_id")
         coordinates = _coordinates(item)
-        value = loaded.context.read("simulation_batches", coordinates)
+        if artifact_id == "model_diagnostics":
+            diagnostics_coordinates.add(_coordinate_key(coordinates))
+            continue
+        if artifact_id != "simulation_batches":
+            raise ValueError(f"unexpected P08 control artifact_id={artifact_id}")
         if not isinstance(value, pd.DataFrame):
             raise ValueError("simulation_batches artifact must be a DataFrame")
         if value.empty:
@@ -117,11 +122,6 @@ def main() -> int:
         range_audits.append(dict(audit))
 
     batch_coordinates = {_coordinate_key(value) for value in coordinates_seen}
-    diagnostics_coordinates = {
-        _coordinate_key(_coordinates(item))
-        for item in inventory
-        if item.get("artifact_id") == "model_diagnostics"
-    }
     missing_diagnostics = batch_coordinates - diagnostics_coordinates
     orphan_diagnostics = diagnostics_coordinates - batch_coordinates
     if missing_diagnostics or orphan_diagnostics:
