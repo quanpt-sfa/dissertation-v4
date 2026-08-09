@@ -172,18 +172,35 @@ class ArtifactStore:
         self,
         artifact_ids: Collection[str] | None = None,
     ) -> Iterator[tuple[dict[str, object], object]]:
-        """Yield verified inventory entries and their already-read values.
+        """Yield selected verified inventory entries and their already-read values."""
+        for row in self.inventory(artifact_ids, verify=False):
+            artifact_id = str(row["artifact_id"])
+            coordinates_raw = row.get("coordinates")
+            if not isinstance(coordinates_raw, dict):
+                raise ConfigurationError(f"artifact={artifact_id}: inventory coordinates required")
+            coordinates = {
+                str(key): str(value)
+                for key, value in cast(dict[object, object], coordinates_raw).items()
+            }
+            yield row, self.read(artifact_id, coordinates)
 
-        When ``artifact_ids`` is supplied, manifests for other artifact types are
-        identified but their payloads are not hashed, deserialized, or schema-
-        validated. Selected artifacts retain the full ``read`` integrity contract.
-        Returning the verified value lets callers avoid immediately reading the
-        same immutable artifact a second time.
+    def inventory(
+        self,
+        artifact_ids: Collection[str] | None = None,
+        *,
+        verify: bool = True,
+    ) -> list[dict[str, object]]:
+        """Return artifact inventory, optionally without loading payloads.
+
+        The default remains fully verified and preserves the historical contract.
+        ``verify=False`` validates manifest identity and catalog path only; callers
+        must subsequently call ``read`` before using any selected artifact payload.
+        This mode is intended for cheap coordinate planning before fail-closed reads.
         """
-
         requested = (
             None if artifact_ids is None else frozenset(str(value) for value in artifact_ids)
         )
+        rows: list[dict[str, object]] = []
         for manifest_path in sorted(self.root.rglob("*.manifest.json")):
             raw = json.loads(manifest_path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
@@ -206,20 +223,16 @@ class ArtifactStore:
                 raise ConfigurationError(
                     f"manifest={manifest_path}: path does not match artifact catalog"
                 )
-            value = self.read(artifact_id, coordinates)
-            row: dict[str, object] = {
-                **manifest,
-                "relative_path": target.relative_to(self.root).as_posix(),
-                "manifest_relative_path": manifest_path.relative_to(self.root).as_posix(),
-            }
-            yield row, value
-
-    def inventory(
-        self,
-        artifact_ids: Collection[str] | None = None,
-    ) -> list[dict[str, object]]:
-        """Return a verified manifest inventory without bypassing the core I/O layer."""
-        return [row for row, _ in self.iter_verified_inventory(artifact_ids)]
+            if verify:
+                self.read(artifact_id, coordinates)
+            rows.append(
+                {
+                    **manifest,
+                    "relative_path": target.relative_to(self.root).as_posix(),
+                    "manifest_relative_path": manifest_path.relative_to(self.root).as_posix(),
+                }
+            )
+        return rows
 
     def _recover_or_reject_existing(
         self, target: Path, manifest_path: Path, item: Mapping[str, object]
