@@ -118,6 +118,31 @@ def _run_units_parallel(
             future.result()
 
 
+def _auto_p08_workers(logical_processors: int | None = None) -> int:
+    logical = max(1, int(logical_processors or os.cpu_count() or 1))
+    if logical <= 4:
+        return logical
+    return min(32, max(4, (logical * 3 + 3) // 4))
+
+
+def _resolve_p08_workers(
+    requested: int | None, env_value: str | None, *, logical_processors: int | None = None
+) -> int:
+    if requested is not None:
+        if requested < 1:
+            raise ValueError("--p08-workers must be positive")
+        return requested
+    if env_value not in {None, ""}:
+        try:
+            value = int(str(env_value))
+        except ValueError as exc:
+            raise ValueError("P08_WORKERS must be a positive integer") from exc
+        if value < 1:
+            raise ValueError("P08_WORKERS must be a positive integer")
+        return value
+    return _auto_p08_workers(logical_processors)
+
+
 def _require_clean_tree(root: Path) -> None:
     result = subprocess.run(
         ["git", "status", "--porcelain"], cwd=root, text=True, capture_output=True, check=True
@@ -175,10 +200,23 @@ def main() -> int:
         "--workers",
         type=int,
         default=1,
-        help="Parallel workers for partitioned stages (P01, P10, P11, P12).",
+        help="Parallel workers for partitioned non-P08 stages (P01, P10, P11, P12).",
+    )
+    parser.add_argument(
+        "--p08-workers",
+        type=int,
+        help=(
+            "P08 subprocess workers. If omitted, use P08_WORKERS when set; "
+            "otherwise auto-size to 75% of logical CPUs, capped at 32."
+        ),
     )
     args = parser.parse_args()
     workers = max(1, args.workers)
+    p08_workers = _resolve_p08_workers(args.p08_workers, os.environ.get("P08_WORKERS"))
+    print(
+        f"worker_plan general={workers} p08={p08_workers} logical_cpus={os.cpu_count() or 1}",
+        flush=True,
+    )
 
     project_root = args.config.resolve().parent.parent
     if not args.allow_dirty:
@@ -342,7 +380,7 @@ def main() -> int:
         "--run-id",
         args.run_id,
         "--workers",
-        str(max(1, int(os.environ.get("P08_WORKERS", str(workers))))),
+        str(p08_workers),
     ]
     if args.resume:
         p08_command.append("--resume")

@@ -7,7 +7,6 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -22,6 +21,7 @@ from core.semantic_keys import (
     PREDICTION,
     WEIGHT,
 )
+from core.sklearn_support import DropAllMissingColumns, make_logistic_regression
 from modeling.service import feature_groups, fit_fold_models
 from sensitivity.service import select_observed_target_outcomes
 
@@ -440,11 +440,13 @@ def _held_test_domain_score_support(
                 }
             estimator = Pipeline(
                 [
+                    ("drop_all_missing", DropAllMissingColumns()),
                     ("imputer", SimpleImputer(strategy="median")),
                     ("scaler", StandardScaler()),
                     (
                         "model",
-                        LogisticRegression(
+                        make_logistic_regression(
+                            penalty_kind="l2",
                             C=1.0,
                             solver="lbfgs",
                             max_iter=2000,

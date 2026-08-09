@@ -145,15 +145,16 @@ qua registry; không chép literal physical column vào stage code.
 
 ## 6. Cấu trúc `scripts/`
 
-- `run_pipeline.py`: orchestration duy nhất cho luồng định kỳ; `--workers N` bật
-  song song cho các stage có partition (P01, P10, P11, P12); mặc định `--workers 1`
-  giữ hành vi tuần tự.
+- `run_pipeline.py`: orchestration duy nhất cho luồng định kỳ; `--workers N` điều khiển
+  các stage partition ngoài P08 (P01, P10, P11, P12). P08 dùng `--p08-workers N` nếu
+  được truyền, tiếp theo là `P08_WORKERS`, và nếu cả hai đều vắng thì tự chọn khoảng
+  75% logical CPU với trần 32 subprocess workers.
 - `create_data_snapshot.py`: snapshot các file đúng catalog trước P00.
 - `p00_lock_protocol.py`: compile và khóa protocol.
 - `p01_*`, `p02_*`: CLI stage và compatibility wrappers.
 - `p03_*` đến `p17_*`: CLI mỏng; nghiệp vụ nằm trong `src/<package>/service.py`.
-- P08 có coordinator, worker theo batch và collector MCSE riêng; `P08_WORKERS` env
-  var ghi đè `--workers` cho riêng P08.
+- P08 có coordinator, worker theo batch và collector MCSE riêng; `--p08-workers`
+  ghi đè auto-sizing, còn `P08_WORKERS` là override môi trường khi CLI không được truyền.
 
 Parallelism model: runner dispatch các unit cùng stage qua
 `ThreadPoolExecutor` + `subprocess.run`. Mỗi worker là một subprocess đơn luồng
