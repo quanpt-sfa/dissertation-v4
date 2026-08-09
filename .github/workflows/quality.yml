@@ -75,19 +75,14 @@ jobs:
           if text.count(old) != 1:
               raise SystemExit(f"expected one scripts.run_pipeline import, found {text.count(old)}")
           text = text.replace(old, new)
-          marker = '''from simulation.service import (
-              DiagnosticCollector,
-              _fit_pu_ensemble_cost_sensitive,
-              diagnostic_capture,
-          )
-          '''
+          marker = "from simulation.service import _fit_pu_ensemble_cost_sensitive, diagnostic_capture, DiagnosticCollector\n"
           assignments = '''
           _RUNNER = run_path(str(Path(__file__).resolve().parents[1] / "scripts" / "run_pipeline.py"))
           _auto_p08_workers = cast(Any, _RUNNER["_auto_p08_workers"])
           _resolve_p08_workers = cast(Any, _RUNNER["_resolve_p08_workers"])
           '''
           if text.count(marker) != 1:
-              raise SystemExit(f"expected one simulation import block, found {text.count(marker)}")
+              raise SystemExit(f"expected one simulation import line, found {text.count(marker)}")
           path.write_text(text.replace(marker, marker + assignments), encoding="utf-8", newline="\n")
           PY
       - run: uv sync --all-extras
