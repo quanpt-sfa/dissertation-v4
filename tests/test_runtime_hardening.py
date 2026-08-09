@@ -8,6 +8,7 @@ from runpy import run_path
 
 import numpy as np
 import pandas as pd
+import pytest
 from sklearn.impute import SimpleImputer
 
 from core.sklearn_support import (
@@ -32,6 +33,13 @@ def test_p08_worker_auto_scale_is_independent_of_general_workers() -> None:
     assert _resolve_p08_workers(12, "20", logical_processors=32) == 12
     assert _resolve_p08_workers(None, "20", logical_processors=32) == 20
     assert _resolve_p08_workers(7, "20", logical_processors=64) == 7
+
+
+def test_p08_worker_overrides_fail_closed_when_nonpositive() -> None:
+    with pytest.raises(ValueError, match="--p08-workers must be positive"):
+        _resolve_p08_workers(0, None, logical_processors=32)
+    with pytest.raises(ValueError, match="P08_WORKERS must be a positive integer"):
+        _resolve_p08_workers(None, "0", logical_processors=32)
 
 
 def test_drop_all_missing_columns_prevents_median_imputer_warning() -> None:
