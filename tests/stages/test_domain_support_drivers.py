@@ -9,6 +9,7 @@ from sensitivity.domain_support_diagnostics import (
     domain_score_diagnostics,
     feature_driver_row,
 )
+from sensitivity.domain_support_report import _parallel_feature_driver_rows
 
 
 def _synthetic_domains() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -91,6 +92,39 @@ def test_leave_one_feature_out_identifies_support_driver() -> None:
     assert shift["restores_locked_support_when_removed"] is True
     assert float(shift["absolute_standardized_mean_difference"]) > 3.0
     assert float(shift["domain_auc_drop_when_removed"]) > 0.30
+
+
+def test_parallel_feature_driver_rows_respects_keyword_only_contract() -> None:
+    development, held = _synthetic_domains()
+    feature_ids = ["shift_driver", "stable_feature"]
+    baseline = domain_score_diagnostics(
+        development=development,
+        held_test=held,
+        feature_ids=feature_ids,
+        firm_column="firm_id",
+        lower=0.05,
+        upper=0.95,
+        crossfit_folds=5,
+        random_state=41,
+    )
+    assert baseline.reason_code is None
+
+    rows = _parallel_feature_driver_rows(
+        feature_ids=feature_ids,
+        workers=2,
+        development=development,
+        held_test=held,
+        baseline=baseline,
+        firm_column="firm_id",
+        lower=0.05,
+        upper=0.95,
+        crossfit_folds=5,
+        random_state=41,
+        support_fraction_minimum=0.80,
+    )
+
+    assert [row["feature_id"] for row in rows] == feature_ids
+    assert all(row["leave_one_out_reason_code"] is None for row in rows)
 
 
 def test_domain_score_diagnostics_preserves_held_row_alignment() -> None:
