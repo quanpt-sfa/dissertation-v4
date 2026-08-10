@@ -5,11 +5,11 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
+import sensitivity.domain_support_report as domain_support_report
 from sensitivity.domain_support_diagnostics import (
     domain_score_diagnostics,
     feature_driver_row,
 )
-from sensitivity.domain_support_report import _parallel_feature_driver_rows
 
 
 def _synthetic_domains() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -109,18 +109,22 @@ def test_parallel_feature_driver_rows_respects_keyword_only_contract() -> None:
     )
     assert baseline.reason_code is None
 
-    rows = _parallel_feature_driver_rows(
-        feature_ids=feature_ids,
-        workers=2,
-        development=development,
-        held_test=held,
-        baseline=baseline,
-        firm_column="firm_id",
-        lower=0.05,
-        upper=0.95,
-        crossfit_folds=5,
-        random_state=41,
-        support_fraction_minimum=0.80,
+    parallel_runner = cast(Any, getattr(domain_support_report, "_parallel_feature_driver_rows"))
+    rows = cast(
+        list[dict[str, Any]],
+        parallel_runner(
+            feature_ids=feature_ids,
+            workers=2,
+            development=development,
+            held_test=held,
+            baseline=baseline,
+            firm_column="firm_id",
+            lower=0.05,
+            upper=0.95,
+            crossfit_folds=5,
+            random_state=41,
+            support_fraction_minimum=0.80,
+        ),
     )
 
     assert [row["feature_id"] for row in rows] == feature_ids
