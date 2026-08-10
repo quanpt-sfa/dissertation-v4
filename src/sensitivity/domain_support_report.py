@@ -431,8 +431,6 @@ def _csv_value(value: object) -> object:
         return ""
     if isinstance(value, float) and np.isnan(value):
         return ""
-    if isinstance(value, np.generic):
-        return str(value)
     return value
 
 
