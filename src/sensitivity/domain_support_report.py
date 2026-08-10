@@ -7,7 +7,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -133,9 +133,10 @@ def run_domain_support_diagnostics(
             crossfit_folds=crossfit_folds,
             random_state=random_state,
         )
+        stored_support = cast(float, scenario["stored_common_support_fraction"])
         _require_matching_baseline(
             baseline=baseline,
-            stored_support=float(scenario["stored_common_support_fraction"]),
+            stored_support=stored_support,
             tolerance=baseline_tolerance,
             scenario=scenario,
         )
@@ -431,7 +432,7 @@ def _csv_value(value: object) -> object:
     if isinstance(value, float) and np.isnan(value):
         return ""
     if isinstance(value, np.generic):
-        return value.item()
+        return str(value)
     return value
 
 
