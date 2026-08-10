@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 import pandas as pd
 
@@ -49,31 +51,37 @@ def test_leave_one_feature_out_identifies_support_driver() -> None:
     assert baseline.support_fraction < 0.80
     assert baseline.domain_auc > 0.95
 
-    shift = feature_driver_row(
-        feature_id="shift_driver",
-        development=development,
-        held_test=held,
-        all_feature_ids=feature_ids,
-        baseline=baseline,
-        firm_column="firm_id",
-        lower=0.05,
-        upper=0.95,
-        crossfit_folds=5,
-        random_state=41,
-        support_fraction_minimum=0.80,
+    shift = cast(
+        dict[str, Any],
+        feature_driver_row(
+            feature_id="shift_driver",
+            development=development,
+            held_test=held,
+            all_feature_ids=feature_ids,
+            baseline=baseline,
+            firm_column="firm_id",
+            lower=0.05,
+            upper=0.95,
+            crossfit_folds=5,
+            random_state=41,
+            support_fraction_minimum=0.80,
+        ),
     )
-    stable = feature_driver_row(
-        feature_id="stable_feature",
-        development=development,
-        held_test=held,
-        all_feature_ids=feature_ids,
-        baseline=baseline,
-        firm_column="firm_id",
-        lower=0.05,
-        upper=0.95,
-        crossfit_folds=5,
-        random_state=41,
-        support_fraction_minimum=0.80,
+    stable = cast(
+        dict[str, Any],
+        feature_driver_row(
+            feature_id="stable_feature",
+            development=development,
+            held_test=held,
+            all_feature_ids=feature_ids,
+            baseline=baseline,
+            firm_column="firm_id",
+            lower=0.05,
+            upper=0.95,
+            crossfit_folds=5,
+            random_state=41,
+            support_fraction_minimum=0.80,
+        ),
     )
 
     assert shift["support_gain_when_removed"] is not None
