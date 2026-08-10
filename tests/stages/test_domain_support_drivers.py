@@ -109,7 +109,7 @@ def test_parallel_feature_driver_rows_respects_keyword_only_contract() -> None:
     )
     assert baseline.reason_code is None
 
-    parallel_runner = cast(Any, getattr(domain_support_report, "_parallel_feature_driver_rows"))
+    parallel_runner = getattr(domain_support_report, "_parallel_feature_driver_rows")
     rows = cast(
         list[dict[str, Any]],
         parallel_runner(
