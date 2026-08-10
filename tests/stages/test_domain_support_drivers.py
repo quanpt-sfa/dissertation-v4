@@ -79,9 +79,7 @@ def test_leave_one_feature_out_identifies_support_driver() -> None:
     assert shift["support_gain_when_removed"] is not None
     assert stable["support_gain_when_removed"] is not None
     assert float(shift["support_gain_when_removed"]) > 0.50
-    assert float(shift["support_gain_when_removed"]) > float(
-        stable["support_gain_when_removed"]
-    )
+    assert float(shift["support_gain_when_removed"]) > float(stable["support_gain_when_removed"])
     assert shift["restores_locked_support_when_removed"] is True
     assert float(shift["absolute_standardized_mean_difference"]) > 3.0
     assert float(shift["domain_auc_drop_when_removed"]) > 0.30
