@@ -77,9 +77,7 @@ def domain_score_diagnostics(
         ignore_index=True,
     )
     labels = pd.Series(
-        np.concatenate(
-            [np.zeros(len(development), dtype=int), np.ones(len(held_test), dtype=int)]
-        ),
+        np.concatenate([np.zeros(len(development), dtype=int), np.ones(len(held_test), dtype=int)]),
         dtype="int64",
     )
     groups = pd.concat(
@@ -252,9 +250,7 @@ def feature_driver_row(
         else None
     )
     auc_drop = (
-        float(baseline_auc - loo_auc)
-        if baseline_auc is not None and loo_auc is not None
-        else None
+        float(baseline_auc - loo_auc) if baseline_auc is not None and loo_auc is not None else None
     )
     restores_support = bool(
         baseline_support is not None
@@ -306,7 +302,9 @@ def _feature_shift(
     if len(baseline.held_supported) == len(held_test) and len(held_test) > 0:
         robust_z = _robust_z_against_development(development_values, held_values)
         supported_values = held_values.loc[baseline.held_supported].dropna().to_numpy(dtype=float)
-        unsupported_values = held_values.loc[~baseline.held_supported].dropna().to_numpy(dtype=float)
+        unsupported_values = (
+            held_values.loc[~baseline.held_supported].dropna().to_numpy(dtype=float)
+        )
         supported_median = _median_or_none(supported_values)
         unsupported_median = _median_or_none(unsupported_values)
         supported_z = robust_z[baseline.held_supported]
@@ -328,9 +326,7 @@ def _feature_shift(
         "unsupported_held_median": unsupported_median,
         "standardized_mean_difference": standardized_mean_difference,
         "absolute_standardized_mean_difference": (
-            abs(standardized_mean_difference)
-            if standardized_mean_difference is not None
-            else None
+            abs(standardized_mean_difference) if standardized_mean_difference is not None else None
         ),
         "univariate_domain_separation_auc": univariate_auc,
         "unsupported_minus_supported_mean_abs_robust_z": unsupported_excess,
