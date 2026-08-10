@@ -8,13 +8,14 @@ then writes diagnostic CSV/JSON/Markdown files to an external output directory.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 # Each diagnostic fit is intentionally single-threaded internally. Parallelism is
 # across leave-one-feature-out fits controlled by --workers.
@@ -46,7 +47,6 @@ _METADATA_FIELDS = (
     "role",
     "content_observability_role",
     "construct",
-    "source_id",
     "description",
     "label",
     "family",
@@ -245,7 +245,7 @@ def main() -> int:
         ["domain_id", "held_level", OUTER_FOLD], ignore_index=True
     )
     feature_frame = pd.DataFrame(feature_rows)
-    scenario_frame.to_csv(output_dir / "domain_support_scenarios.csv", index=False)
+    _write_csv(scenario_frame, output_dir / "domain_support_scenarios.csv")
     if not feature_frame.empty:
         feature_frame = feature_frame.sort_values(
             ["domain_id", "held_level", OUTER_FOLD, "support_gain_when_removed"],
@@ -253,12 +253,12 @@ def main() -> int:
             na_position="last",
             ignore_index=True,
         )
-        feature_frame.to_csv(output_dir / "domain_support_feature_diagnostics.csv", index=False)
+        _write_csv(feature_frame, output_dir / "domain_support_feature_diagnostics.csv")
 
     aggregate = _aggregate_drivers(feature_frame, failing_only=True)
-    aggregate.to_csv(output_dir / "domain_support_feature_drivers_failing.csv", index=False)
+    _write_csv(aggregate, output_dir / "domain_support_feature_drivers_failing.csv")
     aggregate_all = _aggregate_drivers(feature_frame, failing_only=False)
-    aggregate_all.to_csv(output_dir / "domain_support_feature_drivers_all.csv", index=False)
+    _write_csv(aggregate_all, output_dir / "domain_support_feature_drivers_all.csv")
 
     report = _markdown_report(
         run_id=args.run_id,
@@ -396,11 +396,7 @@ def _aggregate_drivers(feature_frame: pd.DataFrame, *, failing_only: bool) -> pd
     frame["absolute_missing_rate_gap"] = pd.to_numeric(
         frame["held_minus_development_missing_rate"], errors="coerce"
     ).abs()
-    group_fields = [
-        field
-        for field in ("feature_id", *_METADATA_FIELDS)
-        if field in frame.columns
-    ]
+    group_fields = [field for field in ("feature_id", *_METADATA_FIELDS) if field in frame.columns]
     aggregate = (
         frame.groupby(group_fields, dropna=False)
         .agg(
@@ -439,6 +435,25 @@ def _aggregate_drivers(feature_frame: pd.DataFrame, *, failing_only: bool) -> pd
         na_position="last",
         ignore_index=True,
     )
+
+
+def _write_csv(frame: pd.DataFrame, path: Path) -> None:
+    fieldnames = [str(value) for value in frame.columns]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for record in frame.to_dict(orient="records"):
+            writer.writerow({str(key): _csv_value(value) for key, value in record.items()})
+
+
+def _csv_value(value: object) -> object:
+    if value is None:
+        return ""
+    if isinstance(value, float) and np.isnan(value):
+        return ""
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
 
 
 def _markdown_report(
