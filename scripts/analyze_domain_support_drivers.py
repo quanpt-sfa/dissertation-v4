@@ -5,6 +5,8 @@ It verifies that its reproduced baseline support equals the stored P13 result,
 then writes diagnostic CSV/JSON/Markdown files to an external output directory.
 """
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse
@@ -17,8 +19,6 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-# Each diagnostic fit is intentionally single-threaded internally. Parallelism is
-# across leave-one-feature-out fits controlled by --workers.
 for _thread_variable in (
     "OMP_NUM_THREADS",
     "OPENBLAS_NUM_THREADS",
