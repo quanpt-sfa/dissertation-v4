@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import json
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
 from pathlib import Path
 from typing import Any, cast
 
@@ -32,6 +31,45 @@ _METADATA_FIELDS = (
     "family",
     "model_eligibility",
 )
+
+
+def _parallel_feature_driver_rows(
+    *,
+    feature_ids: list[str],
+    workers: int,
+    development: pd.DataFrame,
+    held_test: pd.DataFrame,
+    baseline: DomainScoreResult,
+    firm_column: str,
+    lower: float,
+    upper: float,
+    crossfit_folds: int,
+    random_state: int,
+    support_fraction_minimum: float,
+) -> list[dict[str, object]]:
+    """Evaluate leave-one-feature-out diagnostics without violating keyword-only API."""
+
+    if not feature_ids:
+        return []
+    with ThreadPoolExecutor(max_workers=min(workers, len(feature_ids))) as executor:
+        futures = [
+            executor.submit(
+                feature_driver_row,
+                feature_id=feature_id,
+                development=development,
+                held_test=held_test,
+                all_feature_ids=list(feature_ids),
+                baseline=baseline,
+                firm_column=firm_column,
+                lower=lower,
+                upper=upper,
+                crossfit_folds=crossfit_folds,
+                random_state=random_state,
+                support_fraction_minimum=support_fraction_minimum,
+            )
+            for feature_id in feature_ids
+        ]
+        return [future.result() for future in futures]
 
 
 def run_domain_support_diagnostics(
@@ -167,11 +205,11 @@ def run_domain_support_diagnostics(
         if only_failing_scenarios and not support_failed:
             continue
 
-        worker = partial(
-            feature_driver_row,
+        rows = _parallel_feature_driver_rows(
+            feature_ids=list(full_features),
+            workers=workers,
             development=development,
             held_test=held_test,
-            all_feature_ids=list(full_features),
             baseline=baseline,
             firm_column=firm_column,
             lower=lower,
@@ -180,8 +218,6 @@ def run_domain_support_diagnostics(
             random_state=random_state,
             support_fraction_minimum=support_minimum,
         )
-        with ThreadPoolExecutor(max_workers=min(workers, len(full_features))) as executor:
-            rows = list(executor.map(worker, full_features))
         for row in rows:
             feature_id = str(row["feature_id"])
             feature_rows.append(
