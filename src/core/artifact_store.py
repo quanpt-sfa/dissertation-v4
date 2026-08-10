@@ -7,7 +7,7 @@ import json
 import os
 import shutil
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Collection, Iterator, Mapping
 from pathlib import Path
 from typing import Any, cast
 
@@ -168,8 +168,38 @@ class ArtifactStore:
             raise ConfigurationError(f"artifact={artifact_id}: manifest must be an object")
         return cast(dict[str, Any], raw)
 
-    def inventory(self) -> list[dict[str, object]]:
-        """Return a verified manifest inventory without bypassing the core I/O layer."""
+    def iter_verified_inventory(
+        self,
+        artifact_ids: Collection[str] | None = None,
+    ) -> Iterator[tuple[dict[str, object], object]]:
+        """Yield selected verified inventory entries and their already-read values."""
+        for row in self.inventory(artifact_ids, verify=False):
+            artifact_id = str(row["artifact_id"])
+            coordinates_raw = row.get("coordinates")
+            if not isinstance(coordinates_raw, dict):
+                raise ConfigurationError(f"artifact={artifact_id}: inventory coordinates required")
+            coordinates = {
+                str(key): str(value)
+                for key, value in cast(dict[object, object], coordinates_raw).items()
+            }
+            yield row, self.read(artifact_id, coordinates)
+
+    def inventory(
+        self,
+        artifact_ids: Collection[str] | None = None,
+        *,
+        verify: bool = True,
+    ) -> list[dict[str, object]]:
+        """Return artifact inventory, optionally without loading payloads.
+
+        The default remains fully verified and preserves the historical contract.
+        ``verify=False`` validates manifest identity and catalog path only; callers
+        must subsequently call ``read`` before using any selected artifact payload.
+        This mode is intended for cheap coordinate planning before fail-closed reads.
+        """
+        requested = (
+            None if artifact_ids is None else frozenset(str(value) for value in artifact_ids)
+        )
         rows: list[dict[str, object]] = []
         for manifest_path in sorted(self.root.rglob("*.manifest.json")):
             raw = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -177,8 +207,12 @@ class ArtifactStore:
                 raise ConfigurationError(f"manifest={manifest_path}: object required")
             manifest = cast(dict[str, Any], raw)
             artifact_id = manifest.get("artifact_id")
+            if not isinstance(artifact_id, str):
+                raise ConfigurationError(f"manifest={manifest_path}: identity is incomplete")
+            if requested is not None and artifact_id not in requested:
+                continue
             coordinates_raw = manifest.get("coordinates")
-            if not isinstance(artifact_id, str) or not isinstance(coordinates_raw, dict):
+            if not isinstance(coordinates_raw, dict):
                 raise ConfigurationError(f"manifest={manifest_path}: identity is incomplete")
             coordinates = {
                 str(key): str(value)
@@ -189,7 +223,8 @@ class ArtifactStore:
                 raise ConfigurationError(
                     f"manifest={manifest_path}: path does not match artifact catalog"
                 )
-            self.read(artifact_id, coordinates)
+            if verify:
+                self.read(artifact_id, coordinates)
             rows.append(
                 {
                     **manifest,

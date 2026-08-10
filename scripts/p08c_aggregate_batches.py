@@ -42,6 +42,7 @@ from simulation.replication_contract import replication_plan
 _filter_active_batches = filter_active_batches
 
 CoordinateKey = tuple[tuple[str, str], ...]
+_P08_CONTROL_ARTIFACT_IDS = frozenset({"simulation_batches", "model_diagnostics"})
 
 
 def main() -> int:
@@ -76,13 +77,39 @@ def main() -> int:
     active_profile = next(iter(profiles))
 
     simulation = mapping(loaded.registry.get("simulation"), "simulation")
+    inventory = loaded.context.store.inventory(_P08_CONTROL_ARTIFACT_IDS, verify=False)
+    batch_items = [item for item in inventory if item.get("artifact_id") == "simulation_batches"]
+    diagnostic_items = [
+        item for item in inventory if item.get("artifact_id") == "model_diagnostics"
+    ]
+    unexpected = [
+        str(item.get("artifact_id"))
+        for item in inventory
+        if item.get("artifact_id") not in _P08_CONTROL_ARTIFACT_IDS
+    ]
+    if unexpected:
+        raise ValueError(f"unexpected P08 control artifact ids={sorted(set(unexpected))}")
+
+    batch_coordinates = {_coordinate_key(_coordinates(item)) for item in batch_items}
+    diagnostics_coordinates = {_coordinate_key(_coordinates(item)) for item in diagnostic_items}
+    missing_diagnostics = batch_coordinates - diagnostics_coordinates
+    orphan_diagnostics = diagnostics_coordinates - batch_coordinates
+    if missing_diagnostics or orphan_diagnostics:
+        raise ValueError(
+            "P08 batch-diagnostics coordinate mismatch; re-run affected immutable batches. "
+            f"missing_diagnostics={_display_coordinates(missing_diagnostics)}, "
+            f"orphan_diagnostics={_display_coordinates(orphan_diagnostics)}"
+        )
+
+    # Paired diagnostics are integrity-checked exactly once. Their payload is not
+    # needed for MCSE aggregation, so it is not retained in memory.
+    for item in diagnostic_items:
+        loaded.context.read("model_diagnostics", _coordinates(item))
+
     batches: list[pd.DataFrame] = []
     coordinates_seen: list[dict[str, str]] = []
     range_audits: list[dict[str, object]] = []
-    inventory = loaded.context.store.inventory()
-    for item in inventory:
-        if item.get("artifact_id") != "simulation_batches":
-            continue
+    for item in batch_items:
         coordinates = _coordinates(item)
         value = loaded.context.read("simulation_batches", coordinates)
         if not isinstance(value, pd.DataFrame):
@@ -115,21 +142,6 @@ def main() -> int:
         batches.append(value)
         coordinates_seen.append(coordinates)
         range_audits.append(dict(audit))
-
-    batch_coordinates = {_coordinate_key(value) for value in coordinates_seen}
-    diagnostics_coordinates = {
-        _coordinate_key(_coordinates(item))
-        for item in inventory
-        if item.get("artifact_id") == "model_diagnostics"
-    }
-    missing_diagnostics = batch_coordinates - diagnostics_coordinates
-    orphan_diagnostics = diagnostics_coordinates - batch_coordinates
-    if missing_diagnostics or orphan_diagnostics:
-        raise ValueError(
-            "P08 batch-diagnostics coordinate mismatch; re-run affected immutable batches. "
-            f"missing_diagnostics={_display_coordinates(missing_diagnostics)}, "
-            f"orphan_diagnostics={_display_coordinates(orphan_diagnostics)}"
-        )
 
     batches = [sanitize_normalized_cost_regret(batch) for batch in batches]
 
