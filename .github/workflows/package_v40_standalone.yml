@@ -25,7 +25,7 @@ jobs:
           cat .package_payload/*.txt > /tmp/alignment.b64
           base64 -d /tmp/alignment.b64 > /tmp/FSF_Chapter3_v40_Code_Alignment.zip
           unzip -q /tmp/FSF_Chapter3_v40_Code_Alignment.zip -d .v40_alignment
-          python .v40_alignment/tools/apply_to_dissertation_v4.py --repo . --allow-dirty
+          python .v40_alignment/FSF_Chapter3_v40_Code_Alignment/tools/apply_to_dissertation_v4.py --repo . --allow-dirty
           rm -rf .v40_alignment .package_payload /tmp/alignment.b64 /tmp/FSF_Chapter3_v40_Code_Alignment.zip
       - name: Add standalone entrypoints
         shell: bash
