@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - chatgpt/v40-standalone-package-20260824
+  pull_request:
+    branches:
+      - main
 
 jobs:
   package:
