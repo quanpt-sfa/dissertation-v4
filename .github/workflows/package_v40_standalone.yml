@@ -1,0 +1,131 @@
+name: package-v40-standalone
+
+on:
+  push:
+    branches:
+      - chatgpt/v40-standalone-package-20260824
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Apply Chapter 3 v40 alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .v40_alignment
+          mkdir .v40_alignment
+          cat .package_payload/*.txt > /tmp/alignment.b64
+          base64 -d /tmp/alignment.b64 > /tmp/FSF_Chapter3_v40_Code_Alignment.zip
+          unzip -q /tmp/FSF_Chapter3_v40_Code_Alignment.zip -d .v40_alignment
+          python .v40_alignment/tools/apply_to_dissertation_v4.py --repo . --allow-dirty
+          rm -rf .v40_alignment .package_payload /tmp/alignment.b64 /tmp/FSF_Chapter3_v40_Code_Alignment.zip
+      - name: Add standalone entrypoints
+        shell: bash
+        run: |
+          cat > README_FIRST_V40.md <<'EOF'
+          # FSF Dissertation v40 Research Code
+
+          This is a standalone snapshot of `dissertation-v4` with the Chapter 3 v40
+          social-science methodology alignment already applied.
+
+          ## 1. Install
+
+          Install Python 3.11+ and `uv`, then from the project root run:
+
+          ```powershell
+          uv sync --all-extras
+          .\validate_v40.ps1
+          ```
+
+          ## 2. Data
+
+          Raw research data are intentionally not bundled. Keep the raw files outside
+          the repository and pass their directory through `-RawRoot`. The exact source
+          contracts are defined in `config/methodology/source_catalog.yaml` and
+          `config/methodology/data_sources.yaml`.
+
+          ## 3. Run
+
+          ```powershell
+          .\run_v40.ps1 -RunId thesis-v40-run1 -RawRoot D:\path\to\final-input -Workers 5 -Through P17
+          ```
+
+          The pipeline remains fail-closed: missing required source capability,
+          unjustified latent-state restrictions, or failed simulation/outer firewalls
+          produce explicit SKIPPED/INSUFFICIENT/SENSITIVITY_ONLY states rather than
+          silently manufacturing results.
+
+          ## 4. Chapter 3 / code contract
+
+          Read `docs/CHAPTER3_V40_CODE_CROSSWALK.md` and
+          `config/methodology/chapter3_v40_contract.yaml` before changing the empirical
+          design. Chapter 3 is the scientific contract; P00-P17 implement it; P17
+          creates the inputs for Chapter 4.
+          EOF
+
+          cat > validate_v40.ps1 <<'EOF'
+          $ErrorActionPreference = "Stop"
+          uv sync --all-extras
+          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+          uv run pytest tests/chapter3_v40 -q
+          uv run python scripts/validate_chapter3_v40_alignment.py --repo . --output artifacts/chapter3_v40_alignment_audit.json
+          Write-Host "v40 validation PASS"
+          EOF
+
+          cat > run_v40.ps1 <<'EOF'
+          param(
+            [Parameter(Mandatory=$true)][string]$RunId,
+            [Parameter(Mandatory=$true)][string]$RawRoot,
+            [int]$Workers = 5,
+            [string]$Through = "P17",
+            [string]$OutputRoot = "artifacts/runs"
+          )
+          $ErrorActionPreference = "Stop"
+          uv run python scripts/validate_chapter3_v40_alignment.py --repo .
+          & .\scripts\run_pipeline_v40.ps1 -RunId $RunId -RawRoot $RawRoot -OutputRoot $OutputRoot -Workers $Workers -Through $Through
+          EOF
+
+          mkdir -p data
+          cat > data/README_V40.md <<'EOF'
+          # Data are not bundled
+
+          Do not copy confidential/raw research data into Git history. Pass the raw-data
+          root at runtime. See `config/methodology/source_catalog.yaml` for exact expected
+          files and `docs/PIPELINE_P00_P17.md` for P00-P17 execution semantics.
+          EOF
+      - name: Bootstrap and validate merged project
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --all-extras
+          uv run python scripts/bootstrap_repository.py --config config/pipeline.yaml --validate-only
+          uv run pytest tests/chapter3_v40 -q
+          uv run python scripts/validate_chapter3_v40_alignment.py --repo . --output artifacts/chapter3_v40_alignment_audit.json
+      - name: Build standalone ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/FSF_Dissertation_v40_Research_Code
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github/workflows/package_v40_standalone.yml' \
+            --exclude '.venv' \
+            --exclude '__pycache__' \
+            --exclude '.pytest_cache' \
+            --exclude '.ruff_cache' \
+            --exclude 'dist' \
+            --exclude 'artifacts/runs' \
+            ./ dist/FSF_Dissertation_v40_Research_Code/
+          cd dist
+          zip -qr FSF_Dissertation_v40_Research_Code.zip FSF_Dissertation_v40_Research_Code
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FSF_Dissertation_v40_Research_Code
+          path: dist/FSF_Dissertation_v40_Research_Code.zip
+          if-no-files-found: error
+          retention-days: 1
