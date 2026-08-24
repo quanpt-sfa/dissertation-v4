@@ -29,3 +29,13 @@ s = s.replace('row.get("learner_id", row.get("model_id", f"model_{index}"))', 'r
 s = s.replace('row.get("target_id", "observed_target")', 'row.get(TARGET_ID, "observed_target")')
 s = s.replace('        "measurement_id",\n', '        MEASUREMENT_ID,\n')
 p.write_text(s, encoding="utf-8")
+
+# Alignment package test originally resolved the repository root one level too
+# shallow from tests/chapter3_v40. Correct it in the merged standalone tree.
+p = root / "tests" / "chapter3_v40" / "test_contract_yaml.py"
+s = p.read_text(encoding="utf-8")
+s = s.replace(
+    "Path(__file__).resolve().parents[1]",
+    "Path(__file__).resolve().parents[2]",
+)
+p.write_text(s, encoding="utf-8")
